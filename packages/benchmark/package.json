@@ -1,0 +1,17 @@
+{
+  "name": "benchmark",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "bun scripts/dev.ts",
+    "build": "run-p type-check build-only",
+    "build-only": "bun scripts/build.ts",
+    "type-check": "tsc -b --noEmit"
+  },
+  "dependencies": {
+    "psytask": "workspace:*"
+  },
+  "devDependencies": {
+    "shared": "workspace:*"
+  }
+}

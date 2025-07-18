@@ -1,0 +1,9 @@
+{
+  "folders": [
+    { "path": ".." },
+    { "path": "../packages/shared" },
+    { "path": "../packages/psytask" },
+    { "path": "../packages/benchmark" },
+  ],
+  "settings": {},
+}

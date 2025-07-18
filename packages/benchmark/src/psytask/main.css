@@ -1,0 +1,10 @@
+@import 'psytask/main.css';
+
+/* same with jspsych.css */
+body {
+  background-color: white;
+  color: black;
+  font-family: 'Open Sans', 'Arial', sans-serif;
+  font-size: 18px;
+  line-height: 1.6em;
+}

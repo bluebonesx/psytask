@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    // environment
+    "lib": ["ESNext"],
+    "target": "esnext",
+    "module": "esnext",
+    "moduleDetection": "force",
+    "types": ["bun", "node", "puppeteer-core"],
+
+    // module
+    "moduleResolution": "bundler",
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "verbatimModuleSyntax": true,
+    "composite": true,
+
+    // best practices
+    "strict": true,
+    "skipLibCheck": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true
+  },
+  "include": ["**/scripts/**/*"]
+}
