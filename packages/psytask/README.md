@@ -26,10 +26,19 @@
       // create app
       const app = await createApp();
 
-      // create scenes
+      // create built-in scenes
       const fixation = app.fixation({ duration: 500 });
       const blank = app.blank({ close_on: 'click' });
       const text = app.text('no content', { duration: 1000 });
+
+      // create scenes by jsPsych Plugin
+      const jsPsychTrial = app.jsPsych({
+        type: jsPsychHtmlKeyboardResponse,
+        stimulus: 'Hello world',
+        choices: ['f', 'j'],
+      });
+
+      // create custom scenes
       const anything = app.scene(
         // first arg is setup function
         function (self) {
@@ -53,6 +62,7 @@
       for (const content of ['A', 'B', 'C']) {
         await fixation.show();
         await text.show({ text: content });
+        await jsPsychTrial.show();
         await anything.show('any show params');
         await blank.show();
       }
@@ -62,6 +72,7 @@
       fixation[Symbol.dispose]();
       blank[Symbol.dispose]();
       text[Symbol.dispose]();
+      jsPsychTrial[Symbol.dispose]();
       anything[Symbol.dispose]();
     </script>
   </body>
@@ -74,12 +85,16 @@
 import 'psytask/main.css';
 import { createApp, h } from 'psytask';
 
-// NOTE: create app or scene by `using` keyword
+// create app or scene with the `using` keyword, which makes them cleaned up automatically
 using app = await createApp();
-
 using fixation = app.fixation({ duration: 500 });
 using blank = app.blank({ close_on: 'click' });
 using text = app.text('no content', { duration: 1000 });
+using jsPsychTrial = app.jsPsych({
+  type: jsPsychHtmlKeyboardResponse,
+  stimulus: 'Hello world',
+  choices: ['f', 'j'],
+});
 using anything = app.scene(
   function (self) {
     const el = h('p');
