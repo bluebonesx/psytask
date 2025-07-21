@@ -1,6 +1,6 @@
 {
   "name": "psytask",
-  "version": "1.0.0-rc1",
+  "version": "1.0.0-rc2",
   "description": "JavaScript Framework for Psychology task",
   "type": "module",
   "main": "./dist/index.js",
@@ -16,6 +16,7 @@
   "files": [
     "dist",
     "src",
+    "types",
     "index.ts",
     "README.md"
   ],

@@ -1,12 +1,16 @@
 # Psytask
 
-JavaScript Framework for Psychology task. Compatible with the jspsych plugin.
+![NPM Version](https://img.shields.io/npm/v/psytask)
+![NPM Downloads](https://img.shields.io/npm/dm/psytask)
+![jsDelivr hits (npm)](https://img.shields.io/jsdelivr/npm/hm/psytask)
+
+JavaScript Framework for Psychology task. Compatible with the [jsPsych](https://github.com/jspsych/jsPsych) plugin.
 
 Compare to jsPsych, Psytask has:
 
-- Easier and more flexible development experiment
+- Easier and more flexible development experiment.
 - Higher time precision, try [online test](https://bluebones-team.github.io/psytask) on your browser.
-- Smaller bundle size, Faster loading speed
+- Smaller bundle size, Faster loading speed.
 
 ## Install
 
@@ -34,14 +38,14 @@ Otherwise, via CDN:
     <!-- load psytask css -->
     <link
       rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/psytask/dist/main.css"
+      href="https://cdn.jsdelivr.net/npm/psytask@1.0.0-rc1/dist/main.css"
     />
   </head>
   <body>
     <!-- main script -->
     <script type="module">
       // load psytask js
-      import { createApp } from 'https://cdn.jsdelivr.net/npm/psytask/dist/index.min.js';
+      import { createApp } from 'https://cdn.jsdelivr.net/npm/psytask@1.0.0-rc1/dist/index.min.js';
 
       const app = await creaeApp();
       //...
@@ -58,9 +62,8 @@ Otherwise, via CDN:
 
 ## Usage
 
-:::NOTE
-Considering that most psychology researchers do not have a background in Web development, the following examples will be used based on a cdn installation.
-:::
+> [!NOTE]
+> Considering that most psychology researchers do not have a background in Web development, the following examples will be used based on a cdn installation.
 
 All psychological tasks are combinations of a series of scenes,
 writing a psychology task requires only 2 steps:
@@ -76,7 +79,7 @@ import { createApp, h } from '<your-cdn-url>';
 // create app
 const app = await createApp();
 
-// create bulit-in scenes
+// create built-in scenes
 const fixation = app.fixation({ duration: 1000 });
 const blank = app.blank();
 const guide = app.text('Welcome to our task', { close_on: 'click' });
