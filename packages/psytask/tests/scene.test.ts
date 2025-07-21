@@ -1,15 +1,15 @@
 import {
+  afterEach,
+  beforeEach,
   describe,
   expect,
   it,
-  beforeEach,
-  afterEach,
-  spyOn,
   mock,
+  spyOn,
 } from 'bun:test';
 import { Window } from 'happy-dom';
-import { Scene, type SceneOptions, type SceneSetup } from '../src/scene';
 import { App } from '../src/app';
+import { Scene, type SceneOptions, type SceneSetup } from '../src/scene';
 import { detectEnvironment } from '../src/util';
 
 let window: Window;

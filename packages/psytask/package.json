@@ -1,21 +1,22 @@
 {
   "name": "psytask",
-  "version": "1.0.0",
-  "description": "JavaScript Framework of Psychology Task",
+  "version": "1.0.0-rc1",
+  "description": "JavaScript Framework for Psychology task",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/node/index.js"
+      "types": "./index.ts",
+      "import": "./dist/index.js"
     },
     "./main.css": "./dist/main.css"
   },
   "files": [
     "dist",
+    "src",
+    "index.ts",
     "README.md"
   ],
   "keywords": [

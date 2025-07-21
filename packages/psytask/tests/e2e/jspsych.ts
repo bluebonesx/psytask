@@ -1,6 +1,6 @@
 import { expect } from 'bun:test';
 import type { Page } from 'puppeteer-core';
-import { createApp } from '../../../src/app';
+import { createApp } from '../../src/app';
 
 export const InvalidPlugin = global.$prod
   ? async () => {

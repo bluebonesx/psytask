@@ -46,9 +46,9 @@ export class JSONStringifier extends DataStringifier {
 // collector
 /**
  * @example
- *   using dc = await new DataCollector('data.csv');
- *   dc.add({ name: 'Alice', age: 25 });
- *   dc.add({ name: 'Bob', age: 30 });
+ *   const dc = new DataCollector('data.csv');
+ *   await dc.add({ name: 'Alice', age: 25 });
+ *   await dc.add({ name: 'Bob', age: 30 });
  *   await dc.save();
  */
 export class DataCollector<T extends Data> extends DisposableClass {
@@ -61,7 +61,9 @@ export class DataCollector<T extends Data> extends DisposableClass {
    *
    * @example
    *   // add support for Markdown files, whose extension is 'md'
-   *   DataCollector.stringifiers['md'] = class extends DataStringifier {
+   *   DataCollector.stringifiers['md'] = class MarkDownStringifier extends (
+   *     DataStringifier
+   *   ) {
    *     transform(data) {
    *       // write transform logic here
    *       return '';
@@ -128,7 +130,7 @@ export class DataCollector<T extends Data> extends DisposableClass {
    *
    * @example
    *   const dir = await window.showDirectoryPicker?.();
-   *   using dc = await new DataCollector().withFileStream(dir);
+   *   const dc = await new DataCollector().withFileStream(dir);
    *
    * @param handle File system handle to create a `FileSystemWritableFileStream`
    *   for writeting data.

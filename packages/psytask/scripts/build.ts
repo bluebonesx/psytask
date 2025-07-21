@@ -41,6 +41,11 @@ await Promise.all([
     define: { 'process.env.NODE_ENV': 'process.env.NODE_ENV' },
   }),
 
-  // TypeScript declarations
-  $`dts-bundle-generator -o ./dist/index.d.ts --export-referenced-types false --no-banner --no-check index.ts`,
+  // // TypeScript declarations
+  // $`dts-bundle-generator \
+  // -o ./dist/index.d.ts \
+  // --export-referenced-types false \
+  // --no-banner \
+  // --no-check \
+  // -- index.ts`,
 ]);
