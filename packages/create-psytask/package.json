@@ -1,0 +1,21 @@
+{
+  "name": "create-psytask",
+  "version": "1.0.0-rc1",
+  "description": "CLI tool to create a new psytask project",
+  "type": "module",
+  "bin": {
+    "create-psytask": "./index.js"
+  },
+  "files": [
+    "index.js",
+    "template"
+  ],
+  "scripts": {
+    "dev": "bun build-only --watch",
+    "build": "bun build-only --production",
+    "build-only": "bun build index.ts --outfile=index.js --target=node"
+  },
+  "devDependencies": {
+    "@clack/prompts": "^0.11.0"
+  }
+}

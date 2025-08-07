@@ -4,6 +4,7 @@
     { "path": "../packages/shared" },
     { "path": "../packages/psytask" },
     { "path": "../packages/benchmark" },
+    { "path": "../packages/create-psytask" },
   ],
   "settings": {},
 }
