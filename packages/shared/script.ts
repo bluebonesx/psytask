@@ -56,3 +56,18 @@ export function fileServe(dir: string) {
     },
   });
 }
+export function listenFileChange(
+  itempaths: string[],
+  listener: (...e: any[]) => Promise<any> | any,
+) {
+  for (const itempath of itempaths) {
+    (async () => {
+      for await (const event of fs.watch(itempath, { recursive: true })) {
+        process.stdout.write(
+          `File changed: ${path.join(itempath, event.filename ?? '')}\n`,
+        );
+        await listener();
+      }
+    })();
+  }
+}

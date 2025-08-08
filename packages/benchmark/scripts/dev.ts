@@ -1,12 +1,8 @@
 import fs from 'node:fs/promises';
 import { fileServe } from 'shared/script';
 import { build, outdir } from './build';
+import { listenFileChange } from 'shared/script';
 
 fileServe(outdir);
-(async () => {
-  for await (const event of fs.watch('src', { recursive: true })) {
-    process.stdout.write(`File changed: ${event.filename}\n`);
-    await build();
-  }
-})();
+listenFileChange(['src', '../psytask/src'], build);
 await build();

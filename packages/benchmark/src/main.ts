@@ -1,209 +1,263 @@
-import { detectEnvironment, h, mean_std } from '../../psytask/src/util';
+import { render, html, type TemplateResult } from 'lit-html';
+import { Overlay, Plot, injectResource } from './util';
+import {
+  detectEnvironment,
+  h,
+  promiseWithResolvers,
+} from '../../psytask/src/util';
 import { getLibs, getTasks } from './macro' with { type: 'macro' };
 
-const TASKS_LINK = `https://github.com/bluebones-team/psytask/tree/main/packages/benchmark/src/`;
-
-document.documentElement.style.filter = 'invert(1)';
-Object.assign(document.body.style, {
-  backgroundColor: 'white',
-  margin: '2rem',
-  textAlign: 'center',
-  lineHeight: 1.5,
-  fontSize: '1.5rem',
-  fontFamily: 'Arial, sans-serif',
-});
 const env = await detectEnvironment();
 const libs = await getLibs();
 const tasks = await getTasks();
-console.log(libs, tasks);
-if (env['in-app']) {
-  alert('Please run benchmark in browser, not in apps or webview.');
-  throw new Error('Benchmark should be run in browser.');
-}
 
-// create DOM
-const taskEls = libs.map((lib) =>
-  h('div', { ariaCurrent: lib, style: { cursor: 'pointer' } }),
-);
-const shouldSaveDataEl = h('input', {
-  id: 'should-save-data',
-  type: 'checkbox',
-  checked: false,
-  style: { width: '1.2rem', height: '1.2rem', marginLeft: '0.8rem' },
-});
-document.body.innerHTML = '';
-const tips: string[] = [
-  'It is better to CLOSE ALL extensions, other tabs and applications.',
-  'Do not close this page during the task RUNNING.',
-  'Do not leave task page until the task is DONE.',
-];
-if (env.browser === 'firefox' && !env.mobile) {
-  tips.unshift(
-    'Please goto "about:config" and set "privacy.reduceTimerPrecision" to "false", then restart Firefox, if you haven\'t done this.',
-  );
-}
-document.body.append(
-  h(
-    'ol',
-    {
-      style: {
-        textAlign: 'left',
-        color: 'red',
-        fontSize: 'smaller',
-        whiteSpace: 'pre-wrap',
-      },
-    },
-    tips.map((e) => h('li', void 0, e)),
-  ),
-  h('hr'),
-  h(
-    'div',
-    {
-      style: {
-        display: 'flex',
-        flexWrap: 'wrap',
-        justifyContent: 'center',
-        gap: '2rem',
-      },
-    },
-    taskEls,
-  ),
-  h('hr'),
-  h('div', {}, [
-    h('label', { htmlFor: 'should-save-data' }, 'Save benchmark data?'),
-    shouldSaveDataEl,
-  ]),
-  h(
-    'button',
-    {
-      style: {
-        fontSize: 'x-small',
-        color: 'gray',
-        border: 'none',
-        background: 'transparent',
-      },
-      onclick(ev) {
-        ev.preventDefault();
-        alert(JSON.stringify(env, null, 2));
-      },
-    },
-    'show environment',
-  ),
-);
-
-// run tasks
-function runTask(
-  taskEl: HTMLDivElement,
-  lib: string,
-  task: string,
-  cssText: string,
-  jsText: string,
-) {
-  const win = window.open();
-  if (!win) {
-    throw new Error('Failed to open new window');
+class Runner extends Overlay {
+  constructor(public hash: string) {
+    super(document.body);
   }
-  win['__benchmark__'] = (datas) => {
-    console.log(datas);
-    win.close();
-    // show stats
-    const errors = datas.map((e) => e.value - e.except);
-    const { mean, std } = mean_std(errors);
-    const { mean: M, std: SD } = mean_std(
-      errors.filter((v) => mean - std * 3 <= v && v <= mean + std * 3),
-    );
-    taskEl.innerHTML = `${lib}.${task} is DONE.<br/><small>click to retry</small><br/>M: ${M.toFixed(
-      2,
-    )}, SD: ${SD.toFixed(2)}`;
-    // save data
-    if (!shouldSaveDataEl.checked) return;
-    const el = h('a', {
-      download: `benchmark_${lib}.${task}_${Date.now()}.json`,
-      href: URL.createObjectURL(
-        new Blob(
-          [JSON.stringify(datas.map((e) => ({ ...env, lib, task, ...e })))],
-          { type: 'application/json' },
-        ),
-      ),
-    });
-    document.body.appendChild(el);
-    el.click();
-    URL.revokeObjectURL(el.href);
-    document.body.removeChild(el);
-  };
-  // inject html
-  const html = `<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Benchmark-${lib}.${task}</title>
-    <style>${cssText}</style>
-  </head>
-  <body></body>
-  <script>(async function(){${jsText}})()</script>
-</html>`;
-  win.setTimeout(() => {
-    win.document.writeln(html);
-  }, 100);
-  // trigger load event manually
-  const _addEventListener = win.addEventListener;
-  win.addEventListener = function (
-    ...[type, listener, options]: Parameters<Window['addEventListener']>
+  async run(
+    lib: string,
+    task: string,
+    saved: boolean,
+    params: BenchmarkParams,
   ) {
-    if (type === 'load' && typeof listener === 'function') {
-      listener.call(this, new Event(type));
+    document.title = `Benchmark-${lib}.${task}`;
+    await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+    document.body.innerHTML = '';
+
+    // load env
+    await Promise.all([
+      injectResource('link', { rel: 'stylesheet', href: `${lib}/main.css` }),
+      injectResource('script', {
+        type: 'module',
+        src: `${lib}/${task}.bench.js`,
+      }),
+    ]);
+
+    if (typeof window.__benchmark__ !== 'function') {
+      throw new Error(`Load environment failed on: ${lib} ${task}`);
+    }
+
+    // test
+    let prev: number;
+    const datas: Benchmark[] = [];
+    const waitForDone = promiseWithResolvers();
+
+    await Promise.all([
+      window.__benchmark__((curr, except, done) => {
+        // calc duration
+        performance.mark('mark-' + curr);
+        if (prev == null) {
+          prev = curr;
+          return;
+        }
+        datas.push({
+          value: performance.measure('duration', 'mark-' + prev, 'mark-' + curr)
+            .duration,
+          except,
+        });
+        prev = curr;
+
+        if (done) waitForDone.resolve(null);
+      }, params),
+      waitForDone.promise,
+    ]);
+
+    // save data
+    if (saved) {
+      const el = h('a', {
+        download: `benchmark_${lib}.${task}_${Date.now()}.json`,
+        href: URL.createObjectURL(
+          new Blob(
+            [JSON.stringify(datas.map((e) => ({ ...env, lib, task, ...e })))],
+            { type: 'application/json' },
+          ),
+        ),
+      });
+      document.body.appendChild(el);
+      el.click();
+      URL.revokeObjectURL(el.href);
+      document.body.removeChild(el);
+    }
+
+    // send data
+    window.__benchmark_send?.(datas);
+    window.close();
+  }
+  override html() {
+    try {
+      const options = Object.fromEntries(new URLSearchParams(this.hash));
+      if (options.params) options.params = JSON.parse(options.params);
+
+      const { lib, task, saved, params } = options;
+      if (!lib || !task) {
+        throw new Error(`Missing required parameters: lib and task`);
+      }
+
+      const run = () =>
+        this.run(
+          lib,
+          task,
+          saved === 'true',
+          params as unknown as BenchmarkParams,
+        ).catch((err) => this.showOverlay(err));
+      return html`<div
+        style="height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center;"
+        tabindex="0"
+        @click=${run}
+      >
+        <p style="font-size: 1.2rem;">Click anywhere to RUN</p>
+        <pre>${JSON.stringify(options, null, 2)}</pre>
+        ${super.html()}
+      </div>`;
+    } catch (err) {
+      this.showOverlay(err + '');
+      return super.html();
+    }
+  }
+}
+class Launcher extends Overlay {
+  options = {
+    lib: libs[0]!,
+    task: tasks[0]!,
+    count: 100,
+    saved: false,
+  };
+  plot?: Plot;
+  constructor() {
+    super(document.body);
+
+    document.documentElement.style.filter = 'invert(1)';
+    Object.assign(document.body.style, {
+      backgroundColor: 'white',
+      margin: '2rem',
+      textAlign: 'center',
+      lineHeight: 1.5,
+      fontFamily: 'Arial, sans-serif',
+      fontSize: '1.2rem',
+    });
+  }
+  async run() {
+    const { lib, task, count, saved } = this.options;
+    const win = window.open(
+      `#lib=${lib}&task=${task}&saved=${saved}&params={"count":${count}}`,
+    );
+    if (!win) {
+      this.showOverlay('Can not open test page');
       return;
     }
-    _addEventListener.call(this, type, listener, options);
-  };
-}
-async function loadResource(url: string, contentType: string) {
-  const res = await fetch(url);
-  if (res.status !== 200) {
-    throw new Error(`Failed to load ${url}: ${res.statusText}`);
-  }
-  if (!res.headers.get('Content-Type')?.includes(contentType)) {
-    throw new Error(
-      `Invalid content type for ${url}: ${res.headers.get('Content-Type')}`,
+
+    // receive data
+    const { promise, resolve } = promiseWithResolvers<Benchmark[]>();
+    win.__benchmark_send = resolve;
+    const datas = await promise;
+
+    // draw
+    this.plot ??= new Plot(document.querySelector('fieldset#result')!);
+    this.plot.add(
+      lib,
+      datas.map((e) => e.value - e.except),
     );
   }
-  return res.text();
+  override html() {
+    const options = this.options;
+
+    const tips: string[] = [
+      'It is better to CLOSE ALL extensions, other tabs and applications.',
+      'Do not close this page during the task RUNNING.',
+      'Do not leave task page until the task is DONE.',
+    ];
+    if (env.browser.includes('firefox') && !env.mobile) {
+      tips.unshift(
+        'Please goto "about:config" and set "privacy.reduceTimerPrecision" to "false", then restart Firefox, if you haven\'t done this.',
+      );
+    }
+    const panels = [
+      {
+        label: 'tips',
+        children: html`<ol style="text-align: left; color: red;">
+            ${tips.map((e) => html`<li>${e}</li>`)}
+          </ol>
+          <details style="color: gray;">
+            <summary>debug</summary>
+            <textarea readonly>${JSON.stringify(env, null, 2)}</textarea>
+            <textarea
+              readonly
+              @click=${(e: Event) => {
+                (e.target as HTMLTextAreaElement).textContent = JSON.stringify(
+                  options,
+                  null,
+                  2,
+                );
+              }}
+            >
+${JSON.stringify(options, null, 2)}</textarea
+            >
+          </details>`,
+      },
+      {
+        label: 'options',
+        children: html`<div>
+            <label for="task">Task:</label>
+            <select
+              id="task"
+              @change=${(e: Event) => {
+                options.task = (e.target as HTMLSelectElement).value;
+              }}
+            >
+              ${tasks.map((e) => html`<option value=${e}>${e}</option>`)}
+            </select>
+            <label for="lib">Library:</label>
+            <select
+              id="lib"
+              @change=${(e: Event) => {
+                options.lib = (e.target as HTMLSelectElement).value;
+              }}
+            >
+              ${libs.map((e) => html`<option value=${e}>${e}</option>`)}
+            </select>
+            <label for="count">Count:</label>
+            <input
+              id="count"
+              type="number"
+              .value=${options.count}
+              @input=${(e: Event) => {
+                options.count = Number((e.target as HTMLInputElement).value);
+              }}
+            />
+            <label for="save-data">Save data?</label>
+            <input
+              id="save-data"
+              type="checkbox"
+              .checked=${options.saved}
+              @change=${(e: Event) => {
+                options.saved = (e.target as HTMLInputElement).checked;
+              }}
+            />
+          </div>
+          <button @click=${() => this.run()}>RUN</button> `,
+      },
+      {
+        label: 'result',
+        children: html``,
+      },
+    ];
+    return html`${panels.map(
+      (panel) =>
+        html`<fieldset id="${panel.label}" style="border-bottom: none;">
+          <legend>${panel.label}</legend>
+          ${panel.children}
+        </fieldset>`,
+    )}`;
+  }
 }
-async function loadTasks() {
-  const task = location.hash.slice(1);
-  taskEls.forEach((el) => {
-    el.innerHTML = '';
-    el.onclick = null;
-  });
-  // no task
-  if (task === '') {
-    const el = h('div', void 0, 'Loading tasks from GitHub...');
-    taskEls[0]!.append(
-      `Please select a TASK by adding #task to the URL, or click the following links:`,
-      el,
-    );
-    el.innerHTML = tasks.map((e) => `<a href="#${e}">${e}</a>`).join(', ');
+
+async function main() {
+  const hash = location.hash.slice(1);
+  if (hash) {
+    new Runner(hash).render();
     return;
   }
-  // load tasks
-  taskEls.map(async (el, i) => {
-    const lib = el.ariaCurrent!;
-    el.innerHTML = `${lib}.${task} is LOADING...`;
-    try {
-      const cssText = await loadResource(`${lib}/main.css`, 'css');
-      const jsText = await loadResource(
-        `${lib}/${task}.bench.js`,
-        'javascript',
-      );
-      el.innerHTML = `${lib}.${task} is READY.<br/>Click me to start.`;
-      el.onclick = () => runTask(el, lib, task, cssText, jsText);
-    } catch (error) {
-      el.innerHTML = `${lib}.${task} loadding FAILED,<br/>
-goto <a href="${TASKS_LINK + lib}" target="_blank">GitHub</a>
-to find available tasks.<br/>${error}`;
-    }
-  });
+  new Launcher().render();
 }
-window.addEventListener('hashchange', loadTasks);
-loadTasks();
+main();

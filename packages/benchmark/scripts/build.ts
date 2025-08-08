@@ -5,7 +5,14 @@ export const outdir = 'dist';
 await clearDirIfExists(outdir);
 
 export async function build(config: Omit<BuildConfig, 'entrypoints'> = {}) {
-  Object.assign(config, { outdir, minify: true, target: 'browser' });
+  Object.assign(config, {
+    outdir,
+    minify: true,
+    target: 'browser',
+    define: {
+      'process.env.NODE_ENV': '"production"',
+    },
+  });
   return Promise.all([
     _build({
       entrypoints: ['index.html'],
@@ -19,6 +26,8 @@ export async function build(config: Omit<BuildConfig, 'entrypoints'> = {}) {
     _build({
       entrypoints: await Array.fromAsync(new Glob('src/*/*.bench.ts').scan()),
       ...config,
+      // banner: '(async function(){',
+      // footer: '})();',
     }),
   ]);
 }

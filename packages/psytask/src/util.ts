@@ -156,15 +156,22 @@ export function detectFPS(opts: { root: Element; framesCount: number }) {
 
       // calculate average frame duration
       const { mean, std } = mean_std(frameDurations);
-      const valids = (function filter(stdNum = 1): number[] {
-        const temp = frameDurations.filter(
-          (v) => mean - std * stdNum <= v && v <= mean + std * stdNum,
-        );
-        return temp.length > 0 ? temp : filter(stdNum + 0.1);
-      })();
+      const valids = frameDurations.filter(
+        (v) => mean - std * 2 <= v && v <= mean + std * 2,
+      );
+      if (valids.length < 1) {
+        throw new Error('No valid frames found');
+      }
+      const frame_ms = valids.reduce((acc, v) => acc + v) / valids.length;
 
-      console.log('detectFPS', { mean, std, valids });
-      resolve(valids.reduce((acc, v) => acc + v) / valids.length);
+      console.log('detectFPS', {
+        mean,
+        std,
+        valids,
+        raws: frameDurations,
+        frame_ms,
+      });
+      resolve(frame_ms);
     });
   });
 }
