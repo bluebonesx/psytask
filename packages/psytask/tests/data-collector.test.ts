@@ -14,6 +14,7 @@ import {
   CSVStringifier,
   JSONStringifier,
 } from '../src/data-collector';
+import type { Data } from '../types';
 
 // Setup DOM environment
 const window = new Window();
@@ -403,7 +404,7 @@ describe('DataCollector', () => {
       const collector = new DataCollector('test.csv');
       collector.stringifier.value = 'test data';
 
-      collector.backup();
+      collector.download();
 
       expect(document.createElement).toHaveBeenCalledWith('a');
       expect(URL.createObjectURL).toHaveBeenCalledWith(expect.any(window.Blob));
@@ -413,7 +414,7 @@ describe('DataCollector', () => {
       const collector = new DataCollector('test.csv');
       collector.stringifier.value = 'test data';
 
-      collector.backup('.custom');
+      collector.download('.custom');
 
       expect(document.createElement).toHaveBeenCalledWith('a');
     });
@@ -422,7 +423,7 @@ describe('DataCollector', () => {
       const collector = new DataCollector('test.csv');
       collector.stringifier.value = 'test data';
 
-      collector.backup();
+      collector.download();
 
       expect(URL.revokeObjectURL).toHaveBeenCalledWith('mock-url');
     });
@@ -532,7 +533,7 @@ describe('DataCollector', () => {
     });
   });
 
-  describe('DisposableClass integration', () => {
+  describe('_Disposable integration', () => {
     it('should cleanup event listeners on dispose', () => {
       const removeEventListenerSpy = spyOn(document, 'removeEventListener');
       const collector = new DataCollector();

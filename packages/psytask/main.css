@@ -1,9 +1,10 @@
 * {
-  --psytask: 0; /* for psytask css detection */
-
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+}
+body {
+  --psytask: 0; /* for psytask css detection */
 
   background-color: gray;
   color: white;
@@ -18,4 +19,12 @@
 
   overflow: hidden;
   will-change: transform;
+}
+.psytask-center {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+
+  height: 100dvh;
 }

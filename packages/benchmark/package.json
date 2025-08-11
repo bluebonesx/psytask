@@ -9,6 +9,7 @@
     "type-check": "tsc -b --noEmit"
   },
   "dependencies": {
+    "detect-browser": "^5.3.0",
     "lab.js": "^20.2.4",
     "lit-html": "^3.3.1"
   },

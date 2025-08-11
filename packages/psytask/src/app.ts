@@ -1,113 +1,265 @@
-import { type PluginInfo, type TrialType } from 'jspsych';
-import { createSceneByJsPsychPlugin } from './jspsych';
-import { Scene, type SceneOptions } from './scene';
-import { detectEnvironment, DisposableClass, h } from './util';
+import type { Data, MaybePromise } from '../types';
+import { DataCollector } from './data-collector';
+import { effect, reactive } from './reactive';
+import { Scene, type SceneFunction, type SceneOptions } from './scene';
+import { TextStim } from './scenes';
+import { EventEmitter, h, on } from './util';
 
-export class App extends DisposableClass {
+export class App extends EventEmitter<{}> {
+  readonly data = {
+    /** Frame duration */
+    frame_ms: 16.67,
+    /** Number of times the user has left the page */
+    leave_count: 0,
+    /** Device pixel ratio */
+    dpr: window.devicePixelRatio,
+    /** Screen physical size */
+    screen_wh_pix: [window.screen.width, window.screen.height] as const,
+    /** Window physical size */
+    window_wh_pix: [window.innerWidth, window.innerHeight] as const,
+  };
   constructor(
     /** Root element of the app */
     public root: Element,
-    /** Detected environment data */
-    public data: Awaited<ReturnType<typeof detectEnvironment>>,
   ) {
     super();
+    this.data = reactive(this.data);
+    effect(() => {
+      const dpr = this.data.dpr;
+      Object.assign(this.data, {
+        screen_wh_pix: [window.screen.width * dpr, window.screen.height * dpr],
+        window_wh_pix: [window.innerWidth * dpr, window.innerHeight * dpr],
+      });
+    });
 
     // check styles
     if (
-      window
-        .getComputedStyle(document.documentElement)
-        .getPropertyValue('--psytask') === ''
+      window.getComputedStyle(this.root).getPropertyValue('--psytask') === ''
     ) {
-      // TODO: auto import psytask CSS file
       throw new Error('Please import psytask CSS file in your HTML file');
     }
 
-    // add event listeners
-    this.useEventListener(window, 'beforeunload', (e) => {
-      // warn before unloading the page, not compatible with IOS
-      e.preventDefault();
-      return (e.returnValue =
-        'Leaving the page will discard progress. Are you sure?');
-    });
-    this.useEventListener(document, 'visibilitychange', () => {
+    // warn before unloading the page, not compatible with IOS
+    this.on(
+      'cleanup',
+      on(window, 'beforeunload', (e) => {
+        e.preventDefault();
+        return (e.returnValue =
+          'Leaving the page will discard progress. Are you sure?');
+      }),
+    )
       // alert when the page is hidden
-      if (document.visibilityState === 'hidden') {
-        alert(
-          'Please keep the page visible on the screen during the task running',
+      .on(
+        'cleanup',
+        on(document, 'visibilitychange', () => {
+          if (document.visibilityState === 'hidden') {
+            this.data.leave_count++;
+            window.setTimeout(() =>
+              alert(
+                'Please keep the page visible on the screen during the task running',
+              ),
+            );
+          }
+        }),
+      )
+      // update device pixel ratio on resolution change
+      .on(
+        'cleanup',
+        (() => {
+          let cleanup: () => void;
+          effect(() => {
+            cleanup?.();
+            cleanup = on(
+              window.matchMedia(`(resolution: ${this.data.dpr}dppx)`),
+              'change',
+              () => (this.data.dpr = window.devicePixelRatio),
+            );
+          });
+          return () => cleanup();
+        })(),
+      )
+      // update window size on resize
+      .on(
+        'cleanup',
+        on(window, 'resize', () => {
+          const dpr = this.data.dpr;
+          this.data.window_wh_pix = [
+            window.innerWidth * dpr,
+            window.innerHeight * dpr,
+          ];
+        }),
+      )
+      // show last message
+      .on('cleanup', () => {
+        this.root.appendChild(
+          h(
+            'div',
+            { className: 'psytask-center' },
+            'Thanks for participating!',
+          ),
         );
+      });
+  }
+  /** Load resources to RAM */
+  async load<const T extends readonly string[], D = Blob>(
+    urls: T,
+    convertor?: (blob: Blob, url: string) => MaybePromise<D>,
+  ) {
+    const container = this.root.appendChild(TextStim({ children: '' }).node);
+
+    const tasks = urls.map(async (url) => {
+      const link = h('a', { href: url, target: '_blank' }, url);
+      const el = container.appendChild(
+        h('p', { title: url }, ['Fetch ', link, '...']),
+      );
+
+      try {
+        const res = await fetch(url);
+        if (res.body == null) {
+          throw new Error('no response body');
+        }
+
+        // no progress
+        const totalStr = res.headers.get('Content-Length');
+        if (totalStr == null) {
+          console.warn(`Failed to get content length for ${url}`);
+          el.replaceChildren('Loading', link, '...');
+          return res.blob();
+        }
+        const total = +totalStr;
+
+        // show progress
+        const reader = res.body.getReader();
+        const chunks = [];
+        for (let loaded = 0; ; ) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          loaded += value.length;
+          el.replaceChildren(
+            'Loading',
+            link,
+            `... ${((loaded / total) * 100).toFixed(2)}%`,
+          );
+          chunks.push(value);
+        }
+
+        const blob = new Blob(chunks);
+        return convertor ? convertor(blob, url) : blob;
+      } catch (err) {
+        el.style.color = '#000';
+        el.replaceChildren('Failed to load', link, `: ${err}`);
+        // wait forever
+        await new Promise(() => {});
       }
     });
+
+    const datas = await Promise.all(tasks);
+    this.root.removeChild(container);
+    return datas as { [K in keyof T]: D };
+  }
+  /**
+   * Create data collector
+   *
+   * @example
+   *   using dc = await app.collector('data.csv');
+   *   dc.add({ name: 'Alice', age: 25 });
+   *   dc.add({ name: 'Bob', age: 30 });
+   *
+   * @param filename Filename with extension. Default is `data-<timestamp>.csv`.
+   * @param stringifier Using for data transformation.
+   */
+  collector<T extends Data>(
+    ...e: ConstructorParameters<typeof DataCollector<T>>
+  ) {
+    return new DataCollector<T>(...e);
   }
   /** Create a scene */
-  scene<P extends unknown[]>(
-    ...e: ConstructorParameters<typeof Scene<P>> extends [infer L, ...infer R]
+  scene<T extends SceneFunction>(
+    ...e: ConstructorParameters<typeof Scene<T>> extends [infer L, ...infer R]
       ? R
       : never
   ) {
-    const scene = new Scene(this, ...e);
-    scene.root.classList.add('psytask-scene');
-    this.root.appendChild(scene.root);
-    return scene;
+    return new Scene(this, ...e);
   }
-  /** Shortcut to create a text scene */
-  text(text: string, options?: SceneOptions) {
-    return this.scene(function (self) {
-      const el = h('p', { textContent: text });
-      self.root.appendChild(
-        h('div', { style: { textAlign: 'center', lineHeight: '100dvh' } }, el),
-      );
-      return (
-        props?: Partial<{ text: string; size: string; color: string }>,
-      ) => {
-        const p = { ...props };
-        if (p.text) {
-          el.textContent = p.text;
-        }
-        if (p.size) {
-          el.style.fontSize = p.size;
-        }
-        if (p.color) {
-          el.style.color = p.color;
-        }
-      };
-    }, options);
-  }
-  /** Shortcut to create a fixation scene */
-  fixation(options?: SceneOptions) {
-    return this.text('+', options);
-  }
-  /** Shortcut to create a blank scene */
-  blank(options?: SceneOptions) {
-    return this.text('', options);
-  }
-  /**
-   * Create a scene with jsPsych Plugin
-   *
-   * @example
-   *   const scene = app.jsPsych({
-   *     type: jsPsychHtmlKeyboardResponse,
-   *     stimulus: 'Hello world',
-   *     choices: ['f', 'j'],
-   *   });
-   *
-   * @see https://www.jspsych.org/latest/plugins/
-   */
-  jsPsych<I extends PluginInfo>(trial: TrialType<I>) {
-    return createSceneByJsPsychPlugin(this, trial);
+  /** Create a text scene */
+  text(content?: string, options?: Partial<SceneOptions<typeof TextStim>>) {
+    return this.scene(TextStim, {
+      defaultProps: { children: content, ...options?.defaultProps },
+      ...options,
+    });
   }
 }
+
+function mean_std(arr: number[]) {
+  const n = arr.length;
+  const mean = arr.reduce((acc, v) => acc + v) / n;
+  const std = Math.sqrt(
+    arr.reduce((acc, v) => acc + Math.pow(v - mean, 2), 0) / (n - 1),
+  );
+  return { mean, std };
+}
+function detectFPS(opts: { root: Element; framesCount: number }) {
+  function checkPageVisibility() {
+    if (document.visibilityState === 'hidden') {
+      alert(
+        'Please keep the page visible on the screen during the FPS detection',
+      );
+      location.reload();
+    }
+  }
+  document.addEventListener('visibilitychange', checkPageVisibility);
+
+  let startTime = 0;
+  const frameDurations: number[] = [];
+  const el = opts.root.appendChild(h('p'));
+
+  return new Promise<number>((resolve) => {
+    window.requestAnimationFrame(function frame(lastTime) {
+      if (startTime !== 0) {
+        frameDurations.push(lastTime - startTime);
+      }
+      startTime = lastTime;
+
+      const progress = frameDurations.length / opts.framesCount;
+      el.textContent = `test fps ${Math.floor(progress * 100)}%`;
+      if (progress < 1) {
+        window.requestAnimationFrame(frame);
+        return;
+      }
+
+      document.removeEventListener('visibilitychange', checkPageVisibility);
+
+      // calculate average frame duration
+      const { mean, std } = mean_std(frameDurations);
+      const valids = frameDurations.filter(
+        (v) => mean - std * 2 <= v && v <= mean + std * 2,
+      );
+      if (valids.length < 1) {
+        throw new Error('No valid frames found');
+      }
+      const frame_ms = valids.reduce((acc, v) => acc + v) / valids.length;
+
+      console.log('detectFPS', {
+        mean,
+        std,
+        valids,
+        raws: frameDurations,
+        frame_ms,
+      });
+      resolve(frame_ms);
+    });
+  });
+}
 /**
- * Create app and detect environment
+ * Create app
  *
  * @example
  *   using app = await createApp();
- *   using fixation = app.fixation({ duration: 500 });
- *   using blank = app.blank({ duration: 1000 });
- *   using guide = app.text('This is a guide', { close_on: 'click' });
+ *   using fixation = app.text('+', { duration: 500 });
+ *   using blank = app.text('', { duration: 1000 });
+ *   using guide = app.text('Welcome to the task!', { close_on: 'key: ' });
  */
-export async function createApp(
-  options?: Parameters<typeof detectEnvironment>[0],
-) {
+export const createApp = async (options?: Parameters<typeof detectFPS>[0]) => {
   const opts = {
     root: document.body,
     framesCount: 60,
@@ -119,5 +271,13 @@ export async function createApp(
     );
     document.body.appendChild(opts.root);
   }
-  return new App(opts.root, await detectEnvironment(opts));
-}
+
+  const app = new App(opts.root);
+
+  const panel = h('div', { className: 'psytask-center' });
+  opts.root.appendChild(panel);
+  app.data.frame_ms = await detectFPS({ ...opts, root: panel });
+  opts.root.removeChild(panel);
+
+  return app;
+};

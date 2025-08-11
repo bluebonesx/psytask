@@ -1,89 +1,175 @@
-import type { LooseObject } from '../types';
+import type { DeepReadonly, LooseObject, Merge } from '../types';
 import type { App } from './app';
-import { DisposableClass, h, promiseWithResolvers } from './util';
+import { reactive, type Reactive } from './reactive';
+import { EventEmitter, h, on, promiseWithResolvers } from './util';
 
-export type SceneOptions = {
-  /** Milliseconds */
-  duration?: number;
-  close_on?: keyof HTMLElementEventMap | (keyof HTMLElementEventMap)[];
-  on_frame?: (lastFrameTime: number) => void;
+const createShowInfo = () => ({ start_time: 0, frame_times: [] as number[] });
+type SceneShowInfo = ReturnType<typeof createShowInfo>;
+type ForbiddenSceneData = { [K in keyof SceneShowInfo]?: never };
+
+export type SceneSetup<
+  P extends LooseObject = any,
+  D extends LooseObject = LooseObject & ForbiddenSceneData,
+> = (
+  props: Reactive<P>,
+  ctx: Scene<never>,
+) => { node: string | Node | (string | Node)[]; data?: () => D };
+type SceneShow<
+  P extends LooseObject = any,
+  D extends LooseObject = LooseObject & ForbiddenSceneData,
+> = (patchProps?: Partial<P>) => Promise<Merge<D, SceneShowInfo>>;
+export type SceneFunction = SceneSetup | SceneShow;
+
+type SceneEventMap = HTMLElementEventMap & {
+  'scene:show': null;
+  'scene:frame': { lastFrameTime: number };
+  'scene:close': null;
+} & {
+  [K in `mouse:${'left' | 'middle' | 'right' | 'unknown'}`]: MouseEvent;
+} & {
+  [K in `key:${string}`]: KeyboardEvent;
 };
-export type SceneSetup<P extends unknown[] = never> = (
-  /** This scene */
-  self: Scene<never>,
-) => (...e: P) => void;
+type SceneEventType = keyof SceneEventMap;
 
-export class Scene<P extends unknown[]> extends DisposableClass {
-  /** Root element of the scene */
-  root = h('div');
-  /** Show generated data */
-  data: Readonly<{ start_time: number; frame_times: number[] }> & LooseObject =
-    { start_time: 0, frame_times: [] };
-  update: (...e: P) => void;
-  #isShown = true;
-  #showPromiseWithResolvers?: ReturnType<
-    typeof promiseWithResolvers<typeof this.data>
-  >;
+export type SceneOptions<T extends SceneFunction> = DeepReadonly<{
+  defaultProps: T extends SceneSetup<infer P> ? P : LooseObject;
+  /** @unit ms */
+  duration?: number;
+  /** Scene lifecycle and root element events */
+  close_on?: SceneEventType | SceneEventType[];
+  /** Whether to log frame times */
+  frame_times?: boolean;
+}>;
+
+const buttonTypeMap = ['mouse:left', 'mouse:middle', 'mouse:right'] as const;
+/** Just for type infer, do nothing in runtime. */
+const setup2show: {
+  <P extends LooseObject, D extends LooseObject & ForbiddenSceneData = {}>(
+    f: SceneSetup<P, D>,
+  ): SceneShow<P, D>;
+} = (f) => f as any;
+export { setup2show as generic };
+
+export class Scene<
+  T extends SceneFunction,
+> extends EventEmitter<SceneEventMap> {
+  /** Root element */
+  readonly root = h('div', {
+    className: 'psytask-scene',
+    tabIndex: -1, // support keyboard events
+    oncontextmenu: (e) => e.preventDefault(), // prevent context menu
+    style: { transform: 'scale(0)' },
+  });
+  /** Show params */
+  readonly props: Reactive<SceneOptions<T>['defaultProps']>;
+  data?: T extends SceneSetup<infer P, infer D> ? () => D : () => LooseObject;
+  //@ts-ignore
+  show: T extends SceneSetup<infer P, infer D> ? SceneShow<P, D> : T =
+    this.#show;
+  private options: SceneOptions<T>;
+  #showPromiseWithResolvers: ReturnType<
+    typeof promiseWithResolvers<null>
+  > | null = null;
   constructor(
-    public app: App,
-    /**
-     * Setup function to create the scene
-     *
-     * @returns Update function to update the scene each show
-     */
-    setup: SceneSetup<P>,
-    public options: SceneOptions = {},
+    public readonly app: App,
+    setup: T,
+    public readonly defaultOptions: SceneOptions<T>,
   ) {
     super();
+    this.options = defaultOptions;
 
-    // initialize
-    this.close();
-    this.update = setup(this);
-    this.addCleanup(() => this.app.root.removeChild(this.root));
+    const {
+      node: element,
+      data,
+      props,
+    } = this.use(setup as SceneSetup, {
+      ...defaultOptions.defaultProps,
+    });
+    //@ts-ignore
+    this.data = data;
+    this.props = props;
+    Array.isArray(element)
+      ? this.root.append(...element)
+      : this.root.append(element);
 
-    // add close event listener
-    const closeKeys =
-      typeof options.close_on === 'undefined'
-        ? []
-        : typeof options.close_on === 'string'
-          ? [options.close_on]
-          : options.close_on;
-    const closeFn = this.close.bind(this);
-    for (const key of closeKeys) {
-      //@ts-ignore
-      this.useEventListener(this.root, key, closeFn);
-    }
+    app.root.appendChild(this.root);
+    this.on('cleanup', () => app.root.removeChild(this.root));
   }
-  /** Override config */
-  config(options: Partial<SceneOptions>) {
-    Object.assign(this.options, options);
+  use<T extends SceneSetup>(
+    setup: T,
+    defaultProps: T extends SceneSetup<infer P> ? P : never,
+  ) {
+    const props = reactive(defaultProps);
+    return { ...(setup(props, this) as ReturnType<T>), props };
+  }
+  config(patchOptions: Partial<SceneOptions<T>>) {
+    this.options = { ...this.defaultOptions, ...patchOptions };
     return this;
   }
   close() {
-    if (!this.#isShown) {
-      console.warn('Scene is already closed');
-      return;
+    if (!this.#showPromiseWithResolvers) {
+      throw new Error('Scene is not being shown');
     }
-    this.#isShown = false;
     this.root.style.transform = 'scale(0)';
-    this.#showPromiseWithResolvers?.resolve(this.data);
+    this.#showPromiseWithResolvers.resolve(null);
   }
-  /** Show the scene with parameters */
-  show(...e: P) {
-    if (this.#isShown) {
-      console.warn('Scene is already shown');
-      return this.data;
+  async #show(patchProps?: Partial<LooseObject>) {
+    if (this.#showPromiseWithResolvers) {
+      throw new Error('Scene is already being shown');
     }
-    this.#isShown = true;
+    this.root.focus();
     this.root.style.transform = 'scale(1)';
     this.#showPromiseWithResolvers = promiseWithResolvers();
 
-    this.update(...e);
+    const { defaultProps, duration, close_on, frame_times } = this.options;
+    Object.assign(this.props, defaultProps, patchProps);
+    if (process.env.NODE_ENV === 'development') {
+      //@ts-ignore
+      window['s'] = this;
+    }
+    this.emit('scene:show', null);
 
-    const frame_ms = this.app.data.frame_ms;
-    const duration = this.options.duration;
+    // add event listener
+    if (typeof close_on !== 'undefined') {
+      const close_ons = Array.isArray(close_on) ? close_on : [close_on];
+      const close = () => this.close();
+      for (const close_on of close_ons) {
+        this.on(close_on, close);
+        this.once('scene:close', () => this.off(close_on, close));
+      }
+    }
+    const eventTypes = Object.keys(this.listeners) as SceneEventType[];
+    const hasSpecialType: [mouse: boolean, key: boolean] = [false, false];
+    for (const type of eventTypes) {
+      if (!hasSpecialType[0] && type.startsWith('mouse:')) {
+        hasSpecialType[0] = true;
+        this.once(
+          'scene:close',
+          on(this.root, 'mousedown', (e) =>
+            this.emit(buttonTypeMap[e.button] ?? 'mouse:unknown', e),
+          ),
+        );
+        continue;
+      }
+      if (!hasSpecialType[1] && type.startsWith('key:')) {
+        hasSpecialType[1] = true;
+        this.once(
+          'scene:close',
+          on(this.root, 'keydown', (e) => this.emit(`key:${e.key}`, e)),
+        );
+        continue;
+      }
+      if (!type.startsWith('scene:')) {
+        this.once(
+          'scene:close',
+          //@ts-ignore
+          on(this.root, type, (e) => this.emit(type, e)),
+        );
+      }
+    }
 
     // check duration
+    const frame_ms = this.app.data.frame_ms;
     if (
       process.env.NODE_ENV === 'development' &&
       typeof duration !== 'undefined'
@@ -97,10 +183,9 @@ export class Scene<P extends unknown[]> extends DisposableClass {
       }
     }
 
+    // render
     /**
-     * Render
-     *
-     * ## Scene render logic
+     * ## Render logic
      *
      * ```text
      * scene_1.show ->
@@ -130,36 +215,33 @@ export class Scene<P extends unknown[]> extends DisposableClass {
      *     if e + \delta < 0 then -e <= -e - \delta -> false
      * ```
      */
+    let rAFid: number;
+    const showInfo = createShowInfo();
     const onFrame = (lastFrameTime: number) => {
-      this.data.frame_times.push(lastFrameTime);
+      frame_times && showInfo.frame_times.push(lastFrameTime);
 
-      if (typeof this.options.duration !== 'undefined') {
-        if (
-          lastFrameTime - this.data.start_time >=
-          this.options.duration - frame_ms * 1.5
-        ) {
-          // console.log(
-          //     'frame durations',
-          //     this.data.frame_times.reduce(
-          //         (acc, e, i, arr) => (i > 0 && acc.push(e - arr[i - 1]!), acc),
-          //     [] as number[],
-          //   ),
-          // );
-          this.close();
-          return;
-        }
+      if (
+        typeof duration !== 'undefined' &&
+        lastFrameTime - showInfo.start_time >= duration - frame_ms * 1.5
+      ) {
+        this.close();
+        return;
       }
 
-      this.options.on_frame?.(lastFrameTime);
-      window.requestAnimationFrame(onFrame);
+      this.emit('scene:frame', { lastFrameTime });
+      rAFid = window.requestAnimationFrame(onFrame);
     };
-    window.requestAnimationFrame((lastFrameTime) => {
-      //@ts-ignore
-      this.data.start_time = lastFrameTime;
-      this.data.frame_times.length = 0;
+    rAFid = window.requestAnimationFrame((lastFrameTime) => {
+      showInfo.start_time = lastFrameTime;
       onFrame(lastFrameTime);
     });
 
-    return this.#showPromiseWithResolvers.promise;
+    await this.#showPromiseWithResolvers.promise;
+
+    this.emit('scene:close', null);
+    window.cancelAnimationFrame(rAFid);
+    this.options = this.defaultOptions;
+    this.#showPromiseWithResolvers = null;
+    return Object.assign(this.data?.() ?? {}, showInfo);
   }
 }

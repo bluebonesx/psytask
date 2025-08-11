@@ -10,7 +10,7 @@ import {
 import { Window } from 'happy-dom';
 import { App } from '../src/app';
 import { Scene } from '../src/scene';
-import { createSceneByJsPsychPlugin } from '../src/jspsych';
+import { jsPsychSetup } from '../src/scenes/jspsych';
 
 // Mock jspsych types
 type MockPluginInfo = {
@@ -65,8 +65,8 @@ beforeEach(() => {
     return 1;
   };
 
-  // Mock getComputedStyle
-  globalThis.getComputedStyle = (element: Element) =>
+  // Mock getComputedStyle (both global and window)
+  const mockComputedStyle = (element: Element) =>
     ({
       getPropertyValue: (property: string) => {
         if (property === '--psytask') {
@@ -75,6 +75,8 @@ beforeEach(() => {
         return '';
       },
     }) as CSSStyleDeclaration;
+  globalThis.getComputedStyle = mockComputedStyle as any;
+  (window as any).getComputedStyle = mockComputedStyle as any;
 
   // Setup basic HTML structure
   document.documentElement.innerHTML = `
@@ -99,7 +101,7 @@ afterEach(() => {
   globalThis.document = originalDocument;
 });
 
-describe('createSceneByJsPsychPlugin', () => {
+describe('jsPsych scene', () => {
   let mockEnvData: any;
   let app: App;
 
@@ -127,7 +129,7 @@ describe('createSceneByJsPsychPlugin', () => {
       choices: ['f', 'j'],
     };
 
-    const scene = createSceneByJsPsychPlugin(app, trial);
+    const scene = app.scene(jsPsychSetup(trial));
 
     expect(scene).toBeInstanceOf(Scene);
 
@@ -139,26 +141,15 @@ describe('createSceneByJsPsychPlugin', () => {
     expect(content).toBeTruthy();
   });
 
-  it('should warn about invalid plugin type', () => {
-    const consoleSpy = spyOn(console, 'warn');
-
-    // Test with invalid plugin type (not a function)
+  it('should throw error for invalid plugin type', () => {
+    // Test with invalid plugin type (not a class plugin)
     const invalidTrial: any = {
-      type: 'invalid-plugin-type', // string instead of class
+      type: 'invalid-plugin-type',
       stimulus: 'Test',
     };
 
-    const scene = createSceneByJsPsychPlugin(app, invalidTrial);
-
-    expect(consoleSpy).toHaveBeenCalledWith(
-      'jsPsych trial.type only supports jsPsych class plugins, but got',
-      'invalid-plugin-type',
-    );
-
-    // The scene should be a text scene with error message
-    const paragraph = scene.root.querySelector('p');
-    expect(paragraph?.textContent).toBe(
-      'jsPsych trial.type only supports jsPsych class plugins',
+    expect(() => app.scene(jsPsychSetup(invalidTrial))).toThrow(
+      /jsPsych trial.type only supports jsPsych class plugins/,
     );
   });
 
@@ -168,7 +159,7 @@ describe('createSceneByJsPsychPlugin', () => {
       // Don't set stimulus, should use default
     };
 
-    createSceneByJsPsychPlugin(app, trial);
+    app.scene(jsPsychSetup(trial));
 
     expect(trial.stimulus).toBe('default stimulus');
     expect(trial.choices).toEqual(['f', 'j']);
@@ -186,7 +177,7 @@ describe('createSceneByJsPsychPlugin', () => {
       extensions: ['some-extension'], // unsupported parameter
     };
 
-    createSceneByJsPsychPlugin(app, trial);
+    app.scene(jsPsychSetup(trial));
 
     expect(consoleSpy).toHaveBeenCalledWith(
       'jsPsych trial "extensions" parameter is not supported',
@@ -204,7 +195,7 @@ describe('createSceneByJsPsychPlugin', () => {
       on_start: onStartSpy,
     };
 
-    createSceneByJsPsychPlugin(app, trial);
+    app.scene(jsPsychSetup(trial));
 
     expect(onStartSpy).toHaveBeenCalledWith(trial);
   });
@@ -216,7 +207,7 @@ describe('createSceneByJsPsychPlugin', () => {
       css_classes: 'test-class another-class',
     };
 
-    const scene = createSceneByJsPsychPlugin(app, trial);
+    const scene = app.scene(jsPsychSetup(trial));
     const content = scene.root.querySelector('#jspsych-content')!;
 
     expect(content.classList.contains('test-class')).toBe(true);
@@ -229,7 +220,7 @@ describe('createSceneByJsPsychPlugin', () => {
       css_classes: ['class1', 'class2'],
     };
 
-    const scene = createSceneByJsPsychPlugin(app, trial);
+    const scene = app.scene(jsPsychSetup(trial));
     const content = scene.root.querySelector('#jspsych-content')!;
 
     expect(content.classList.contains('class1')).toBe(true);
@@ -246,7 +237,7 @@ describe('createSceneByJsPsychPlugin', () => {
       on_finish: onFinishSpy,
     };
 
-    const scene = createSceneByJsPsychPlugin(app, trial);
+    const scene = app.scene(jsPsychSetup(trial));
 
     const result = await scene.show();
 
@@ -280,7 +271,7 @@ describe('createSceneByJsPsychPlugin', () => {
       post_trial_gap: 50, // 50ms gap
     };
 
-    const scene = createSceneByJsPsychPlugin(app, trial);
+    const scene = app.scene(jsPsychSetup(trial));
     const closeSpy = spyOn(scene, 'close');
 
     // Start the scene
@@ -325,7 +316,7 @@ describe('createSceneByJsPsychPlugin', () => {
     };
 
     // Create the scene - this triggers plugin creation and trial execution
-    createSceneByJsPsychPlugin(app, trial);
+    app.scene(jsPsychSetup(trial));
 
     // Should have warned about the non-existent method
     expect(consoleSpy).toHaveBeenCalledWith(
@@ -367,7 +358,7 @@ describe('createSceneByJsPsychPlugin', () => {
     };
 
     // Create the scene - this triggers plugin creation and trial execution
-    createSceneByJsPsychPlugin(app, trial);
+    app.scene(jsPsychSetup(trial));
 
     // Should have warned about the non-existent method
     expect(consoleSpy).toHaveBeenCalledWith(
@@ -415,7 +406,7 @@ describe('createSceneByJsPsychPlugin', () => {
     };
 
     // Create the scene - this triggers plugin creation and trial execution
-    createSceneByJsPsychPlugin(app, trial);
+    app.scene(jsPsychSetup(trial));
 
     // Should have warned about the non-existent method
     expect(consoleSpy).toHaveBeenCalledWith(
@@ -434,7 +425,7 @@ describe('createSceneByJsPsychPlugin', () => {
     };
 
     // Should not throw when on_finish is not provided
-    const scene = createSceneByJsPsychPlugin(app, trial);
+    const scene = app.scene(jsPsychSetup(trial));
     expect(scene).toBeInstanceOf(Scene);
   });
 
@@ -445,7 +436,7 @@ describe('createSceneByJsPsychPlugin', () => {
       css_classes: 'single-class',
     };
 
-    const scene = createSceneByJsPsychPlugin(app, trial);
+    const scene = app.scene(jsPsychSetup(trial));
     const content = scene.root.querySelector('#jspsych-content')!;
 
     expect(content.classList.contains('single-class')).toBe(true);
@@ -460,7 +451,7 @@ describe('createSceneByJsPsychPlugin', () => {
       stimulus: 'Test in production',
     };
 
-    const scene = createSceneByJsPsychPlugin(app, trial);
+    const scene = app.scene(jsPsychSetup(trial));
 
     expect(scene).toBeInstanceOf(Scene);
 
@@ -481,7 +472,7 @@ describe('createSceneByJsPsychPlugin', () => {
     };
 
     // Should not throw
-    const scene = createSceneByJsPsychPlugin(app, trial);
+    const scene = app.scene(jsPsychSetup(trial));
     expect(scene).toBeInstanceOf(Scene);
   });
 
@@ -495,7 +486,7 @@ describe('createSceneByJsPsychPlugin', () => {
     };
 
     // Just create the scene, don't execute to avoid timing issues
-    const scene = createSceneByJsPsychPlugin(app, trial);
+    const scene = app.scene(jsPsychSetup(trial));
     expect(scene).toBeInstanceOf(Scene);
     // Note: on_load is called during plugin.trial() execution
   });
@@ -522,14 +513,14 @@ describe('App jsPsych integration', () => {
     app = new App(root, mockEnvData);
   });
 
-  it('should create a scene with jsPsych plugin via app.jsPsych method', async () => {
+  it('should create a scene with jsPsych plugin via app.scene + jsPsychTrial', async () => {
     const trial = {
       type: MockJsPsychPlugin,
       stimulus: 'Test stimulus',
       choices: ['f', 'j'],
     };
 
-    const scene = app.jsPsych(trial);
+    const scene = app.scene(jsPsychSetup(trial));
 
     expect(scene).toBeInstanceOf(Scene);
 

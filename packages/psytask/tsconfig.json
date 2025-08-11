@@ -4,6 +4,6 @@
     "outDir": "dist",
     "types": ["jspsych", "wicg-file-system-access"]
   },
-  "include": ["src", "types", "index.ts"],
-  "exclude": ["src/data-convert.ts"]
+  "include": ["src", "types", "index.ts", "examples"]
+  // "exclude": ["**/jspsych.ts"]
 }

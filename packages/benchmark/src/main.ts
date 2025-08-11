@@ -1,11 +1,7 @@
-import { render, html, type TemplateResult } from 'lit-html';
-import { Overlay, Plot, injectResource } from './util';
-import {
-  detectEnvironment,
-  h,
-  promiseWithResolvers,
-} from '../../psytask/src/util';
+import { html } from 'lit-html';
+import { h, promiseWithResolvers } from '../../psytask/src/util';
 import { getLibs, getTasks } from './macro' with { type: 'macro' };
+import { Overlay, Plot, detectEnvironment, injectResource } from './util';
 
 const env = await detectEnvironment();
 const libs = await getLibs();
@@ -220,7 +216,7 @@ ${JSON.stringify(options, null, 2)}</textarea
             <input
               id="count"
               type="number"
-              .value=${options.count}
+              .value=${options.count + ''}
               @input=${(e: Event) => {
                 options.count = Number((e.target as HTMLInputElement).value);
               }}

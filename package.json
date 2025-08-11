@@ -9,6 +9,7 @@
   "devDependencies": {
     "@jspsych/plugin-html-button-response": "^2.1.0",
     "@jspsych/plugin-html-keyboard-response": "^2.1.0",
+    "@jspsych/plugin-survey": "^3.0.0",
     "@types/bun": "^1.2.18",
     "jspsych": "^8.2.2",
     "npm-run-all2": "^8.0.4",

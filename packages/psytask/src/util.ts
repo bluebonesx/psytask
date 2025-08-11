@@ -1,49 +1,61 @@
-import type { Properties as CSSProperties } from 'csstype';
-import { detect } from 'detect-browser';
-import type { EventType, Merge } from '../types';
+import type { PropertiesHyphen as CSSProperties } from 'csstype';
+import type { EventType, LooseObject, Merge } from '../types';
 
-/** Creates a new HTML element quickly and easily */
-export function h<K extends keyof HTMLElementTagNameMap>(
+/** Creates HTML element */
+export const h = <K extends keyof HTMLElementTagNameMap>(
   tagName: K,
-  props?: Partial<Merge<HTMLElementTagNameMap[K], { style?: CSSProperties }>>,
-  children?: Node | string | (Node | string)[],
-) {
+  props?: Partial<
+    Merge<
+      HTMLElementTagNameMap[K],
+      { style?: CSSProperties; dataset?: LooseObject }
+    >
+  > | null,
+  children?: Node | string | (Node | string)[] | null,
+) => {
   const el = document.createElement(tagName);
-  if (typeof props !== 'undefined') {
-    for (const key in props) {
-      if (hasOwn(props, key)) {
-        if (key === 'style') {
-          for (const styleKey in props.style!) {
-            if (hasOwn(props.style, styleKey)) {
-              el.style[styleKey] = props.style[styleKey]!;
-            }
-          }
-        } else {
+  if (props != null) {
+    for (const key of Object.keys(props)) {
+      if (key === 'style') {
+        for (const k of Object.keys(props.style!)) {
           //@ts-ignore
-          el[key] = props[key]!;
+          el.style.setProperty(k, props.style[k]);
         }
+        continue;
       }
+      if (key === 'dataset') {
+        for (const k of Object.keys(props.dataset!)) {
+          //@ts-ignore
+          el.dataset[k] = props.dataset[k];
+        }
+        continue;
+      }
+      //@ts-ignore
+      el[key] = props[key];
     }
   }
-  if (typeof children !== 'undefined') {
-    if (typeof children === 'string') {
-      el.textContent = children;
-    } else if (Array.isArray(children)) {
-      el.append(...children);
-    } else {
-      el.appendChild(children);
-    }
+  if (children != null) {
+    Array.isArray(children) ? el.append(...children) : el.append(children);
   }
   return el;
-}
-export function pipe<T>(...fns: ((v: T) => T)[]) {
-  return (v: T) => fns.reduce((acc, fn) => fn(acc), v);
-}
-export function hasOwn<T, K extends PropertyKey>(
+};
+export function hasOwn<T extends LooseObject, K extends PropertyKey>(
   obj: T,
   key: K,
-): obj is K extends keyof T ? T : T & { [P in K]: unknown } {
+): obj is Extract<T, { [P in K]: unknown }> extends never
+  ? T & { [P in K]: unknown }
+  : Extract<T, { [P in K]: unknown }> {
   return Object.prototype.hasOwnProperty.call(obj, key);
+}
+export function proxyNonKey<T extends object>(
+  obj: T,
+  onNoKey: (key: PropertyKey) => void,
+) {
+  return new Proxy(obj, {
+    get(o, k) {
+      if (hasOwn(o, k)) return o[k as keyof T];
+      return onNoKey(k);
+    },
+  });
 }
 export const promiseWithResolvers = (
   hasOwn(Promise, 'withResolvers') &&
@@ -61,155 +73,66 @@ export const promiseWithResolvers = (
   resolve: (value: T | PromiseLike<T>) => void;
   reject: (reason?: any) => void;
 };
-export function proxy<T extends object>(
-  obj: T,
-  opts: {
-    onNoKey?: (key: PropertyKey) => void;
-  },
+/**
+ * Add event listener and return cleanup function
+ *
+ * @example
+ *   const cleanup = on(window, 'resize', (e) => {});
+ */
+export function on<T extends EventTarget, K extends EventType<T>>(
+  target: T,
+  type: K,
+  //@ts-ignore
+  listener: (ev: Parameters<T[`on${K}`]>[0]) => void,
+  options?: boolean | AddEventListenerOptions,
 ) {
-  return new Proxy(obj, {
-    get(o, k) {
-      if (hasOwn(o, k)) return o[k as keyof T];
-      opts.onNoKey?.(k);
-    },
-  });
+  target.addEventListener(type, listener, options);
+  return () => target.removeEventListener(type, listener, options);
 }
 
 //@ts-ignore
 Symbol.dispose ??= Symbol.for('Symbol.dispose');
-/**
- * Most browsers do not support this feature, but using it is good practice.
- *
- * @see https://www.typescriptlang.org/docs/handbook/release-notes/typescript-5-2.html
- */
-export class DisposableClass implements Disposable {
-  #cleanups: (() => void)[] = [];
+export class EventEmitter<
+  M extends LooseObject & { cleanup?: never },
+  EventMap extends { cleanup: null } = M & { cleanup: null },
+> implements Disposable
+{
+  protected listeners: {
+    [K in keyof EventMap]?: Set<(e: EventMap[K]) => void>;
+  } = {};
   [Symbol.dispose]() {
-    for (const task of this.#cleanups) task();
-    this.#cleanups.length = 0;
+    this.emit('cleanup', null);
   }
-  /** Add a cleanup function to be called on dispose */
-  addCleanup(cleanup: () => void) {
-    this.#cleanups.push(cleanup);
+  /** Add event listener */
+  on<K extends keyof EventMap>(type: K, listener: (evt: EventMap[K]) => void) {
+    (this.listeners[type] ??= new Set<any>()).add(listener);
+    return this;
   }
-  /**
-   * Add disposable event listener
-   *
-   * @example
-   *   this.useEventListener(window, 'resize', (e) => {
-   *     console.log('Window resized', e);
-   *   });
-   */
-  useEventListener<T extends EventTarget, K extends EventType<T>>(
-    target: T,
+  /** Remove event listener */
+  off<K extends keyof EventMap>(type: K, listener: (evt: EventMap[K]) => void) {
+    this.listeners[type]?.delete(listener);
+    return this;
+  }
+  /** Add one-time event listener, can not be removed manually */
+  once<K extends keyof EventMap>(
     type: K,
-    //@ts-ignore
-    listener: (ev: Parameters<T[`on${K}`]>[0]) => void,
-    options?: boolean | AddEventListenerOptions,
+    listener: (evt: EventMap[K]) => void,
   ) {
-    target.addEventListener(type, listener, options);
-    this.addCleanup(() => target.removeEventListener(type, listener, options));
-  }
-}
-
-// stat
-export function mean_std(arr: number[]) {
-  const n = arr.length;
-  const mean = arr.reduce((acc, v) => acc + v) / n;
-  const std = Math.sqrt(
-    arr.reduce((acc, v) => acc + Math.pow(v - mean, 2), 0) / (n - 1),
-  );
-  return { mean, std };
-}
-
-// detect environment
-export function detectFPS(opts: { root: Element; framesCount: number }) {
-  function checkPageVisibility() {
-    if (document.visibilityState === 'hidden') {
-      alert(
-        'Please keep the page visible on the screen during the FPS detection',
-      );
-      location.reload();
-    }
-  }
-  document.addEventListener('visibilitychange', checkPageVisibility);
-
-  let startTime = 0;
-  const frameDurations: number[] = [];
-  const el = opts.root.appendChild(h('p'));
-
-  return new Promise<number>((resolve) => {
-    window.requestAnimationFrame(function frame(lastTime) {
-      if (startTime !== 0) {
-        frameDurations.push(lastTime - startTime);
+    const wrapper = (evt: EventMap[K]) => {
+      try {
+        listener(evt);
+      } finally {
+        this.off(type, wrapper);
       }
-      startTime = lastTime;
-
-      const progress = frameDurations.length / opts.framesCount;
-      el.textContent = `test fps ${Math.floor(progress * 100)}%`;
-      if (progress < 1) {
-        window.requestAnimationFrame(frame);
-        return;
-      }
-
-      document.removeEventListener('visibilitychange', checkPageVisibility);
-
-      // calculate average frame duration
-      const { mean, std } = mean_std(frameDurations);
-      const valids = frameDurations.filter(
-        (v) => mean - std * 2 <= v && v <= mean + std * 2,
-      );
-      if (valids.length < 1) {
-        throw new Error('No valid frames found');
-      }
-      const frame_ms = valids.reduce((acc, v) => acc + v) / valids.length;
-
-      console.log('detectFPS', {
-        mean,
-        std,
-        valids,
-        raws: frameDurations,
-        frame_ms,
-      });
-      resolve(frame_ms);
-    });
-  });
-}
-export async function detectEnvironment(options?: {
-  /** The detection panel container */
-  root?: Element;
-  /** Count of frames to calculate perFrame milliseconds */
-  framesCount?: number;
-}) {
-  const opts = { root: document.body, framesCount: 60, ...options };
-  const panel = opts.root.appendChild(
-    h('div', { style: { textAlign: 'center', lineHeight: '100dvh' } }),
-  );
-
-  const ua = navigator.userAgent;
-  const browser = detect(ua);
-  if (!browser) {
-    throw new Error('Cannot detect browser environment');
+    };
+    this.on(type, wrapper);
+    return this;
   }
-  const env = {
-    ua,
-    os: browser.os,
-    browser: browser.name + '/' + browser.version,
-    mobile: /Mobi/i.test(ua),
-    'in-app': /wv|in-app/i.test(ua), // webview or in-app browser
-    screen_wh: [window.screen.width, window.screen.height],
-    window_wh: (function () {
-      const wh = [window.innerWidth, window.innerHeight];
-      window.addEventListener('resize', () => {
-        wh[0] = window.innerWidth;
-        wh[1] = window.innerHeight;
-      });
-      return wh;
-    })(),
-    frame_ms: await detectFPS({ root: panel, framesCount: opts.framesCount }),
-  } as const;
-
-  opts.root.removeChild(panel);
-  console.log('env', env);
-  return env;
+  /** Emit event listeners */
+  emit<K extends keyof EventMap>(type: K, e: EventMap[K]) {
+    const listeners = this.listeners[type];
+    if (!listeners) return 0;
+    for (const listener of listeners) listener(e);
+    return listeners.size;
+  }
 }

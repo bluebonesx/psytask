@@ -1,6 +1,51 @@
-import { h } from '../../psytask/src/util';
+import { detect } from 'detect-browser';
 import { html, render, type TemplateResult } from 'lit-html';
+import { detectFPS, h } from '../../psytask/src/util';
 
+export async function detectEnvironment(options?: {
+  /** The detection panel container */
+  root?: Element;
+  /** Count of frames to calculate perFrame milliseconds */
+  framesCount?: number;
+}) {
+  const opts = { root: document.body, framesCount: 60, ...options };
+  const panel = opts.root.appendChild(
+    h('div', { style: { textAlign: 'center', lineHeight: '100dvh' } }),
+  );
+
+  const ua = navigator.userAgent;
+  const browser = detect(ua);
+  if (!browser) {
+    throw new Error('Cannot detect browser environment');
+  }
+  const env = {
+    ua,
+    os: browser.os,
+    browser: browser.name + '/' + browser.version,
+    mobile: /Mobi/i.test(ua),
+    'in-app': /wv|in-app/i.test(ua), // webview or in-app browser
+    screen_wh_pix: [window.screen.width, window.screen.height] as [
+      width: number,
+      height: number,
+    ],
+    window_wh_pix: (function () {
+      const wh: [width: number, height: number] = [
+        window.innerWidth,
+        window.innerHeight,
+      ];
+      window.addEventListener('resize', () => {
+        wh[0] = window.innerWidth;
+        wh[1] = window.innerHeight;
+      });
+      return wh;
+    })(),
+    frame_ms: await detectFPS({ root: panel, framesCount: opts.framesCount }),
+  } as const;
+
+  opts.root.removeChild(panel);
+  console.log('env', env);
+  return env;
+}
 export function injectResource(tag: string, props: {}) {
   return new Promise((resolve, reject) => {
     const el = document.createElement(tag);
