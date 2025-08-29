@@ -239,7 +239,7 @@ function detectFPS(opts: { root: Element; framesCount: number }) {
       }
       const frame_ms = valids.reduce((acc, v) => acc + v) / valids.length;
 
-      console.log('detectFPS', {
+      console.info('detectFPS', {
         mean,
         std,
         valids,

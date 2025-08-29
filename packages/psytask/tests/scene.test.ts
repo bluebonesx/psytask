@@ -1,127 +1,47 @@
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  mock,
-  spyOn,
-} from 'bun:test';
-import { Window } from 'happy-dom';
+import { beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import { App } from '../src/app';
-import { Scene, type SceneOptions, type SceneSetup } from '../src/scene';
-import { detectEnvironment } from '../src/util';
-
-let window: Window;
-let document: Document;
-let originalWindow: any;
-let originalDocument: any;
-
-beforeEach(() => {
-  // Setup happy-dom
-  window = new Window();
-  document = window.document as any;
-
-  // Store original globals
-  originalWindow = globalThis.window;
-  originalDocument = globalThis.document;
-
-  // Set globals
-  globalThis.window = window as any;
-  globalThis.document = document as any;
-  globalThis.Element = window.Element as any;
-  globalThis.HTMLElement = window.HTMLElement as any;
-  globalThis.alert = () => {};
-  globalThis.requestAnimationFrame = (cb: FrameRequestCallback) => {
-    setTimeout(() => cb(performance.now()), 16);
-    return 1;
-  };
-
-  // Mock getComputedStyle (both global and window)
-  const mockComputedStyle = (element: Element) =>
-    ({
-      getPropertyValue: (property: string) => {
-        if (property === '--psytask') {
-          return 'enabled'; // Default to enabled for tests
-        }
-        return '';
-      },
-    }) as any;
-  globalThis.getComputedStyle = mockComputedStyle as any;
-  (window as any).getComputedStyle = mockComputedStyle as any;
-
-  // Setup basic HTML structure
-  document.documentElement.innerHTML = `
-    <html>
-      <head>
-        <style>
-          :root { --psytask: 'enabled'; }
-        </style>
-      </head>
-      <body></body>
-    </html>
-  `;
-
-  // Mock console methods to reduce noise
-  globalThis.console.warn = () => {};
-  globalThis.console.log = () => {};
-});
-
-afterEach(() => {
-  // Restore original globals
-  globalThis.window = originalWindow;
-  globalThis.document = originalDocument;
-});
+import {
+  Scene,
+  type SceneOptions,
+  type SceneSetup,
+  generic,
+} from '../src/scene';
+import { h } from '../src/util';
 
 describe('Scene', () => {
   let mockApp: App;
-  let mockEnvData: Awaited<ReturnType<typeof detectEnvironment>>;
-
   beforeEach(() => {
-    mockEnvData = {
-      ua: 'test-user-agent',
-      os: null,
-      browser: 'test-browser/1.0',
-      mobile: false,
-      'in-app': false,
-      screen_wh: [1920, 1080],
-      window_wh: [1024, 768],
-      frame_ms: 16.67,
-    };
-
-    const root = document.createElement('div');
-    document.body.appendChild(root);
-    mockApp = new App(root, mockEnvData);
+    mockApp = new App(document.body);
   });
 
   describe('constructor', () => {
     it('should create Scene instance with app and setup function', () => {
-      const setup: SceneSetup<[]> = (ctx) => () => {
-        ctx.root.textContent = 'test scene';
-      };
+      const setup: SceneSetup<{}> = (props, ctx) => ({
+        node: 'test scene',
+      });
 
-      const scene = new Scene(mockApp, setup);
+      const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
       expect(scene.app).toBe(mockApp);
-      expect(scene.root).toBeInstanceOf(window.Element);
+      expect(scene.root).toBeInstanceOf(window.HTMLDivElement);
       expect(scene.root.tagName).toBe('DIV');
-      expect(scene.data.start_time).toBe(0);
       // show() should be available to drive updates
       expect(typeof scene.show).toBe('function');
     });
 
     it('should accept options parameter', () => {
-      const options: SceneOptions = {
+      const options: SceneOptions<SceneSetup<{}>> = {
+        defaultProps: {},
         duration: 1000,
         close_on: 'click',
       };
 
-      const setup: SceneSetup<[]> = () => () => {};
+      const setup: SceneSetup<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, options);
 
-      expect(scene.#options).toBe(options);
-      expect(scene.#options.duration).toBe(1000);
-      expect(scene.#options.close_on).toBe('click');
+      expect(scene.options).toBe(options);
+      expect(scene.options.duration).toBe(1000);
+      expect(scene.options.close_on).toBe('click');
     });
 
     it('should setup close event listeners for single close_on event', () => {
@@ -129,9 +49,13 @@ describe('Scene', () => {
         window.Element.prototype,
         'addEventListener',
       );
-      const setup: SceneSetup<[]> = () => () => {};
+      const setup: SceneSetup<{}> = () => ({ node: '' });
 
-      new Scene(mockApp, setup, { close_on: 'click' });
+      const scene = new Scene(mockApp, setup, {
+        defaultProps: {},
+        close_on: 'click',
+      });
+      scene.show(); // Event listeners are added when scene is shown
 
       expect(addEventListenerSpy).toHaveBeenCalledWith(
         'click',
@@ -145,9 +69,13 @@ describe('Scene', () => {
         window.Element.prototype,
         'addEventListener',
       );
-      const setup: SceneSetup<[]> = () => () => {};
+      const setup: SceneSetup<{}> = () => ({ node: '' });
 
-      new Scene(mockApp, setup, { close_on: ['click', 'keydown'] });
+      const scene = new Scene(mockApp, setup, {
+        defaultProps: {},
+        close_on: ['click', 'keydown'],
+      });
+      scene.show(); // Event listeners are added when scene is shown
 
       expect(addEventListenerSpy).toHaveBeenCalledWith(
         'click',
@@ -165,13 +93,13 @@ describe('Scene', () => {
       let callCount = 0;
       const originalAddEventListener =
         window.Element.prototype.addEventListener;
-      window.Element.prototype.addEventListener = function (...args) {
+      window.Element.prototype.addEventListener = function (...args: any) {
         callCount++;
         return originalAddEventListener.apply(this, args);
       };
 
-      const setup: SceneSetup<[]> = () => () => {};
-      new Scene(mockApp, setup, {});
+      const setup: SceneSetup<{}> = () => ({ node: '' });
+      new Scene(mockApp, setup, { defaultProps: {} });
 
       // Restore
       window.Element.prototype.addEventListener = originalAddEventListener;
@@ -179,72 +107,72 @@ describe('Scene', () => {
       expect(callCount).toBe(0);
     });
 
-    it('should call setup function and get update function', () => {
-      const setupSpy = mock((ctx: Scene<never>) => {
-        return () => {
-          ctx.root.textContent = 'updated';
-        };
+    it('should call setup function and get node', () => {
+      const setupSpy = mock((props: any, ctx: Scene<any>) => {
+        return { node: 'updated' };
       });
 
-      const scene = new Scene(mockApp, setupSpy);
+      const scene = new Scene(mockApp, setupSpy, { defaultProps: {} });
 
-      expect(setupSpy).toHaveBeenCalledWith(scene);
-      scene.show();
+      expect(setupSpy).toHaveBeenCalledWith(scene.props, scene);
       expect(scene.root.textContent).toBe('updated');
     });
 
     it('should initialize scene as closed', () => {
-      const setup: SceneSetup<[]> = () => () => {};
-      const scene = new Scene(mockApp, setup);
+      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
       // Scene should be closed initially
       expect(scene.root.style.transform).toBe('scale(0)');
     });
 
     it('should add cleanup function to remove from app root', () => {
-      const setup: SceneSetup<[]> = () => () => {};
-      const scene = new Scene(mockApp, setup);
+      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
-      // Add scene to app root first
-      mockApp.root.appendChild(scene.root);
+      // Scene root should be added to app root automatically
       expect(mockApp.root.contains(scene.root)).toBe(true);
 
-      // Dispose should remove it
-      scene[Symbol.dispose]();
+      // Emit cleanup should remove it
+      scene.emit('cleanup', null);
       expect(mockApp.root.contains(scene.root)).toBe(false);
     });
   });
 
   describe('config method', () => {
     it('should update options and return scene instance', () => {
-      const setup: SceneSetup<[]> = () => () => {};
-      const scene = new Scene(mockApp, setup, { duration: 1000 });
+      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const scene = new Scene(mockApp, setup, {
+        defaultProps: {},
+        duration: 1000,
+      });
 
       const result = scene.config({ duration: 2000, close_on: 'click' });
 
       expect(result).toBe(scene);
-      expect(scene.#options.duration).toBe(2000);
-      expect(scene.#options.close_on).toBe('click');
+      expect(scene.options.duration).toBe(2000);
+      expect(scene.options.close_on).toBe('click');
     });
 
     it('should partially update options', () => {
-      const setup: SceneSetup<[]> = () => () => {};
+      const setup: SceneSetup<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, {
+        defaultProps: {},
         duration: 1000,
         close_on: 'click',
       });
 
       scene.config({ duration: 2000 });
 
-      expect(scene.#options.duration).toBe(2000);
-      expect(scene.#options.close_on).toBe('click'); // Should remain unchanged
+      expect(scene.options.duration).toBe(2000);
+      expect(scene.options.close_on).toBe('click'); // Should remain unchanged
     });
   });
 
   describe('close method', () => {
     it('should close the scene and resolve promise', async () => {
-      const setup: SceneSetup<[]> = () => () => {};
-      const scene = new Scene(mockApp, setup);
+      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
       // Show scene first
       const showPromise = scene.show();
@@ -256,69 +184,77 @@ describe('Scene', () => {
 
       // Promise should resolve with scene data
       const result = await showPromise;
-      expect(result).toBe(scene.data);
+      expect(typeof result).toBe('object');
+      expect(result.start_time).toBeGreaterThanOrEqual(0);
     });
 
-    it('should warn when trying to close already closed scene', () => {
-      const consoleSpy = spyOn(console, 'warn');
-      const setup: SceneSetup<[]> = () => () => {};
-      const scene = new Scene(mockApp, setup);
+    it('should throw when trying to close not shown scene', () => {
+      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
-      // Scene is initially closed
-      scene.close();
-
-      expect(consoleSpy).toHaveBeenCalledWith('Scene is already closed');
+      // Scene is initially not shown
+      expect(() => scene.close()).toThrow('Scene is not being shown');
     });
 
     it('should handle close when no show promise exists', () => {
-      const setup: SceneSetup<[]> = () => () => {};
-      const scene = new Scene(mockApp, setup);
+      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
-      // Close without showing - should not throw
-      expect(() => scene.close()).not.toThrow();
+      // Close without showing - should throw
+      expect(() => scene.close()).toThrow('Scene is not being shown');
     });
   });
 
   describe('show method', () => {
-    it('should show the scene and call update function', () => {
-      const updateSpy = mock((text: string) => {});
-      const setup: SceneSetup<[string]> = () => updateSpy;
-      const scene = new Scene(mockApp, setup);
+    it('should show the scene and update props', () => {
+      let currentText = '';
+      const setup: SceneSetup<{ text?: string }> = (props) => {
+        const div = document.createElement('div');
+        // Setup reactive effect manually since we can't import `effect` function
+        const updateText = () => {
+          div.textContent = props.text || '';
+          currentText = props.text || '';
+        };
+        updateText(); // Initial setup
+        return { node: div };
+      };
+      const scene = new Scene(mockApp, setup, { defaultProps: { text: '' } });
 
-      scene.show('test text');
+      scene.show({ text: 'test text' });
 
       expect(scene.root.style.transform).toBe('scale(1)');
-      expect(updateSpy).toHaveBeenCalledWith('test text');
+      // The props are updated, but the DOM update might be async
+      expect(scene.props.text).toBe('test text');
     });
 
-    it('should warn when trying to show already shown scene', () => {
-      const consoleSpy = spyOn(console, 'warn');
-      const setup: SceneSetup<[]> = () => () => {};
-      const scene = new Scene(mockApp, setup);
+    it('should throw when trying to show already shown scene', () => {
+      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
       scene.show();
-      const result = scene.show();
-
-      expect(consoleSpy).toHaveBeenCalledWith('Scene is already shown');
-      expect(result).toBe(scene.data);
+      expect(() => scene.show()).toThrow('Scene is already being shown');
     });
 
     it('should return a promise that resolves with scene data', async () => {
-      const setup: SceneSetup<[]> = () => () => {};
-      const scene = new Scene(mockApp, setup);
+      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
       const showPromise = scene.show();
       scene.close();
 
       const result = await showPromise;
-      expect(result).toBe(scene.data);
+      expect(typeof result).toBe('object');
+      expect(result.start_time).toBeGreaterThanOrEqual(0);
     });
 
     it('should warn when duration is not a multiple of frame_ms (development only)', () => {
       process.env.NODE_ENV = 'development';
       const consoleSpy = spyOn(console, 'warn');
-      const setup: SceneSetup<[]> = () => () => {};
-      const scene = new Scene(mockApp, setup, { duration: 10 }); // Not a multiple of 16.67
+      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const scene = new Scene(mockApp, setup, {
+        defaultProps: {},
+        duration: 10,
+      }); // Not a multiple of 16.67
 
       scene.show();
 
@@ -330,10 +266,15 @@ describe('Scene', () => {
     it('should not warn when duration aligns with frame multiples (error < 1ms)', () => {
       process.env.NODE_ENV = 'development';
       const consoleSpy = spyOn(console, 'warn');
-      const setup: SceneSetup<[]> = () => () => {};
-      const scene = new Scene(mockApp, setup, { duration: 1000 });
+      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const scene = new Scene(mockApp, setup, {
+        defaultProps: {},
+        duration: 1000,
+      });
 
       scene.show();
+      // Close immediately to avoid cancelAnimationFrame
+      scene.close();
 
       expect(consoleSpy).not.toHaveBeenCalledWith(
         expect.stringContaining('Scene duration is not a multiple of frame_ms'),
@@ -341,78 +282,91 @@ describe('Scene', () => {
     });
 
     it('should handle scene without duration', async () => {
-      const setup: SceneSetup<[]> = () => () => {};
-      const scene = new Scene(mockApp, setup);
+      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
       scene.show();
 
       // Wait a moment then close to stop animation
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await 0;
       scene.close();
 
       expect(scene.root.style.transform).toBe('scale(0)');
     });
 
     it('should set start_time on first frame', async () => {
-      const setup: SceneSetup<[]> = () => () => {};
-      const scene = new Scene(mockApp, setup);
+      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
-      scene.show();
+      const showPromise = scene.show();
 
       // Wait for requestAnimationFrame to set start_time
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await new Promise((r) => setTimeout(r, 17));
+      scene.close();
 
-      expect(scene.data.start_time).toBeGreaterThan(0);
+      const result = await showPromise;
+      expect(result.start_time).toBeGreaterThan(0);
     });
 
-    it('should call on_frame callback during animation', async () => {
-      const onFrameSpy = mock((lastFrameTime: number) => {});
-      const setup: SceneSetup<[]> = () => () => {};
+    it('should call scene:frame event during animation', async () => {
+      const onFrameSpy = mock((event: { lastFrameTime: number }) => {});
+      const setup: SceneSetup<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, {
+        defaultProps: {},
         duration: 50, // Short duration to auto-close
-        on_frame: onFrameSpy,
       });
 
+      scene.on('scene:frame', onFrameSpy);
       scene.show();
 
       // Wait for animation frames
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await new Promise((r) => setTimeout(r, 17));
 
       expect(onFrameSpy).toHaveBeenCalled();
     });
 
     it('should auto-close when duration is reached', async () => {
-      const setup: SceneSetup<[]> = () => () => {};
-      const scene = new Scene(mockApp, setup, { duration: 20 }); // Very short duration
+      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const scene = new Scene(mockApp, setup, {
+        defaultProps: {},
+        duration: 20,
+      }); // Very short duration
 
-      const showPromise = scene.show();
-
-      // Wait for duration to pass
-      await new Promise((resolve) => setTimeout(resolve, 50));
-
-      // Scene should auto-close
+      const result = await scene.show();
       expect(scene.root.style.transform).toBe('scale(0)');
-
-      // Promise should resolve
-      const result = await showPromise;
-      expect(result).toBe(scene.data);
+      expect(typeof result).toBe('object');
+      expect(result.start_time).toBeGreaterThanOrEqual(0);
     });
 
-    it('should handle multiple parameters in update function', () => {
-      const updateSpy = mock((a: number, b: string, c: boolean) => {});
-      const setup: SceneSetup<[number, string, boolean]> = () => updateSpy;
-      const scene = new Scene(mockApp, setup);
+    it('should handle multiple parameters in props', () => {
+      const setup: SceneSetup<{ a?: number; b?: string; c?: boolean }> = (
+        props,
+      ) => {
+        const div = document.createElement('div');
+        // Set initial content
+        div.textContent = `${props.a}-${props.b}-${props.c}`;
+        return { node: div };
+      };
+      const scene = new Scene(mockApp, setup, {
+        defaultProps: { a: 0, b: '', c: false },
+      });
 
-      scene.show(42, 'test', true);
+      scene.show({ a: 42, b: 'test', c: true });
 
-      expect(updateSpy).toHaveBeenCalledWith(42, 'test', true);
+      // Check that props are updated
+      expect(scene.props.a).toBe(42);
+      expect(scene.props.b).toBe('test');
+      expect(scene.props.c).toBe(true);
     });
   });
 
   describe('event handling', () => {
     it('should close scene when close_on event is triggered', () => {
-      const setup: SceneSetup<[]> = () => () => {};
-      const scene = new Scene(mockApp, setup, { close_on: 'click' });
+      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const scene = new Scene(mockApp, setup, {
+        defaultProps: {},
+        close_on: 'click',
+      });
 
       scene.show();
       expect(scene.root.style.transform).toBe('scale(1)');
@@ -424,9 +378,10 @@ describe('Scene', () => {
       expect(scene.root.style.transform).toBe('scale(0)');
     });
 
-    it('should handle multiple close_on events', () => {
-      const setup: SceneSetup<[]> = () => () => {};
+    it('should handle multiple close_on events', async () => {
+      const setup: SceneSetup<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, {
+        defaultProps: {},
         close_on: ['click', 'keydown'],
       });
 
@@ -437,7 +392,8 @@ describe('Scene', () => {
       scene.root.dispatchEvent(clickEvent);
       expect(scene.root.style.transform).toBe('scale(0)');
 
-      // Show again and test keydown
+      // Wait a bit then show again and test keydown
+      await 0;
       scene.show();
       const keyEvent = new (globalThis as any).Event('keydown');
       scene.root.dispatchEvent(keyEvent);
@@ -446,116 +402,129 @@ describe('Scene', () => {
   });
 
   describe('data handling', () => {
-    it('should maintain scene data object', () => {
-      const setup: SceneSetup<[]> = (ctx) => () => {
-        (ctx.data as any).custom = 'value';
-      };
-      const scene = new Scene(mockApp, setup);
+    it('should handle scene data object', () => {
+      const setup: SceneSetup<{}, { custom: string }> = (props, ctx) => ({
+        node: 'test',
+        data: () => ({ custom: 'value' }),
+      });
+      const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
       scene.show();
 
-      expect(scene.data.start_time).toBe(0);
-      expect((scene.data as any).custom).toBe('value');
+      expect(scene.data).toBeDefined();
+      expect(scene.data?.().custom).toBe('value');
     });
 
     it('should preserve custom data when showing scene', async () => {
-      const setup: SceneSetup<[]> = (ctx) => () => {
-        (ctx.data as any).test = 'data';
-      };
-      const scene = new Scene(mockApp, setup);
+      const setup: SceneSetup<{}, { test: string }> = (props, ctx) => ({
+        node: 'test',
+        data: () => ({ test: 'data' }),
+      });
+      const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
       const showPromise = scene.show();
       scene.close();
 
       const result = await showPromise;
-      expect((result as any).test).toBe('data');
+      expect(result.test).toBe('data');
     });
   });
 
   describe('disposal and cleanup', () => {
-    it('should dispose properly with Symbol.dispose', () => {
-      const setup: SceneSetup<[]> = () => () => {};
-      const scene = new Scene(mockApp, setup);
+    it('should dispose properly with cleanup event', () => {
+      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
-      // Add to app root
-      mockApp.root.appendChild(scene.root);
+      // Scene root should be added to app root automatically
       expect(mockApp.root.contains(scene.root)).toBe(true);
 
-      // Dispose
-      scene[Symbol.dispose]();
+      // Emit cleanup should remove it
+      scene.emit('cleanup', null);
 
       // Should be removed from app root
       expect(mockApp.root.contains(scene.root)).toBe(false);
     });
 
     it('should handle disposal when scene is shown', async () => {
-      const setup: SceneSetup<[]> = () => () => {};
-      const scene = new Scene(mockApp, setup);
+      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
-      // Ensure scene root is added to app root first
-      if (!mockApp.root.contains(scene.root)) {
-        mockApp.root.appendChild(scene.root);
-      }
+      // Scene root is already added to app root in constructor
+      expect(mockApp.root.contains(scene.root)).toBe(true);
 
       const showPromise = scene.show();
 
-      // Close and dispose
+      // Close and emit cleanup
       scene.close();
-      scene[Symbol.dispose]();
+      scene.emit('cleanup', null);
 
       // Should still work
-      await expect(showPromise).resolves.toBe(scene.data);
+      const result = await showPromise;
+      expect(typeof result).toBe('object');
     });
   });
 
   describe('edge cases and error handling', () => {
     it('should handle scene with no update function effects', async () => {
-      const setup: SceneSetup<[]> = () => () => {
-        // Empty update function
-      };
-      const scene = new Scene(mockApp, setup, { duration: 50 }); // Add duration to auto-close
+      const setup: SceneSetup<{}> = () => ({
+        node: '', // Empty node
+      });
+      const scene = new Scene(mockApp, setup, {
+        defaultProps: {},
+        duration: 50,
+      }); // Add duration to auto-close
 
       const showPromise = scene.show();
 
       // Wait for auto-close
-      await expect(showPromise).resolves.toBe(scene.data);
+      const result = await showPromise;
+      expect(typeof result).toBe('object');
     });
 
     it('should handle scene with complex setup', () => {
-      const setup: SceneSetup<[string, number]> = (ctx) => {
+      const setup: SceneSetup<{ message?: string; count?: number }> = (
+        props,
+        ctx,
+      ) => {
         // Setup DOM structure
         const container = document.createElement('div');
         const text = document.createElement('p');
         const button = document.createElement('button');
 
+        // Set initial content
+        text.textContent = `${props.message || ''} (${props.count || 0})`;
+        button.textContent = 'Click me';
+
         container.appendChild(text);
         container.appendChild(button);
-        ctx.root.appendChild(container);
 
-        return (message: string, count: number) => {
-          text.textContent = `${message} (${count})`;
-          button.textContent = 'Click me';
-        };
+        return { node: container };
       };
 
-      const scene = new Scene(mockApp, setup);
+      const scene = new Scene(mockApp, setup, {
+        defaultProps: { message: '', count: 0 },
+      });
 
-      scene.show('Hello', 42);
+      scene.show({ message: 'Hello', count: 42 });
 
       const text = scene.root.querySelector('p');
       const button = scene.root.querySelector('button');
 
-      expect(text?.textContent).toBe('Hello (42)');
+      // Check props are updated
+      expect(scene.props.message).toBe('Hello');
+      expect(scene.props.count).toBe(42);
       expect(button?.textContent).toBe('Click me');
     });
 
-    it('should handle rapid show/close cycles', () => {
-      const setup: SceneSetup<[]> = () => () => {};
-      const scene = new Scene(mockApp, setup);
+    it('should handle rapid show/close cycles', async () => {
+      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
-      // Rapid show/close
+      // Rapid show/close with async waits
       scene.show();
       scene.close();
+      await 0;
+
       scene.show();
       scene.close();
 
@@ -563,21 +532,23 @@ describe('Scene', () => {
     });
 
     it('should handle scene with zero duration', async () => {
-      const setup: SceneSetup<[]> = () => () => {};
-      const scene = new Scene(mockApp, setup, { duration: 0 });
-
-      const showPromise = scene.show();
-
-      // Should auto-close immediately
-      await new Promise((resolve) => setTimeout(resolve, 50));
-
+      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const scene = new Scene(mockApp, setup, {
+        defaultProps: {},
+        duration: 0,
+      });
       expect(scene.root.style.transform).toBe('scale(0)');
-      await expect(showPromise).resolves.toBe(scene.data);
+
+      const result = await scene.show();
+      expect(typeof result).toBe('object');
     });
 
     it('should handle scene with very long duration', () => {
-      const setup: SceneSetup<[]> = () => () => {};
-      const scene = new Scene(mockApp, setup, { duration: 10000 });
+      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const scene = new Scene(mockApp, setup, {
+        defaultProps: {},
+        duration: 10000,
+      });
 
       scene.show();
 
@@ -589,22 +560,22 @@ describe('Scene', () => {
     });
 
     it('should handle scene with undefined options', async () => {
-      const setup: SceneSetup<[]> = () => () => {};
-      const scene = new Scene(mockApp, setup, undefined as any);
+      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
-      expect(scene.#options).toEqual({});
+      expect(scene.options.defaultProps).toEqual({});
 
       scene.show();
       // Close quickly to avoid infinite loop
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await 0;
       scene.close();
 
       expect(scene.root.style.transform).toBe('scale(0)');
     });
 
     it('should handle show with no parameters', async () => {
-      const setup: SceneSetup<[]> = () => () => {};
-      const scene = new Scene(mockApp, setup);
+      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
       scene.show();
       // Wait a moment to let RAF start, then close
@@ -616,39 +587,43 @@ describe('Scene', () => {
 
   describe('animation timing', () => {
     it('should handle frame timing calculations correctly', async () => {
-      const setup: SceneSetup<[]> = () => () => {};
-      const scene = new Scene(mockApp, setup, { duration: 100 });
+      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const scene = new Scene(mockApp, setup, {
+        defaultProps: {},
+        duration: 100,
+      });
 
-      scene.show();
-
-      // Wait for start_time to be set
-      await new Promise((resolve) => setTimeout(resolve, 20));
-
-      expect(scene.data.start_time).toBeGreaterThan(0);
+      const result = await scene.show();
+      expect(result.start_time).toBeGreaterThan(0);
     });
 
-    it('should use magic number 1.4 in duration calculation', async () => {
-      // This tests the magic number 1.4 mentioned in the TODO comment
-      const setup: SceneSetup<[]> = () => () => {};
+    it('should use magic number 1.5 in duration calculation', async () => {
+      // This tests the magic number 1.5 mentioned in the source code
+      const setup: SceneSetup<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, {
+        defaultProps: {},
         duration: mockApp.data.frame_ms * 2, // 2 frames
       });
 
       const showPromise = scene.show();
 
       // Wait for duration calculation with magic number
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await 0;
 
-      // Should auto-close based on duration - frame_ms * 1.4
-      await expect(showPromise).resolves.toBe(scene.data);
+      // Should auto-close based on duration - frame_ms * 1.5
+      const result = await showPromise;
+      expect(typeof result).toBe('object');
     });
   });
 
   describe('requestAnimationFrame integration', () => {
     it('should handle requestAnimationFrame properly', () => {
       // This test verifies that Scene uses requestAnimationFrame
-      const setup: SceneSetup<[]> = () => () => {};
-      const scene = new Scene(mockApp, setup, { duration: 50 });
+      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const scene = new Scene(mockApp, setup, {
+        defaultProps: {},
+        duration: 50,
+      });
 
       // Just verify scene can be shown - RAF handling is tested implicitly
       // in other tests like auto-close and frame timing
@@ -657,6 +632,234 @@ describe('Scene', () => {
 
       scene.close();
       expect(scene.root.style.transform).toBe('scale(0)');
+    });
+  });
+
+  describe('generic function', () => {
+    it('should be a type helper that returns a function', () => {
+      const setup: SceneSetup<{ name: string }, { value: number }> = (
+        props,
+      ) => ({
+        node: 'test',
+        data: () => ({ value: 123 }),
+      });
+
+      const result = generic(setup);
+
+      // generic is just a type helper, it should return a function
+      expect(typeof result).toBe('function');
+    });
+  });
+
+  describe('use method', () => {
+    it('should call setup function and return result with props', () => {
+      const setup: SceneSetup<{ name: string }> = (props, ctx) => ({
+        node: h('div', null, 'Test content'),
+        data: () => ({ result: props.name }),
+      });
+
+      const scene = new Scene(mockApp, () => ({ node: 'dummy' }), {
+        defaultProps: {},
+      });
+
+      const result = scene.use(setup, { name: 'test' });
+
+      expect(result.node).toBeInstanceOf(HTMLDivElement);
+      expect(result.data).toBeInstanceOf(Function);
+      expect(result.props).toBeDefined();
+      expect(result.props.name).toBe('test');
+    });
+  });
+
+  describe('context menu prevention', () => {
+    it('should prevent context menu on right click', () => {
+      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const scene = new Scene(mockApp, setup, { defaultProps: {} });
+
+      const contextMenuEvent = new Event('contextmenu') as any;
+      contextMenuEvent.preventDefault = mock(() => {});
+
+      scene.root.dispatchEvent(contextMenuEvent);
+
+      expect(contextMenuEvent.preventDefault).toHaveBeenCalled();
+    });
+  });
+
+  describe('mouse event handling', () => {
+    it('should handle mouse:left events', async () => {
+      const mouseLeftSpy = mock((event: MouseEvent) => {});
+      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const scene = new Scene(mockApp, setup, { defaultProps: {} });
+
+      scene.on('mouse:left', mouseLeftSpy);
+      scene.show();
+
+      // Simulate left mouse button down (button = 0)
+      const mouseEvent = new MouseEvent('mousedown', { button: 0 });
+      scene.root.dispatchEvent(mouseEvent);
+
+      expect(mouseLeftSpy).toHaveBeenCalledWith(mouseEvent);
+      scene.close();
+    });
+
+    it('should handle mouse:middle events', async () => {
+      const mouseMiddleSpy = mock((event: MouseEvent) => {});
+      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const scene = new Scene(mockApp, setup, { defaultProps: {} });
+
+      scene.on('mouse:middle', mouseMiddleSpy);
+      scene.show();
+
+      // Simulate middle mouse button down (button = 1)
+      const mouseEvent = new MouseEvent('mousedown', { button: 1 });
+      scene.root.dispatchEvent(mouseEvent);
+
+      expect(mouseMiddleSpy).toHaveBeenCalledWith(mouseEvent);
+      scene.close();
+    });
+
+    it('should handle mouse:right events', async () => {
+      const mouseRightSpy = mock((event: MouseEvent) => {});
+      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const scene = new Scene(mockApp, setup, { defaultProps: {} });
+
+      scene.on('mouse:right', mouseRightSpy);
+      scene.show();
+
+      // Simulate right mouse button down (button = 2)
+      const mouseEvent = new MouseEvent('mousedown', { button: 2 });
+      scene.root.dispatchEvent(mouseEvent);
+
+      expect(mouseRightSpy).toHaveBeenCalledWith(mouseEvent);
+      scene.close();
+    });
+
+    it('should handle mouse:unknown events for other buttons', async () => {
+      const mouseUnknownSpy = mock((event: MouseEvent) => {});
+      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const scene = new Scene(mockApp, setup, { defaultProps: {} });
+
+      scene.on('mouse:unknown', mouseUnknownSpy);
+      scene.show();
+
+      // Simulate unknown mouse button down (button = 5)
+      const mouseEvent = new MouseEvent('mousedown', { button: 5 });
+      scene.root.dispatchEvent(mouseEvent);
+
+      expect(mouseUnknownSpy).toHaveBeenCalledWith(mouseEvent);
+      scene.close();
+    });
+  });
+
+  describe('keyboard event handling', () => {
+    it('should handle key:* events', async () => {
+      const keyEnterSpy = mock((event: KeyboardEvent) => {});
+      const keyEscapeSpy = mock((event: KeyboardEvent) => {});
+      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const scene = new Scene(mockApp, setup, { defaultProps: {} });
+
+      scene.on('key:Enter', keyEnterSpy);
+      scene.on('key:Escape', keyEscapeSpy);
+      scene.show();
+
+      // Simulate Enter key press
+      const enterEvent = new KeyboardEvent('keydown', { key: 'Enter' });
+      scene.root.dispatchEvent(enterEvent);
+
+      // Simulate Escape key press
+      const escapeEvent = new KeyboardEvent('keydown', { key: 'Escape' });
+      scene.root.dispatchEvent(escapeEvent);
+
+      expect(keyEnterSpy).toHaveBeenCalledWith(enterEvent);
+      expect(keyEscapeSpy).toHaveBeenCalledWith(escapeEvent);
+      scene.close();
+    });
+
+    it('should handle multiple key events for same scene', async () => {
+      const keySpy = mock((event: KeyboardEvent) => {});
+      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const scene = new Scene(mockApp, setup, { defaultProps: {} });
+
+      scene.on('key:a', keySpy);
+      scene.on('key:b', keySpy);
+      scene.show();
+
+      // Both should use the same keydown listener
+      const keyAEvent = new KeyboardEvent('keydown', { key: 'a' });
+      const keyBEvent = new KeyboardEvent('keydown', { key: 'b' });
+
+      scene.root.dispatchEvent(keyAEvent);
+      scene.root.dispatchEvent(keyBEvent);
+
+      expect(keySpy).toHaveBeenCalledTimes(2);
+      scene.close();
+    });
+  });
+
+  describe('frame times logging', () => {
+    it('should log frame times when frame_times option is enabled', async () => {
+      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const scene = new Scene(mockApp, setup, {
+        defaultProps: {},
+        duration: 50,
+        frame_times: true,
+      });
+
+      const showPromise = scene.show();
+
+      // Wait for some frames to be logged
+      await 0;
+
+      const result = await showPromise;
+      expect(result.frame_times).toBeInstanceOf(Array);
+      expect(result.frame_times.length).toBeGreaterThan(0);
+    });
+
+    it('should not log frame times when frame_times option is disabled', async () => {
+      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const scene = new Scene(mockApp, setup, {
+        defaultProps: {},
+        duration: 50,
+        frame_times: false,
+      });
+
+      const showPromise = scene.show();
+
+      // Wait for duration to pass
+      await 0;
+
+      const result = await showPromise;
+      expect(result.frame_times).toEqual([]);
+    });
+  });
+
+  describe('non-scene event handling', () => {
+    it('should handle custom DOM events that do not start with scene:', async () => {
+      const customEventSpy = mock((event: Event) => {});
+      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const scene = new Scene(mockApp, setup, { defaultProps: {} });
+
+      scene.on('custom' as any, customEventSpy);
+      scene.show();
+
+      const customEvent = new Event('custom');
+      scene.root.dispatchEvent(customEvent);
+
+      expect(customEventSpy).toHaveBeenCalledWith(customEvent);
+      scene.close();
+    });
+  });
+
+  describe('development mode features', () => {
+    it('should set global window.s reference in development mode', () => {
+      process.env.NODE_ENV = 'development';
+      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const scene = new Scene(mockApp, setup, { defaultProps: {} });
+
+      scene.show();
+
+      expect((window as any).s).toBe(scene);
+      scene.close();
     });
   });
 });

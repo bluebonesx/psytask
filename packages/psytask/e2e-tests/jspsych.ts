@@ -1,13 +1,13 @@
 import { expect } from 'bun:test';
 import type { Page } from 'puppeteer-core';
-import { createApp } from '../../src/app';
-import { jsPsychSetup } from '../../src/scenes/jspsych';
+import { createApp } from '../src/app';
+import { jsPsychStim } from '../src/scenes/jspsych';
 
 export const InvalidPlugin = global.$prod
   ? async () => {
       using app = await createApp();
       try {
-        using s = app.scene(jsPsychSetup({ type: class {} } as any));
+        using s = app.scene(jsPsychStim, { defaultProps: { type: class {} } });
         await s.show();
       } catch {
         // Fallback to a text scene mirroring error message for assertion
@@ -27,13 +27,13 @@ export const InvalidPlugin = global.$prod
 export const HtmlButtonResponsePlugin = global.$prod
   ? async () => {
       using app = await createApp();
-      using s = app.scene(
-        jsPsychSetup({
+      using s = app.scene(jsPsychStim, {
+        defaultProps: {
           type: (await import('@jspsych/plugin-html-button-response')).default,
           stimulus: 'Test',
           choices: ['A', 'B', 'C'],
-        } as any),
-      );
+        },
+      });
       await s.show();
     }
   : async (page: Page) => {

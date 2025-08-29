@@ -360,7 +360,7 @@ export const VirtualChinrest = function (
       ]);
     })(),
     onSuccess() {
-      console.log('screen width:', state.screen_width_cm);
+      console.info('screen width:', state.screen_width_cm);
       text.props.children = distanceEl;
     },
   });
@@ -532,7 +532,7 @@ export const VirtualChinrest = function (
   return {
     node: text.node,
     data() {
-      console.log('VirtualChinrest', { ...state });
+      console.info('VirtualChinrest', { ...state });
       const { pix_per_cm, distance_cm } = state;
       const deg2cm = (deg: number) =>
         2 * distance_cm * Math.tan((deg / 2) * (Math.PI / 180));

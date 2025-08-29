@@ -5,7 +5,7 @@ import path from 'node:path';
 import { launch } from 'puppeteer-core';
 import { port } from 'shared/script';
 
-const root = path.resolve('./tests/e2e');
+const root = import.meta.dir;
 
 // load tests
 const files = await Promise.all(
@@ -50,7 +50,10 @@ serve({
     const $from = searchParams.get('from');
     const jspsychcss = searchParams.get('jspsychcss') === 'true';
     if (!$import || !$from) {
-      return new Response('Missing label or mod parameter', { status: 400 });
+      return new Response(
+        'Missing search parameters: import, from, jspsychcss',
+        { status: 400 },
+      );
     }
 
     // build browser test
@@ -125,36 +128,38 @@ const browser = await launch({
   headless: false,
   devtools: false,
 });
-afterAll(async () => {
-  // close browser if all test pages are closed
-  if ((await browser.pages()).length <= 1) {
-    await browser.close();
-  }
-});
-process.stdout.write(
-  `Browser launched: \x1b[34m${await browser.version()}\x1b[0m\n`,
-);
 
 // run tests
-describe.each(files)('%s', (label, filepath, tests) => {
-  test.each(Object.keys(tests))('%s', async (name) => {
-    const page = await browser.newPage();
-
-    // throw error if page error occurs
-    page.on('pageerror', (error) => {
-      throw error;
-    });
-
-    // load browser test
-    await page.goto(
-      `http://127.0.0.1:${port}?from=${filepath}&import=${name}&jspsychcss=${filepath.includes('jspsych')}`,
-    );
-    await page.waitForSelector('div.psytask-scene');
-
-    // load local test
-    await tests[name](page);
-
-    // close page if test is passed
-    await page.close();
+if (process.env.NODE_ENV === 'test') {
+  afterAll(async () => {
+    // close browser if all test pages are closed
+    if ((await browser.pages()).length <= 1) {
+      await browser.close();
+    }
   });
-});
+  process.stdout.write(
+    `Browser launched: \x1b[34m${await browser.version()}\x1b[0m\n`,
+  );
+
+  describe.each(files)('%s', (label, filepath, tests) => {
+    test.each(Object.keys(tests))('%s', async (name) => {
+      const page = await browser.newPage();
+
+      // throw error if page error occurs
+      page.on('pageerror', (error) => {
+        throw error;
+      });
+
+      // load browser test
+      const url = `http://127.0.0.1:${port}?from=${filepath}&import=${name}&jspsychcss=${filepath.includes('jspsych')}`;
+      await page.goto(url);
+      await page.waitForSelector('div.psytask-scene');
+
+      // load local test
+      await tests[name](page);
+
+      // close page if test is passed
+      await page.close();
+    });
+  });
+}

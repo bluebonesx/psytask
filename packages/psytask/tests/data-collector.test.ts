@@ -1,27 +1,19 @@
 import {
+  afterEach,
+  beforeEach,
   describe,
   expect,
   it,
-  beforeEach,
-  afterEach,
-  spyOn,
   mock,
+  spyOn,
 } from 'bun:test';
-import { Window } from 'happy-dom';
 import {
+  CSVStringifier,
   DataCollector,
   DataStringifier,
-  CSVStringifier,
   JSONStringifier,
 } from '../src/data-collector';
 import type { Data } from '../types';
-
-// Setup DOM environment
-const window = new Window();
-global.document = window.document as any;
-global.window = window as any;
-global.URL = window.URL as any;
-global.Blob = window.Blob as any;
 
 describe('DataStringifier', () => {
   describe('Abstract DataStringifier', () => {
@@ -62,13 +54,31 @@ describe('DataStringifier', () => {
       expect(stringifier.keys).toEqual([]);
     });
 
+    it('should test normalize method directly', () => {
+      // Test normalize method with various input types
+      expect(stringifier.normalize(null)).toBe('');
+      expect(stringifier.normalize(undefined)).toBe('');
+      expect(stringifier.normalize('simple')).toBe('simple');
+      expect(stringifier.normalize('text,with,commas')).toBe(
+        '"text,with,commas"',
+      );
+      expect(stringifier.normalize('text"with"quotes')).toBe(
+        '"text""with""quotes"',
+      );
+      expect(stringifier.normalize('text\nwith\nnewlines')).toBe(
+        '"text\nwith\nnewlines"',
+      );
+      expect(stringifier.normalize(123)).toBe('123');
+      expect(stringifier.normalize(true)).toBe('true');
+    });
+
     it('should generate CSV header on first transform', () => {
       const data = { name: 'Alice', age: 25 };
       const chunk = stringifier.transform(data);
 
       expect(stringifier.keys).toEqual(['name', 'age']);
-      expect(chunk).toBe('name,age,\nAlice,25,');
-      expect(stringifier.value).toBe('name,age,\nAlice,25,');
+      expect(chunk).toBe('name,age\nAlice,25');
+      expect(stringifier.value).toBe('name,age\nAlice,25');
     });
 
     it('should not regenerate header on subsequent transforms', () => {
@@ -78,8 +88,8 @@ describe('DataStringifier', () => {
       stringifier.transform(data1);
       const chunk2 = stringifier.transform(data2);
 
-      expect(chunk2).toBe('\nBob,30,');
-      expect(stringifier.value).toBe('name,age,\nAlice,25,\nBob,30,');
+      expect(chunk2).toBe('\nBob,30');
+      expect(stringifier.value).toBe('name,age\nAlice,25\nBob,30');
     });
 
     it('should handle values with commas by wrapping in quotes', () => {
@@ -98,18 +108,37 @@ describe('DataStringifier', () => {
       expect(chunk).toContain('"age, years"');
     });
 
+    it('should handle values with quotes by escaping them', () => {
+      const data = { name: 'Alice "The Great"', description: 'Say "Hello"' };
+      const chunk = stringifier.transform(data);
+
+      expect(chunk).toContain('"Alice ""The Great"""');
+      expect(chunk).toContain('"Say ""Hello"""');
+    });
+
+    it('should handle values with newlines and carriage returns', () => {
+      const data = {
+        multiline: 'Line 1\nLine 2',
+        withCR: 'Text\rWith\r\nReturns',
+      };
+      const chunk = stringifier.transform(data);
+
+      expect(chunk).toContain('"Line 1\nLine 2"');
+      expect(chunk).toContain('"Text\rWith\r\nReturns"');
+    });
+
     it('should handle null and undefined values', () => {
       const data = { name: 'Alice', age: null, city: undefined };
       const chunk = stringifier.transform(data);
 
-      expect(chunk).toContain('Alice,null,undefined,');
+      expect(chunk).toContain('Alice,,');
     });
 
     it('should handle boolean values', () => {
       const data = { name: 'Alice', active: true, verified: false };
       const chunk = stringifier.transform(data);
 
-      expect(chunk).toContain('Alice,true,false,');
+      expect(chunk).toContain('Alice,true,false');
     });
 
     it('should return empty string from final()', () => {
@@ -172,8 +201,8 @@ describe('DataStringifier', () => {
     it('should handle empty case in final()', () => {
       const finalChunk = stringifier.final();
 
-      expect(finalChunk).toBe(']');
-      expect(stringifier.value).toBe(']');
+      expect(finalChunk).toBe('[]');
+      expect(stringifier.value).toBe('[]');
     });
   });
 });
@@ -309,89 +338,22 @@ describe('DataCollector', () => {
     });
   });
 
-  describe('withFileStream', () => {
-    it('should return this when no handle provided', async () => {
-      const collector = new DataCollector();
-      const result = await collector.withFileStream();
-
-      expect(result).toBe(collector);
-      expect(collector.fileStream).toBeUndefined();
-    });
-
-    it('should setup file stream with directory handle', async () => {
-      const collector = new DataCollector('test.csv');
-      const result = await collector.withFileStream(mockDirectoryHandle);
-
-      expect(result).toBe(collector);
-      expect(collector.fileStream).toBe(mockWritableStream);
-      expect(mockDirectoryHandle.getFileHandle).toHaveBeenCalledWith(
-        'test.csv',
-        { create: true },
-      );
-    });
-
-    it('should setup file stream with file handle', async () => {
-      const collector = new DataCollector('test.csv');
-      const result = await collector.withFileStream(mockFileHandle);
-
-      expect(result).toBe(collector);
-      expect(collector.fileStream).toBe(mockWritableStream);
-      expect(mockFileHandle.createWritable).toHaveBeenCalled();
-    });
-
-    it('should warn when file handle name does not match collector filename', async () => {
-      mockFileHandle.name = 'different.csv';
-      const collector = new DataCollector('test.csv');
-      await collector.withFileStream(mockFileHandle);
-
-      expect(console.warn).toHaveBeenCalledWith(
-        'File handle name "different.csv" does not match the collector filename "test.csv".',
-      );
-    });
-
-    it('should handle permission denied case', async () => {
-      mockFileHandle.queryPermission.mockResolvedValue('prompt');
-      mockFileHandle.requestPermission.mockResolvedValue('denied');
-
-      const collector = new DataCollector('test.csv');
-      const result = await collector.withFileStream(mockFileHandle);
-
-      expect(console.warn).toHaveBeenCalledWith(
-        'File permission denied, no file stream will be created',
-      );
-      expect(result).toBe(collector);
-      expect(collector.fileStream).toBeUndefined();
-    });
-  });
-
   describe('add', () => {
-    it('should add row and transform data', async () => {
+    it('should add row and transform data', () => {
       const collector = new DataCollector('test.csv');
       const data = { name: 'Alice', age: 25 };
 
-      const chunk = await collector.add(data);
+      const chunk = collector.add(data);
 
       expect(collector.rows).toEqual([data]);
-      expect(chunk).toBe('name,age,\nAlice,25,');
+      expect(chunk).toBe('name,age\nAlice,25');
     });
 
-    it('should write to file stream if available', async () => {
-      const collector = new DataCollector('test.csv');
-      await collector.withFileStream(mockFileHandle);
-
-      const data = { name: 'Alice', age: 25 };
-      await collector.add(data);
-
-      expect(mockWritableStream.write).toHaveBeenCalledWith(
-        'name,age,\nAlice,25,',
-      );
-    });
-
-    it('should handle multiple rows', async () => {
+    it('should handle multiple rows', () => {
       const collector = new DataCollector('test.csv');
 
-      await collector.add({ name: 'Alice', age: 25 });
-      await collector.add({ name: 'Bob', age: 30 });
+      collector.add({ name: 'Alice', age: 25 });
+      collector.add({ name: 'Bob', age: 30 });
 
       expect(collector.rows).toHaveLength(2);
       expect(collector.rows[0]).toEqual({ name: 'Alice', age: 25 });
@@ -399,9 +361,10 @@ describe('DataCollector', () => {
     });
   });
 
-  describe('backup', () => {
+  describe('download', () => {
     it('should create download link with default suffix', () => {
       const collector = new DataCollector('test.csv');
+      collector.add({ test: 'data' }); // Add some data first
       collector.stringifier.value = 'test data';
 
       collector.download();
@@ -412,6 +375,7 @@ describe('DataCollector', () => {
 
     it('should create download link with custom suffix', () => {
       const collector = new DataCollector('test.csv');
+      collector.add({ test: 'data' }); // Add some data first
       collector.stringifier.value = 'test data';
 
       collector.download('.custom');
@@ -421,59 +385,79 @@ describe('DataCollector', () => {
 
     it('should cleanup URL after download', () => {
       const collector = new DataCollector('test.csv');
+      collector.add({ test: 'data' }); // Add some data first
       collector.stringifier.value = 'test data';
 
       collector.download();
 
       expect(URL.revokeObjectURL).toHaveBeenCalledWith('mock-url');
     });
+
+    it('should not download when no rows exist', () => {
+      const collector = new DataCollector('test.csv');
+      const createElementSpy = spyOn(document, 'createElement');
+
+      collector.download();
+
+      expect(createElementSpy).not.toHaveBeenCalled();
+    });
   });
 
   describe('save', () => {
-    it('should write final chunk to file stream and close', async () => {
-      const collector = new DataCollector('test.json');
-      await collector.withFileStream(mockFileHandle);
-      await collector.add({ name: 'Alice' });
+    it('should call download when save is called', () => {
+      const collector = new DataCollector('test.csv');
+      const downloadSpy = spyOn(collector, 'download').mockImplementation(
+        () => {},
+      );
 
-      await collector.save();
+      collector.save();
 
-      expect(mockWritableStream.write).toHaveBeenCalledWith(']');
-      expect(mockWritableStream.close).toHaveBeenCalled();
+      expect(downloadSpy).toHaveBeenCalledWith();
     });
 
-    it('should call backup when no file stream', async () => {
-      const collector = new DataCollector('test.csv');
-      const backupSpy = spyOn(collector, 'backup').mockImplementation(() => {});
-
-      await collector.save();
-
-      expect(backupSpy).toHaveBeenCalledWith('');
-    });
-
-    it('should prevent repeated saves', async () => {
+    it('should prevent repeated saves', () => {
       const collector = new DataCollector('test.csv');
 
-      await collector.save();
-      await collector.save();
+      collector.save();
+      collector.save();
 
       expect(console.warn).toHaveBeenCalledWith('Repeated save is not allowed');
     });
 
-    it('should handle JSON stringifier final chunk', async () => {
+    it('should handle JSON stringifier final chunk', () => {
       const collector = new DataCollector('test.json');
-      await collector.withFileStream(mockFileHandle);
 
-      await collector.save();
+      collector.save();
 
-      expect(mockWritableStream.write).toHaveBeenCalledWith(']');
+      // The final chunk should be added to the stringifier
+      expect(collector.stringifier.value).toContain(']');
+    });
+
+    it('should respect preventDefault in save event', () => {
+      const collector = new DataCollector('test.csv');
+      const downloadSpy = spyOn(collector, 'download').mockImplementation(
+        () => {},
+      );
+
+      // Add a listener that prevents default
+      collector.on('save', ({ preventDefault }) => {
+        preventDefault();
+      });
+
+      collector.save();
+
+      expect(downloadSpy).not.toHaveBeenCalled();
     });
   });
 
   describe('visibilitychange event handling', () => {
-    it('should call backup when page becomes hidden without file stream', () => {
+    it('should call download when page becomes hidden', () => {
       const addEventListenerSpy = spyOn(document, 'addEventListener');
       const collector = new DataCollector('test.csv');
-      const backupSpy = spyOn(collector, 'backup').mockImplementation(() => {});
+      collector.add({ test: 'data' }); // Add some data to enable download
+      const downloadSpy = spyOn(collector, 'download').mockImplementation(
+        () => {},
+      );
 
       // Get the event listener function
       const visibilityChangeHandler = addEventListenerSpy.mock.calls.find(
@@ -488,34 +472,15 @@ describe('DataCollector', () => {
 
       visibilityChangeHandler?.();
 
-      expect(backupSpy).toHaveBeenCalled();
+      expect(downloadSpy).toHaveBeenCalled();
     });
 
-    it('should not call backup when page becomes hidden with file stream', async () => {
+    it('should not call download when page becomes visible', () => {
       const addEventListenerSpy = spyOn(document, 'addEventListener');
       const collector = new DataCollector('test.csv');
-      await collector.withFileStream(mockFileHandle);
-      const backupSpy = spyOn(collector, 'backup').mockImplementation(() => {});
-
-      // Get the event listener function
-      const visibilityChangeHandler = addEventListenerSpy.mock.calls.find(
-        (call: any) => call[0] === 'visibilitychange',
-      )?.[1] as Function;
-
-      Object.defineProperty(document, 'visibilityState', {
-        value: 'hidden',
-        writable: true,
-      });
-
-      visibilityChangeHandler?.();
-
-      expect(backupSpy).not.toHaveBeenCalled();
-    });
-
-    it('should not call backup when page becomes visible', () => {
-      const addEventListenerSpy = spyOn(document, 'addEventListener');
-      const collector = new DataCollector('test.csv');
-      const backupSpy = spyOn(collector, 'backup').mockImplementation(() => {});
+      const downloadSpy = spyOn(collector, 'download').mockImplementation(
+        () => {},
+      );
 
       // Get the event listener function
       const visibilityChangeHandler = addEventListenerSpy.mock.calls.find(
@@ -529,7 +494,7 @@ describe('DataCollector', () => {
 
       visibilityChangeHandler?.();
 
-      expect(backupSpy).not.toHaveBeenCalled();
+      expect(downloadSpy).not.toHaveBeenCalled();
     });
   });
 
@@ -549,15 +514,15 @@ describe('DataCollector', () => {
   });
 
   describe('Edge cases and error handling', () => {
-    it('should handle empty data objects', async () => {
+    it('should handle empty data objects', () => {
       const collector = new DataCollector('test.csv');
-      const chunk = await collector.add({});
+      const chunk = collector.add({});
 
       expect(chunk).toBe('\n');
       expect(collector.rows).toEqual([{}]);
     });
 
-    it('should handle data with special characters', async () => {
+    it('should handle data with special characters', () => {
       const collector = new DataCollector('test.csv');
       const data = {
         'key with spaces': 'value with spaces',
@@ -565,14 +530,14 @@ describe('DataCollector', () => {
         'key-with-dashes': 'value-with-dashes',
       };
 
-      const chunk = await collector.add(data);
+      const chunk = collector.add(data);
 
       expect(chunk).toContain('value with spaces');
       expect(chunk).toContain('value_with_underscores');
       expect(chunk).toContain('value-with-dashes');
     });
 
-    it('should handle numeric data types', async () => {
+    it('should handle numeric data types', () => {
       const collector = new DataCollector('test.csv');
       const data = {
         integer: 42,
@@ -581,7 +546,7 @@ describe('DataCollector', () => {
         negative: -100,
       };
 
-      const chunk = await collector.add(data);
+      const chunk = collector.add(data);
 
       expect(chunk).toContain('42');
       expect(chunk).toContain('3.14159');
@@ -590,12 +555,8 @@ describe('DataCollector', () => {
     });
 
     it('should handle file extension without dot in regex match', () => {
-      // This test creates a new DataCollector which will trigger console.warn
-      // We don't need to reset the mock since beforeEach handles it
       const collector = new DataCollector('test.xml');
 
-      // The actual call will have happened during construction
-      // Let's check what the actual warning message contains
       const calls = (console.warn as any).mock.calls;
       const lastCall = calls[calls.length - 1];
 
@@ -606,58 +567,60 @@ describe('DataCollector', () => {
       expect(collector.stringifier).toBeInstanceOf(CSVStringifier);
     });
 
-    it('should handle permission already granted case', async () => {
-      mockFileHandle.queryPermission.mockResolvedValue('granted');
-
+    it('should emit add event with correct data', () => {
       const collector = new DataCollector('test.csv');
-      const result = await collector.withFileStream(mockFileHandle);
+      let emittedData: any = null;
 
-      expect(result).toBe(collector);
-      expect(collector.fileStream).toBe(mockWritableStream);
-      expect(mockFileHandle.requestPermission).not.toHaveBeenCalled();
+      collector.on('add', (data) => {
+        emittedData = data;
+      });
+
+      const testData = { name: 'Test', value: 123 };
+      const chunk = collector.add(testData);
+
+      expect(emittedData).toEqual({
+        row: testData,
+        chunk: chunk,
+      });
     });
 
-    it('should handle queryPermission denied without requestPermission', async () => {
-      mockFileHandle.queryPermission.mockResolvedValue('denied');
-      mockFileHandle.requestPermission.mockResolvedValue('denied');
-
+    it('should emit save event with correct data', () => {
       const collector = new DataCollector('test.csv');
-      const result = await collector.withFileStream(mockFileHandle);
+      let emittedData: any = null;
 
-      expect(console.warn).toHaveBeenCalledWith(
-        'File permission denied, no file stream will be created',
-      );
-      expect(result).toBe(collector);
-      expect(collector.fileStream).toBeUndefined();
+      collector.on('save', (data) => {
+        emittedData = data;
+      });
+
+      collector.save();
+
+      expect(emittedData).toHaveProperty('chunk');
+      expect(emittedData).toHaveProperty('preventDefault');
+      expect(typeof emittedData.preventDefault).toBe('function');
     });
 
-    it('should handle file stream write errors gracefully', async () => {
-      mockWritableStream.write.mockRejectedValue(new Error('Write failed'));
-
+    it('should test EventEmitter inherited methods', () => {
       const collector = new DataCollector('test.csv');
-      await collector.withFileStream(mockFileHandle);
+      let callCount = 0;
 
-      // The error should be thrown but we can test it doesn't break the collector
-      try {
-        await collector.add({ test: 'data' });
-      } catch (error: any) {
-        expect(error.message).toBe('Write failed');
-      }
-      expect(collector.rows).toHaveLength(1);
-    });
+      const listener = () => {
+        callCount++;
+      };
 
-    it('should handle file stream close errors gracefully', async () => {
-      mockWritableStream.close.mockRejectedValue(new Error('Close failed'));
+      // Test on/off methods
+      collector.on('add', listener);
+      collector.emit('add', { row: {}, chunk: '' });
+      expect(callCount).toBe(1);
 
-      const collector = new DataCollector('test.csv');
-      await collector.withFileStream(mockFileHandle);
+      collector.off('add', listener);
+      collector.emit('add', { row: {}, chunk: '' });
+      expect(callCount).toBe(1); // Should not increase
 
-      // The error should be thrown but we can test the behavior
-      try {
-        await collector.save();
-      } catch (error: any) {
-        expect(error.message).toBe('Close failed');
-      }
+      // Test once method
+      collector.once('add', listener);
+      collector.emit('add', { row: {}, chunk: '' });
+      collector.emit('add', { row: {}, chunk: '' });
+      expect(callCount).toBe(2); // Should only increase by 1
     });
   });
 
@@ -665,19 +628,19 @@ describe('DataCollector', () => {
     it('should work end-to-end with CSV format', async () => {
       const collector = new DataCollector('experiment.csv');
 
-      await collector.add({
+      collector.add({
         participant: 'P001',
         trial: 1,
         response: 'A',
         rt: 450,
       });
-      await collector.add({
+      collector.add({
         participant: 'P001',
         trial: 2,
         response: 'B',
         rt: 320,
       });
-      await collector.add({
+      collector.add({
         participant: 'P002',
         trial: 1,
         response: 'A',
@@ -686,35 +649,23 @@ describe('DataCollector', () => {
 
       expect(collector.rows).toHaveLength(3);
       expect(collector.stringifier.value).toContain(
-        'participant,trial,response,rt,',
+        'participant,trial,response,rt',
       );
-      expect(collector.stringifier.value).toContain('P001,1,A,450,');
-      expect(collector.stringifier.value).toContain('P002,1,A,380,');
+      expect(collector.stringifier.value).toContain('P001,1,A,450');
+      expect(collector.stringifier.value).toContain('P002,1,A,380');
     });
 
-    it('should work end-to-end with JSON format', async () => {
+    it('should work end-to-end with JSON format', () => {
       const collector = new DataCollector('experiment.json');
 
-      await collector.add({ participant: 'P001', trial: 1, response: 'A' });
-      await collector.add({ participant: 'P001', trial: 2, response: 'B' });
+      collector.add({ participant: 'P001', trial: 1, response: 'A' });
+      collector.add({ participant: 'P001', trial: 2, response: 'B' });
 
       collector.stringifier.final();
 
       expect(collector.stringifier.value).toBe(
         '[{"participant":"P001","trial":1,"response":"A"},{"participant":"P001","trial":2,"response":"B"}]',
       );
-    });
-
-    it('should work with file system API', async () => {
-      const collector = new DataCollector('test.csv');
-      await collector.withFileStream(mockDirectoryHandle);
-
-      await collector.add({ name: 'Alice', age: 25 });
-      await collector.add({ name: 'Bob', age: 30 });
-      await collector.save();
-
-      expect(mockWritableStream.write).toHaveBeenCalledTimes(3); // 2 data writes + 1 final
-      expect(mockWritableStream.close).toHaveBeenCalled();
     });
   });
 });

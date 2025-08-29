@@ -58,6 +58,7 @@ export function proxyNonKey<T extends object>(
   });
 }
 export const promiseWithResolvers = (
+  process.env.NODE_ENV !== 'test' &&
   hasOwn(Promise, 'withResolvers') &&
   typeof Promise.withResolvers === 'function'
     ? Promise.withResolvers.bind(Promise)

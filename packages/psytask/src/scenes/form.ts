@@ -215,7 +215,7 @@ export const Form = function <T extends Record<string, FieldRecord>>(
             : never;
         },
       );
-      console.log('Form', data);
+      console.info('Form', data);
       return data;
     },
   };

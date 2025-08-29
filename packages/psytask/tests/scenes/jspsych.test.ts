@@ -1,30 +1,15 @@
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  mock,
-  spyOn,
-} from 'bun:test';
-import { Window } from 'happy-dom';
-import { App } from '../src/app';
-import { Scene } from '../src/scene';
-import { jsPsychSetup } from '../src/scenes/jspsych';
-
-// Mock jspsych types
-type MockPluginInfo = {
-  name: string;
-  parameters: Record<string, { default: any }>;
-};
+import { beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
+import { App } from '../../src/app';
+import { Scene } from '../../src/scene';
+import { jsPsychStim } from '../../src/scenes/jspsych';
 
 class MockJsPsychPlugin {
-  static info: MockPluginInfo = {
+  static info = {
     name: 'mock-plugin',
     parameters: {
       stimulus: { default: 'default stimulus' },
       choices: { default: ['f', 'j'] },
-    },
+    } as Record<string, { default: any }>,
   };
 
   constructor(public jsPsych: any) {}
@@ -33,93 +18,33 @@ class MockJsPsychPlugin {
     display_element.innerHTML = trial.stimulus;
     on_load();
 
-    // Simulate user interaction after a delay
-    setTimeout(() => {
-      this.jsPsych.finishTrial({ rt: 500, response: 'f' });
-    }, 100);
+    // Only simulate user interaction for tests that actually show the scene
+    // Check if the trial has a special flag to auto-finish
+    if (trial.autoFinish !== false) {
+      setTimeout(() => {
+        // Check if the scene is actually being shown before finishing
+        try {
+          this.jsPsych.finishTrial({ rt: 500, response: 'f' });
+        } catch (error) {
+          // Ignore errors about scene not being shown - this is expected for tests
+          // that create scenes without calling show()
+          if (
+            !(error instanceof Error) ||
+            !error.message?.includes('Scene is not being shown')
+          ) {
+            throw error;
+          }
+        }
+      }, 100);
+    }
   }
 }
 
-let window: Window;
-let document: Document;
-let originalWindow: any;
-let originalDocument: any;
-
-beforeEach(() => {
-  // Setup happy-dom
-  window = new Window();
-  document = window.document as any;
-
-  // Store original globals
-  originalWindow = globalThis.window;
-  originalDocument = globalThis.document;
-
-  // Set globals
-  globalThis.window = window as any;
-  globalThis.document = document as any;
-  globalThis.Element = window.Element as any;
-  globalThis.HTMLElement = window.HTMLElement as any;
-  globalThis.alert = () => {};
-  globalThis.requestAnimationFrame = (cb: FrameRequestCallback) => {
-    setTimeout(() => cb(performance.now()), 16);
-    return 1;
-  };
-
-  // Mock getComputedStyle (both global and window)
-  const mockComputedStyle = (element: Element) =>
-    ({
-      getPropertyValue: (property: string) => {
-        if (property === '--psytask') {
-          return 'enabled'; // Default to enabled for tests
-        }
-        return '';
-      },
-    }) as CSSStyleDeclaration;
-  globalThis.getComputedStyle = mockComputedStyle as any;
-  (window as any).getComputedStyle = mockComputedStyle as any;
-
-  // Setup basic HTML structure
-  document.documentElement.innerHTML = `
-    <html>
-      <head>
-        <style>
-          :root { --psytask: 'enabled'; }
-        </style>
-      </head>
-      <body></body>
-    </html>
-  `;
-
-  // Mock console methods to avoid noise in tests
-  globalThis.console.warn = () => {};
-  globalThis.console.log = () => {};
-});
-
-afterEach(() => {
-  // Restore original globals
-  globalThis.window = originalWindow;
-  globalThis.document = originalDocument;
-});
-
 describe('jsPsych scene', () => {
-  let mockEnvData: any;
   let app: App;
 
   beforeEach(() => {
-    mockEnvData = {
-      ua: 'test-user-agent',
-      os: null,
-      browser: 'test-browser/1.0',
-      mobile: false,
-      'in-app': false,
-      screen_wh: [1920, 1080],
-      window_wh: [1024, 768],
-      frame_ms: 16.67,
-    };
-
-    const root = document.createElement('div');
-    document.body.appendChild(root);
-    app = new App(root, mockEnvData);
+    app = new App(document.body);
   });
 
   it('should create a scene with jsPsych plugin', async () => {
@@ -129,7 +54,7 @@ describe('jsPsych scene', () => {
       choices: ['f', 'j'],
     };
 
-    const scene = app.scene(jsPsychSetup(trial));
+    const scene = app.scene(jsPsychStim, { defaultProps: trial });
 
     expect(scene).toBeInstanceOf(Scene);
 
@@ -148,9 +73,9 @@ describe('jsPsych scene', () => {
       stimulus: 'Test',
     };
 
-    expect(() => app.scene(jsPsychSetup(invalidTrial))).toThrow(
-      /jsPsych trial.type only supports jsPsych class plugins/,
-    );
+    expect(() =>
+      app.scene(jsPsychStim, { defaultProps: invalidTrial }),
+    ).toThrow(/jsPsych trial.type only supports jsPsych class plugins/);
   });
 
   it('should set default parameters from plugin info', () => {
@@ -159,10 +84,11 @@ describe('jsPsych scene', () => {
       // Don't set stimulus, should use default
     };
 
-    app.scene(jsPsychSetup(trial));
+    const scene = app.scene(jsPsychStim, { defaultProps: trial });
 
-    expect(trial.stimulus).toBe('default stimulus');
-    expect(trial.choices).toEqual(['f', 'j']);
+    // Check the reactive props object instead of original trial
+    expect(scene.props.stimulus).toBe('default stimulus');
+    expect(scene.props.choices).toEqual(['f', 'j']);
   });
 
   it('should warn about unsupported parameters in development', () => {
@@ -177,7 +103,7 @@ describe('jsPsych scene', () => {
       extensions: ['some-extension'], // unsupported parameter
     };
 
-    app.scene(jsPsychSetup(trial));
+    app.scene(jsPsychStim, { defaultProps: trial });
 
     expect(consoleSpy).toHaveBeenCalledWith(
       'jsPsych trial "extensions" parameter is not supported',
@@ -195,9 +121,10 @@ describe('jsPsych scene', () => {
       on_start: onStartSpy,
     };
 
-    app.scene(jsPsychSetup(trial));
+    const scene = app.scene(jsPsychStim, { defaultProps: trial });
 
-    expect(onStartSpy).toHaveBeenCalledWith(trial);
+    // The on_start callback is called with the reactive props object
+    expect(onStartSpy).toHaveBeenCalledWith(scene.props);
   });
 
   it('should add CSS classes to content element', () => {
@@ -207,7 +134,7 @@ describe('jsPsych scene', () => {
       css_classes: 'test-class another-class',
     };
 
-    const scene = app.scene(jsPsychSetup(trial));
+    const scene = app.scene(jsPsychStim, { defaultProps: trial });
     const content = scene.root.querySelector('#jspsych-content')!;
 
     expect(content.classList.contains('test-class')).toBe(true);
@@ -220,7 +147,7 @@ describe('jsPsych scene', () => {
       css_classes: ['class1', 'class2'],
     };
 
-    const scene = app.scene(jsPsychSetup(trial));
+    const scene = app.scene(jsPsychStim, { defaultProps: trial });
     const content = scene.root.querySelector('#jspsych-content')!;
 
     expect(content.classList.contains('class1')).toBe(true);
@@ -237,7 +164,7 @@ describe('jsPsych scene', () => {
       on_finish: onFinishSpy,
     };
 
-    const scene = app.scene(jsPsychSetup(trial));
+    const scene = app.scene(jsPsychStim, { defaultProps: trial });
 
     const result = await scene.show();
 
@@ -271,20 +198,20 @@ describe('jsPsych scene', () => {
       post_trial_gap: 50, // 50ms gap
     };
 
-    const scene = app.scene(jsPsychSetup(trial));
+    const scene = app.scene(jsPsychStim, { defaultProps: trial });
     const closeSpy = spyOn(scene, 'close');
 
-    // Start the scene
+    // Start the scene to put it in "shown" state
     const showPromise = scene.show();
 
     // Wait for the trial to finish and gap to be processed
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await new Promise((r) => setTimeout(r, 100));
 
     // Scene should be closed after the gap
     expect(closeSpy).toHaveBeenCalled();
 
-    // Clean up
-    scene.close();
+    // Wait for the show promise to complete
+    await showPromise;
   });
 
   it('should warn about unsupported jsPsych API calls in development', () => {
@@ -316,7 +243,7 @@ describe('jsPsych scene', () => {
     };
 
     // Create the scene - this triggers plugin creation and trial execution
-    app.scene(jsPsychSetup(trial));
+    app.scene(jsPsychStim, { defaultProps: trial });
 
     // Should have warned about the non-existent method
     expect(consoleSpy).toHaveBeenCalledWith(
@@ -358,7 +285,7 @@ describe('jsPsych scene', () => {
     };
 
     // Create the scene - this triggers plugin creation and trial execution
-    app.scene(jsPsychSetup(trial));
+    app.scene(jsPsychStim, { defaultProps: trial });
 
     // Should have warned about the non-existent method
     expect(consoleSpy).toHaveBeenCalledWith(
@@ -406,7 +333,7 @@ describe('jsPsych scene', () => {
     };
 
     // Create the scene - this triggers plugin creation and trial execution
-    app.scene(jsPsychSetup(trial));
+    app.scene(jsPsychStim, { defaultProps: trial });
 
     // Should have warned about the non-existent method
     expect(consoleSpy).toHaveBeenCalledWith(
@@ -425,7 +352,7 @@ describe('jsPsych scene', () => {
     };
 
     // Should not throw when on_finish is not provided
-    const scene = app.scene(jsPsychSetup(trial));
+    const scene = app.scene(jsPsychStim, { defaultProps: trial });
     expect(scene).toBeInstanceOf(Scene);
   });
 
@@ -436,7 +363,7 @@ describe('jsPsych scene', () => {
       css_classes: 'single-class',
     };
 
-    const scene = app.scene(jsPsychSetup(trial));
+    const scene = app.scene(jsPsychStim, { defaultProps: trial });
     const content = scene.root.querySelector('#jspsych-content')!;
 
     expect(content.classList.contains('single-class')).toBe(true);
@@ -451,7 +378,7 @@ describe('jsPsych scene', () => {
       stimulus: 'Test in production',
     };
 
-    const scene = app.scene(jsPsychSetup(trial));
+    const scene = app.scene(jsPsychStim, { defaultProps: trial });
 
     expect(scene).toBeInstanceOf(Scene);
 
@@ -472,7 +399,7 @@ describe('jsPsych scene', () => {
     };
 
     // Should not throw
-    const scene = app.scene(jsPsychSetup(trial));
+    const scene = app.scene(jsPsychStim, { defaultProps: trial });
     expect(scene).toBeInstanceOf(Scene);
   });
 
@@ -486,7 +413,7 @@ describe('jsPsych scene', () => {
     };
 
     // Just create the scene, don't execute to avoid timing issues
-    const scene = app.scene(jsPsychSetup(trial));
+    const scene = app.scene(jsPsychStim, { defaultProps: trial });
     expect(scene).toBeInstanceOf(Scene);
     // Note: on_load is called during plugin.trial() execution
   });
@@ -510,7 +437,7 @@ describe('App jsPsych integration', () => {
 
     const root = document.createElement('div');
     document.body.appendChild(root);
-    app = new App(root, mockEnvData);
+    app = new App(root);
   });
 
   it('should create a scene with jsPsych plugin via app.scene + jsPsychTrial', async () => {
@@ -520,7 +447,7 @@ describe('App jsPsych integration', () => {
       choices: ['f', 'j'],
     };
 
-    const scene = app.scene(jsPsychSetup(trial));
+    const scene = app.scene(jsPsychStim, { defaultProps: trial });
 
     expect(scene).toBeInstanceOf(Scene);
 

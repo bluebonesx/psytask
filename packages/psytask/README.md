@@ -78,11 +78,13 @@ import { createApp, h } from '<your-cdn-url>';
 
 // create app
 const app = await createApp();
+// create data collector
+const dc = app.collector();
 
 // create built-in scenes
 const fixation = app.fixation({ duration: 1000 });
 const blank = app.blank();
-const guide = app.text('Welcome to our task', { close_on: 'click' });
+const guide = app.text('Welcome to our task', { close_on: 'key: ' }); // close on space key
 
 // create jsPsych scene
 const jsPsychScene = app.jsPsych({
@@ -171,13 +173,9 @@ for (const value of staircase) {
 
 ### Data Collection
 
-We use `DataCollector` to save data as a file:
-
 ```js
-import { DataCollector } from '<your-cdn-url>';
-
 // create data collector
-const dc = new DataCollector('demo.csv');
+const dc = app.collector('data.csv');
 
 // show scenes
 for (const char of ['A', 'B', 'C']) {
@@ -223,14 +221,15 @@ After a scene is shown, we need to clean up the resources manually.
 This is done to free up invalid memory and avoid memory leaks:
 
 ```js
-// we create the app and a scene before, so we need to clean up them
-app[Symbol.dispose]();
-scene[Symbol.dispose]();
+app.emit('cleanup');
+dc.emit('cleanup');
+scene.emit('cleanup');
 ```
 
 But if we develop it with TypeScript 5.2+ and create them via `using` keyword, they will be cleaned up automatically:
 
 ```ts
 using app = await createApp();
+using dc = app.collector();
 using scene = app.text('custom text');
 ```

@@ -66,7 +66,7 @@ export class Scene<
   //@ts-ignore
   show: T extends SceneSetup<infer P, infer D> ? SceneShow<P, D> : T =
     this.#show;
-  private options: SceneOptions<T>;
+  options: SceneOptions<T>;
   #showPromiseWithResolvers: ReturnType<
     typeof promiseWithResolvers<null>
   > | null = null;

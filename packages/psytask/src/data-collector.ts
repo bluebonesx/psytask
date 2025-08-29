@@ -128,7 +128,7 @@ export class DataCollector<T extends Data> extends EventEmitter<{
   }
   /** Add a data row */
   add(row: T) {
-    console.log('data', row);
+    console.info('data', row);
     this.rows.push(row);
     const chunk = this.stringifier.transform(row);
     this.emit('add', { row, chunk });
