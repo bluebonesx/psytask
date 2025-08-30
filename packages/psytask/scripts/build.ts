@@ -9,7 +9,6 @@ const baseConfig: Omit<BuildConfig, 'entrypoints'> = {
   outdir,
   target: 'browser',
   minify: true,
-  splitting: false,
   banner: `/**
  * ${packageConfig.name[0]?.toUpperCase() + packageConfig.name.slice(1)} v${packageConfig.version}
  * @author ${packageConfig.author}

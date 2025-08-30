@@ -1,0 +1,44 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- load jspsych css if needed, it should be above psytask css -->
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/jspsych@8.2.2/css/jspsych.css"
+    />
+
+    <!-- load psytask css -->
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/psytask@1.1/dist/main.css"
+    />
+  </head>
+  <body>
+    <!-- task script -->
+    <script type="module">
+      import { createApp } from 'https://cdn.jsdelivr.net/npm/psytask@1.1/dist/index.min.js';
+
+      using app = await createApp();
+      using dc = app.collector();
+
+      using guide = app.text('', { close_on: 'pointerup' });
+
+      for (let i = 0; i < 3; i++) {
+        const { start_time } = await guide.show({
+          children: `This is trial ${i + 1}. Click to continue.`,
+        });
+
+        dc.add({ index: i + 1, start_time });
+      }
+    </script>
+
+    <!-- load jspsych plugin if needed, it should be below psytask js and add `defer` property -->
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/npm/@jspsych/plugin-html-keyboard-response@2.1.0/dist/index.browser.min.js"
+    ></script>
+  </body>
+</html>

@@ -14,13 +14,208 @@ Compare to jsPsych, Psytask has:
 
 ## Install
 
-If you're an old hand at Web development, we recommend installing via NPM:
+via NPM (Recommand):
 
 ```bash
 npm i psytask
 ```
 
-Otherwise, via CDN:
+via CDN:
+
+```html
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- load  css -->
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/psytask@1.1/dist/main.css"
+    />
+  </head>
+  <body>
+    <script type="module">
+      // load  js
+      import { createApp } from 'https://cdn.jsdelivr.net/npm/psytask@1.1/dist/index.min.js';
+
+      using app = await creaeApp();
+      //...
+    </script>
+  </body>
+</html>
+```
+
+> [!WARNING]
+> Psytask uses the modern JavaScript [`using` keyword](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Statements/using) for automatic resource cleanup.
+>
+> When using bundlers (like Vite, Bun, etc.), the `using` keyword will be transpiled automatically, so you don't need to worry about browser compatibility.
+>
+> For CDN usage in older browsers that don't support the `using` keyword, you need to manually call the cleanup method:
+>
+> ```js
+> // Instead of: using app = await createApp();
+> const app = await createApp();
+> // ... your code ...
+> app.emit('cleanup'); // Manually clean up when done
+> ```
+
+## Usage
+
+All psychology tasks are combinations of a series of scenes,
+writing a psychology task requires only 2 steps:
+
+1. create scene
+2. show scene
+
+### Create Scene
+
+```js
+import 'psytask/main.css';
+
+import { createApp, effect, h } from 'psytask';
+
+// create app
+using app = await createApp();
+
+// create built-in scenes
+using fixation = app.text('+', { duration: 500 });
+using blank = app.text('');
+using guide = app.text('Welcome to our task', { close_on: 'key: ' }); // close on space key
+
+// create custom scene with response collection
+using scene = app.scene(
+  // 1st. argument: setup function
+  /** @param {{ stimulus: string }} props */
+  (props, ctx) => {
+    let data = { response_key: '', response_time: 0 };
+
+    // Reset data when scene shows
+    ctx
+      .on('scene:show', () => {
+        data = { response_key: '', response_time: 0 };
+      })
+      // Capture keyboard responses
+      .on('key:f', (e) => {
+        data.response_key = 'f';
+        data.response_time = e.timeStamp;
+        ctx.close();
+      })
+      .on('key:j', (e) => {
+        data.response_key = 'j';
+        data.response_time = e.timeStamp;
+        ctx.close();
+      });
+
+    // Create stimulus element
+    const el = h('div', { className: 'psytask-center' });
+    effect(() => {
+      el.textContent = props.stimulus || '';
+    });
+
+    // Return the element and data getter
+    return { node: el, data: () => data };
+  },
+  // 2nd. argument: scene options
+  {
+    defaultProps: { stimulus: '' },
+  },
+);
+```
+
+### Show Scene
+
+Based on the above example:
+
+```js
+// show with parameters
+const data = await scene.show({ stimulus: 'Press F or J' });
+console.log(`Response: ${data.response_key}, RT: ${data.response_time}ms`);
+
+// show with new scene options
+const data = await scene.config({ duration: Math.random() * 1000 }).show();
+```
+
+Scene will log the first frame time in each show:
+
+```js
+const data = await scene.show();
+console.log("this scene's start time is", data.start_time);
+```
+
+Usually, we need to show a series of scenes:
+
+```js
+import { RandomSampling, StairCase } from 'psytask';
+
+// show a fixed sequence
+for (const stimulus of ['A', 'B', 'C']) {
+  await scene.show({ stimulus });
+}
+
+// show a random sequence
+for (const stimulus of new RandomSampling({
+  candidates: ['A', 'B', 'C'],
+  sampleSize: 10,
+  replace: true,
+})) {
+  await scene.show({ stimulus });
+}
+
+// adaptive testing with staircase
+const staircase = new StairCase({
+  start: 10,
+  step: 1,
+  up: 3,
+  down: 1,
+  reversal: 6,
+  min: 1,
+  max: 12,
+});
+for (const duration of staircase) {
+  const data = await scene.config({ duration }).show({ stimulus: 'X' });
+
+  const correct = data.response_key === 'f'; // example response
+  staircase.response(correct); // set this trial response
+}
+```
+
+### Data Collection
+
+```js
+// create data collector
+using dc = app.collector('data.csv');
+
+// show scenes and collect data
+for (const stimulus of ['A', 'B', 'C']) {
+  const data = await scene.show({ stimulus });
+  // add a row
+  dc.add({
+    stimulus,
+    response: data.response_key,
+    rt: data.response_time - data.start_time,
+    correct: data.response_key === 'f', // example response
+  });
+}
+```
+
+## Examples
+
+Here are some complete examples of common psychology tasks: [examples](https://github.com/bluebones-team/psytask/tree/main/packages/psytask/examples)
+
+## Integration
+
+### jsPsych
+
+Psytask is compatible with jsPsych plugins. Here's how to integrate jsPsych with Psytask:
+
+#### Installation with jsPsych
+
+```bash
+npm i psytask jspsych @jspsych/plugin-html-button-response
+```
+
+#### CDN with jsPsych
 
 ```html
 <!DOCTYPE html>
@@ -38,16 +233,16 @@ Otherwise, via CDN:
     <!-- load psytask css -->
     <link
       rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/psytask@1.0.0-rc1/dist/main.css"
+      href="https://cdn.jsdelivr.net/npm/psytask@1.1/dist/main.css"
     />
   </head>
   <body>
     <!-- main script -->
     <script type="module">
       // load psytask js
-      import { createApp } from 'https://cdn.jsdelivr.net/npm/psytask@1.0.0-rc1/dist/index.min.js';
+      import { createApp } from 'https://cdn.jsdelivr.net/npm/psytask@1.1/dist/index.min.js';
 
-      const app = await creaeApp();
+      using app = await createApp();
       //...
     </script>
 
@@ -60,176 +255,67 @@ Otherwise, via CDN:
 </html>
 ```
 
-## Usage
-
-> [!NOTE]
-> Considering that most psychology researchers do not have a background in Web development, the following examples will be used based on a cdn installation.
-
-All psychological tasks are combinations of a series of scenes,
-writing a psychology task requires only 2 steps:
-
-1. create scene
-2. show scene
-
-### Create Scene
+#### Using jsPsych Plugins
 
 ```js
-import { createApp, h } from '<your-cdn-url>';
+import 'jspsych/css/jspsych.css';
+import 'psytask/main.css';
+
+import HtmlButtonResponsePlugin from '@jspsych/plugin-html-button-response';
+import { createApp, jsPsychStim } from 'psytask';
 
 // create app
-const app = await createApp();
-// create data collector
-const dc = app.collector();
-
-// create built-in scenes
-const fixation = app.fixation({ duration: 1000 });
-const blank = app.blank();
-const guide = app.text('Welcome to our task', { close_on: 'key: ' }); // close on space key
+using app = await createApp();
 
 // create jsPsych scene
-const jsPsychScene = app.jsPsych({
-  type: jsPsychHtmlKeyboardResponse, // please import jspsych.css via CDN yourself
-  stimulus: 'Hello world',
-  choices: ['f', 'j'],
-});
-
-// create custom scene
-const scene = app.scene(
-  // 1st. argument: setup function
-  function (self) {
-    // 1. create custom element to show custom stimulus
-    const el = h('p');
-    // 2. mount it to scene root element
-    self.root.appendChild(el);
-    // 3. return update function, which will be run on each time it is shown
-    return (props) => {
-      // 4. apply custom show paramenters
-      el.textContent = `current show params is: ${JSON.stringify(props)}`;
-    };
+using jsPsychScene = app.scene(jsPsychStim, {
+  defaultProps: {
+    type: HtmlButtonResponsePlugin,
+    stimulus: 'Hello world',
+    choices: ['f', 'j'],
   },
-  // 2nd. argument: scene options
-  {
-    duration: 200,
-    close_on: 'keydown',
-    on_frame(time) {
-      console.log(`last frame time is: ${time}`);
-    },
-  },
-);
-```
-
-### Show Scene
-
-Based on the above example:
-
-```js
-// show with paramenters
-const data = await scene.show('custom show params');
-
-// show with new scene options
-const data = await scene.config({ duration: Math.random() * 1000 }).show();
-```
-
-Scene will log the first frame time in each show:
-
-```js
-const { start_time } = await scene.show();
-```
-
-Usually, we need to show a series of scenes:
-
-```js
-import { RandomSampling, StairCase } from '<your-cdn-url>';
-
-// show a fixed sequence
-for (const char of ['A', 'B', 'C']) {
-  await scene.show(char);
-}
-
-// show a random sequence
-for (const char of new RandomSampling({
-  candidates: ['A', 'B', 'C'],
-  sampleSize: 10,
-  replace: true,
-})) {
-  await scene.show(char);
-}
-
-// show a staircase
-const staircase = new StairCase({
-  start: 10,
-  step: 1,
-  up: 3,
-  down: 1,
-  reversal: 6,
-  min: 1,
-  max: 12,
-});
-for (const value of staircase) {
-  await scene.show(value);
-  staircase.response(Math.random() > 0.5); // mock user response
-}
-```
-
-### Data Collection
-
-```js
-// create data collector
-const dc = app.collector('data.csv');
-
-// show scenes
-for (const char of ['A', 'B', 'C']) {
-  const data = await scene.show(char);
-  // add a row
-  await dc.add({
-    stimulus: char,
-    // first frame time
-    start_time: data.start_time,
-  });
-}
-
-// save as file
-await dc.save();
-```
-
-Usually, scene will just collect the first frame time into the `start_time` data field.
-If we want to log subject response, we can add data field to scene:
-
-```js
-const scene = app.scene(function (self) {
-  const el = h('p');
-  self.root.appendChild(el);
-  // 1. add event listener
-  self.useEventListener(el, 'keydown', (event) => {
-    self.close(); // press any key to close
-    // 2. set data field
-    self.data['key'] = event.key;
-    self.data['rt'] = event.timeStamp - self.data.start_time;
-  });
-  return (props) => {
-    el.textContent = `current show params is: ${JSON.stringify(props)}`;
-  };
 });
 
-// the data has 3 fields now: start_time, key, rt
-const data = await scene.show();
+// show jsPsych scene
+const data = await jsPsychScene.show();
+console.log(data);
 ```
 
-### Clean up
+### JATOS
 
-After a scene is shown, we need to clean up the resources manually.
-This is done to free up invalid memory and avoid memory leaks:
+JATOS (Just Another Tool for Online Studies) is a popular platform for running online psychology experiments. Psytask integrates seamlessly with JATOS for data collection and experiment management. See more: https://www.jatos.org/Write-your-own-Study-Basics-and-Beyond.html
+
+#### Setup with JATOS
+
+```html
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- load jatos.js -->
+    <script src="jatos.js"></script>
+  </head>
+  <body>
+    <!-- load your task script -->
+    <script type="module" src="./index.js"></script>
+  </body>
+</html>
+```
+
+#### Data Upload
+
+Psytask's data collector can automatically send data to JATOS using event listeners:
 
 ```js
-app.emit('cleanup');
-dc.emit('cleanup');
-scene.emit('cleanup');
-```
+import { createApp } from 'psytask';
 
-But if we develop it with TypeScript 5.2+ and create them via `using` keyword, they will be cleaned up automatically:
+// wait for jatos loading
+await new Promise((r) => jatos.onLoad(r));
 
-```ts
 using app = await createApp();
-using dc = app.collector();
-using scene = app.text('custom text');
+using dc = app.collector('experiment_data.csv').on('add', (row) => {
+  // send data to JATOS server when `dc.add` be called.
+  jatos.appendResultData(row);
+});
 ```

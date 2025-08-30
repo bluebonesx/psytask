@@ -4,3 +4,5 @@ export { reactive, effect } from './src/reactive';
 export { generic, type SceneSetup } from './src/scene';
 export * from './src/trial-iterator';
 export { h, on } from './src/util';
+
+export * from './src/scenes';

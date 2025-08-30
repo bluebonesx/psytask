@@ -1,6 +1,7 @@
 import { detect } from 'detect-browser';
 import { html, render, type TemplateResult } from 'lit-html';
-import { detectFPS, h } from '../../psytask/src/util';
+import { h } from 'psytask';
+import { detectFPS } from '../../psytask/src/app';
 
 export async function detectEnvironment(options?: {
   /** The detection panel container */
@@ -10,7 +11,7 @@ export async function detectEnvironment(options?: {
 }) {
   const opts = { root: document.body, framesCount: 60, ...options };
   const panel = opts.root.appendChild(
-    h('div', { style: { textAlign: 'center', lineHeight: '100dvh' } }),
+    h('div', { style: { 'text-align': 'center', 'line-height': '100dvh' } }),
   );
 
   const ua = navigator.userAgent;

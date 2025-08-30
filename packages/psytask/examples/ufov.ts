@@ -55,7 +55,6 @@ const urls = [
 ] as const;
 const imageBitmaps = await app.load(urls, (blob) => {
   const physical_size = deg2pix(opts.image_size);
-  // Create ImageBitmap with resize algorithm
   return window.createImageBitmap(blob, {
     resizeWidth: physical_size,
     resizeHeight: physical_size,
@@ -63,16 +62,16 @@ const imageBitmaps = await app.load(urls, (blob) => {
 });
 // Define possible angles for peripheral targets (8 directions)
 const rads = Array.from({ length: 8 }, (_, i) => (i * Math.PI) / 4);
-//
+// Calculate mask size
 const stim_size = deg2pix(opts.image_size * 12);
 // Initialize staircase for adaptive duration adjustment
 const staircase = new StairCase({
-  start: 500, // Start with 500ms stimulus duration
-  step: 20, // Adjust by 20ms steps
-  down: 3, // Require 3 correct responses to make it harder (shorter duration)
-  up: 1, // Increase duration after 1 incorrect response
-  reversal: 3, // Stop after 3 reversals
-  min: 16, // Minimum duration (1 frame at 60Hz)
+  start: 500,
+  step: 20,
+  down: 3,
+  up: 1,
+  reversal: 3,
+  min: 16,
 });
 
 // Fixation cross
@@ -95,6 +94,7 @@ using ufovStim = app.scene(
       effect(() => {
         el.style.transform = `translate(${deg2csspix(pos[0])}px, ${deg2csspix(pos[1])}px)`;
       });
+      // Reactive size updates
       effect(() => {
         const _size = deg2csspix(size);
         el.style.top = el.style.left = -_size / 2 + 'px';
@@ -103,30 +103,40 @@ using ufovStim = app.scene(
       return el;
     };
 
+    // Central image stimulus - always at fixation point (0,0)
     const centralImage = ctx.use(ImageStim, {
       image: imageBitmaps[props.image_indexes[0]],
     });
     modify(centralImage.node, [0, 0]);
+    // Reactive image updates based on trial parameters
     effect(
       () => (centralImage.props.image = imageBitmaps[props.image_indexes[0]]),
     );
 
+    // Peripheral image stimulus - position determined by angle
     const peripheralImage = ctx.use(ImageStim, {
       image: imageBitmaps[props.image_indexes[1]],
     });
-    modify(peripheralImage.node, [0, 0]);
+    modify(peripheralImage.node, [0, 0]); // Position will be updated by triangle effect
+    // Reactive image updates
     effect(
       () =>
         (peripheralImage.props.image = imageBitmaps[props.image_indexes[1]]),
     );
 
+    // White rectangle border around fixation area (visual reference)
     const rect = h('div');
     modify(rect, [0, 0], opts.image_size * 1.5);
     effect(() => (rect.style.border = deg2csspix(0.1) + 'px solid #fff'));
 
+    /**
+     * Creates SVG triangle elements for peripheral target locations Triangles
+     * serve as visual markers for the 8 possible directions
+     */
     const triangle = () => {
       const svg = SVG().stroke({ color: '#fff' }).fill('none');
-      svg.polygon('1,1.732 2,0 0,0');
+      svg.polygon('1,1.732 2,0 0,0'); // Equilateral triangle points
+      // Reactive stroke width scaling based on visual angle
       effect(() => {
         const strokeWidth =
           Math.round((deg2csspix(0.2) / deg2csspix(opts.image_size)) * 1e3) *
@@ -143,12 +153,19 @@ using ufovStim = app.scene(
       return svg.node;
     };
 
-    const option_triangle_els: SVGSVGElement[] = [];
-    const fixed_triangle_els: SVGSVGElement[] = [];
+    // Create triangle markers at 8 possible peripheral locations
+    const option_triangle_els: SVGSVGElement[] = []; // Possible target locations
+    const fixed_triangle_els: SVGSVGElement[] = []; // Distractor triangles
+
+    // Generate concentric rings of triangles at different eccentricities
     for (let i = 1; i <= 3; i++) {
+      // 3 concentric rings
       for (let j = 0; j < i * 8; j++) {
-        const radius = i * 2;
-        const rad = (j / (i * 8)) * (2 * Math.PI);
+        // More triangles in outer rings
+        const radius = i * 2; // Ring radius in visual degrees
+        const rad = (j / (i * 8)) * (2 * Math.PI); // Angle for this triangle
+
+        // Outermost ring (i=3) every 3rd triangle (j%3===0) are potential targets
         (i === 3 && j % 3 === 0
           ? option_triangle_els
           : fixed_triangle_els
@@ -168,7 +185,7 @@ using ufovStim = app.scene(
         el.style.visibility = 'hidden';
         peripheralImage.node.style.transform = el.style.transform;
       });
-      ctx.app.data.dpr; // auto update when device pixel ratio changes
+      ctx.app.data.dpr;
     });
 
     return {
@@ -179,33 +196,32 @@ using ufovStim = app.scene(
           style: { position: 'relative', transform: 'translate(50%, 50%)' },
         },
         [
-          centralImage.node,
-          peripheralImage.node,
-          rect,
-          ...option_triangle_els,
-          ...fixed_triangle_els,
+          centralImage.node, // Central target image
+          peripheralImage.node, // Peripheral target image
+          rect, // Fixation area border
+          ...option_triangle_els, // Possible peripheral locations
+          ...fixed_triangle_els, // Distractor triangles
         ],
       ),
     };
   },
   { defaultProps: { image_indexes: [0, 1], peripheral_angle_index: -1 } },
 );
+
 // Mask scene using ImageStim
 using mask = app.scene(
   (_, ctx) => {
     const image = ctx.use(ImageStim, {});
     const createNoise = () => {
-      // Create white noise ImageData directly
       const imageData = new ImageData(stim_size, stim_size);
       const data = imageData.data;
 
-      // Generate random grayscale value (white noise)
       for (let i = 0; i < data.length; i += 4) {
         const value = Math.floor(Math.random() * 256);
-        data[i] = value; // Red
-        data[i + 1] = value; // Green
-        data[i + 2] = value; // Blue
-        data[i + 3] = 255; // Alpha (fully opaque)
+        data[i] = value;
+        data[i + 1] = value;
+        data[i + 2] = value;
+        data[i + 3] = 255;
       }
       image.props.image = imageData;
     };
@@ -216,6 +232,7 @@ using mask = app.scene(
   },
   { defaultProps: {} },
 );
+
 // Identification response scene
 using identification = app.scene(
   (props: { image_indexes: (0 | 1)[] }, ctx) => {
@@ -235,7 +252,6 @@ using identification = app.scene(
         images[i]!.props.image = imageBitmaps[i];
       }
     });
-
     return {
       node: h('div', { className: 'psytask-center' }, [
         'Central Identification:\nWhich image was displayed in the center?',
@@ -250,6 +266,7 @@ using identification = app.scene(
   },
   { defaultProps: { image_indexes: [0, 1] } },
 );
+
 // Localization response scene - select from 8 directions
 using localization = app.scene(
   (_, ctx) => {
@@ -271,9 +288,11 @@ using localization = app.scene(
             ctx.close();
           },
         },
-        '' + (index + 1),
+        '' + (index + 1), // Button label (1-8)
       ),
     );
+
+    // Container for the circular button arrangement
     const container = h(
       'div',
       {
@@ -284,6 +303,7 @@ using localization = app.scene(
       },
       buttons,
     );
+
     return {
       node: h('div', { className: 'psytask-center' }, [
         'Peripheral Localization:\nIn which direction did the peripheral image appear?',
@@ -294,6 +314,7 @@ using localization = app.scene(
   },
   { defaultProps: {} },
 );
+
 // Feedback scene
 using feedback = app.text('', { close_on: 'key: ' });
 
@@ -303,7 +324,7 @@ await guide.show();
 for (const stim_duration of staircase) {
   // Generate trial parameters
   const central_image_index = Math.random() < 0.5 ? 0 : 1;
-  const peripheral_image_index = (1 - central_image_index) as 0 | 1; // Use the other image
+  const peripheral_image_index = (1 - central_image_index) as 0 | 1;
   const peripheral_angle_index = Math.floor(Math.random() * rads.length);
 
   // Show fixation
@@ -314,8 +335,7 @@ for (const stim_duration of staircase) {
     .show({
       image_indexes: [central_image_index, peripheral_image_index],
       peripheral_angle_index,
-    });
-  // Show mask
+    }); // Show mask
   const mask_data = await mask.config({ duration: opts.mask_duration }).show();
   const stim_real_duration = mask_data.start_time - ufovStim_data.start_time;
 
@@ -349,7 +369,7 @@ for (const stim_duration of staircase) {
       '\nPress SPACE key to continue.',
   });
 
-  // Collect simplified trial data
+  // Record trial data
   dc.add({
     image_urls: urls.join(','),
     stim_duration,

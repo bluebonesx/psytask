@@ -198,7 +198,7 @@ function mean_std(arr: number[]) {
   );
   return { mean, std };
 }
-function detectFPS(opts: { root: Element; framesCount: number }) {
+export function detectFPS(opts: { root: Element; framesCount: number }) {
   function checkPageVisibility() {
     if (document.visibilityState === 'hidden') {
       alert(
