@@ -1,5 +1,5 @@
 {
   "extends": "../../tsconfig.node.json",
-  "include": ["."],
-  "compilerOptions": {}
+  "include": ["./index.ts"],
+  "compilerOptions": { "types": ["node"] }
 }

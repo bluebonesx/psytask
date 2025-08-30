@@ -30,24 +30,23 @@
     },
     "packages/create-psytask": {
       "name": "create-psytask",
-      "version": "1.0.0-rc1",
+      "version": "1.1.2",
       "bin": {
-        "create-psytask": "./index.js",
+        "create-psytask": "./dist/index.js",
       },
-      "devDependencies": {
+      "dependencies": {
         "@clack/prompts": "^0.11.0",
       },
     },
     "packages/psytask": {
       "name": "psytask",
-      "version": "1.0.0-rc2",
+      "version": "1.1.0",
       "dependencies": {
         "csstype": "^3.1.3",
       },
       "devDependencies": {
         "@happy-dom/global-registrator": "^18.0.1",
         "@svgdotjs/svg.js": "^3.2.4",
-        "@types/wicg-file-system-access": "^2023.10.6",
         "puppeteer-core": "^24.13.0",
       },
     },
@@ -124,8 +123,6 @@
     "@types/unist": ["@types/unist@3.0.3", "", {}, "sha512-ko/gIFJRv177XgZsZcBwnqJN5x/Gien8qNOn0D5bQU/zAzVf9Zt3BlcUiLqhV9y4ARk0GbT3tnUiPNgnTXzc/Q=="],
 
     "@types/whatwg-mimetype": ["@types/whatwg-mimetype@3.0.2", "", {}, "sha512-c2AKvDT8ToxLIOUlN51gTiHXflsfIFisS4pO7pDPoKouJCESkhZnEy623gwP9laCy5lnLDAw1vAzu2vM2YLOrA=="],
-
-    "@types/wicg-file-system-access": ["@types/wicg-file-system-access@2023.10.6", "", {}, "sha512-YO/183gNRzZFSdKu+ikkD7ambAj4PhgjFAF2A/Mw/7wroSF6ne8r804RkpZzqrJ/F6DO2/IYlQF/ULOZ/bhKyA=="],
 
     "@types/yauzl": ["@types/yauzl@2.10.3", "", { "dependencies": { "@types/node": "*" } }, "sha512-oJoftv0LSuaDZE3Le4DbKX+KS9G36NzOeSap90UIK0yMA/NhKJhqlSGtNDORNRaIbQfzjXDrQa0ytJ6mNRGz/Q=="],
 

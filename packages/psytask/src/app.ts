@@ -36,6 +36,7 @@ export class App extends EventEmitter<{}> {
     if (
       window.getComputedStyle(this.root).getPropertyValue('--psytask') === ''
     ) {
+      // TODO: show on screen
       throw new Error('Please import psytask CSS file in your HTML file');
     }
 

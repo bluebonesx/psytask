@@ -14,7 +14,13 @@ Compare to jsPsych, Psytask has:
 
 ## Install
 
-via NPM (Recommand):
+via [create-psytask](https://github.com/bluebones-team/psytask/tree/main/packages/create-psytask):
+
+```bash
+npm create psytask
+```
+
+via NPM:
 
 ```bash
 npm i psytask
@@ -201,7 +207,7 @@ for (const stimulus of ['A', 'B', 'C']) {
 
 ## Examples
 
-Here are some complete examples of common psychology tasks: [examples](https://github.com/bluebones-team/psytask/tree/main/packages/psytask/examples)
+Here are some complete examples of common psychology tasks: [examples](https://github.com/bluebones-team/psytask/tree/main/packages/psytask/examples). For reference only, not for experimental purposes.
 
 ## Integration
 

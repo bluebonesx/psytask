@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     // environment
-    "lib": ["DOM", "ES2022"],
+    "lib": ["DOM", "ES2022", "ESNext.Disposable"],
     "target": "es2022",
     "module": "esnext",
     "moduleDetection": "force",
@@ -20,11 +20,6 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
-    "checkJs": true,
-
-    // compile
-    "outDir": "./dist",
-    "declaration": true,
-    "sourceMap": false
+    "checkJs": true
   }
 }

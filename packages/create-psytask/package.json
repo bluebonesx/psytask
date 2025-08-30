@@ -1,21 +1,23 @@
 {
   "name": "create-psytask",
-  "version": "1.1.0",
+  "version": "1.1.3",
   "description": "CLI tool to create a new psytask project",
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "bin": {
-    "create-psytask": "./index.js"
+    "create-psytask": "./dist/index.js"
   },
   "files": [
-    "index.js",
+    "dist",
     "template"
   ],
   "scripts": {
-    "dev": "bun build-only --watch",
-    "build": "bun build-only --production",
-    "build-only": "bun build index.ts --outfile=index.js --target=node"
+    "dev": "bun run build --watch",
+    "build": "bun build index.ts --outfile=dist/index.js --target=node --external=@clack/prompts --banner='#!/usr/bin/env node' --production"
   },
-  "devDependencies": {
+  "dependencies": {
     "@clack/prompts": "^0.11.0"
   }
 }

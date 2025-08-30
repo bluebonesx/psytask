@@ -1,22 +1,11 @@
 {
   "name": "psytask",
   "version": "1.1.0",
+  "type": "module",
   "author": "cubxx",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/bluebones-team/psytask.git"
-  },
+  "description": "JavaScript Framework for Psychology task",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
-  "dependencies": {
-    "csstype": "^3.1.3"
-  },
-  "devDependencies": {
-    "@happy-dom/global-registrator": "^18.0.1",
-    "@svgdotjs/svg.js": "^3.2.4",
-    "@types/wicg-file-system-access": "^2023.10.6",
-    "puppeteer-core": "^24.13.0"
-  },
   "exports": {
     ".": {
       "types": "./index.ts",
@@ -24,10 +13,6 @@
     },
     "./main.css": "./dist/main.css"
   },
-  "bugs": {
-    "url": "https://github.com/bluebones-team/psytask/issues"
-  },
-  "description": "JavaScript Framework for Psychology task",
   "files": [
     "dist",
     "src",
@@ -35,7 +20,7 @@
     "index.ts",
     "README.md"
   ],
-  "homepage": "https://github.com/bluebones-team/psytask#readme",
+  "homepage": "https://github.com/bluebones-team/psytask",
   "keywords": [
     "psychology",
     "experiment",
@@ -46,6 +31,13 @@
     "behavioral"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bluebones-team/psytask.git"
+  },
+  "bugs": {
+    "url": "https://github.com/bluebones-team/psytask/issues"
+  },
   "scripts": {
     "dev": "bun index.html --host=0.0.0.0",
     "build": "run-p type-check build-only",
@@ -53,6 +45,12 @@
     "test:e2e": "bun test ./e2e-tests/index.test.ts",
     "type-check": "tsc -b --noEmit"
   },
-  "type": "module",
-  "types": "./dist/index.d.ts"
+  "dependencies": {
+    "csstype": "^3.1.3"
+  },
+  "devDependencies": {
+    "@happy-dom/global-registrator": "^18.0.1",
+    "@svgdotjs/svg.js": "^3.2.4",
+    "puppeteer-core": "^24.13.0"
+  }
 }

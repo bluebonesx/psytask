@@ -1,9 +1,8 @@
 {
   "extends": "../../tsconfig.app.json",
   "compilerOptions": {
-    "outDir": "dist",
-    "types": ["jspsych", "wicg-file-system-access"]
+    "outDir": "dist"
   },
+  // "exclude": ["**/jspsych.ts"],
   "include": ["src", "types", "index.ts", "examples"]
-  // "exclude": ["**/jspsych.ts"]
 }
