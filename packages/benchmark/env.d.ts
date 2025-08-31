@@ -13,13 +13,3 @@ declare module 'lab.js' {
   const _: any;
   export default _;
 }
-
-/** @see ../../node_modules/psychojs/src/index.js */
-declare module 'psychojs' {
-  export const util: any;
-  export const core: any;
-  export const data: any;
-  export const visual: any;
-  export const sound: any;
-  export const hardware: any;
-}

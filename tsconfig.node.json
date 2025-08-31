@@ -5,7 +5,7 @@
     "target": "esnext",
     "module": "esnext",
     "moduleDetection": "force",
-    "types": ["bun", "node", "puppeteer-core"],
+    "types": ["bun", "puppeteer-core"],
 
     // module
     "moduleResolution": "bundler",

@@ -9,8 +9,10 @@ JavaScript Framework for Psychology task. Compatible with the [jsPsych](https://
 Compare to jsPsych, Psytask has:
 
 - Easier and more flexible development experiment.
-- Higher time precision, try [online test](https://bluebones-team.github.io/psytask) on your browser.
+- Higher time precision, try [Benchmark](https://bluebones-team.github.io/psytask/benchmark) on your browser.
 - Smaller bundle size, Faster loading speed.
+
+**🥳 You can play it online now via [Playground](https://bluebones-team.github.io/psytask/playground)**
 
 ## Install
 

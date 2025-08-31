@@ -1,7 +1,5 @@
 name: deploy benchmarks to pages
 on:
-  # push:
-  #   branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
@@ -26,12 +24,15 @@ jobs:
         run: bun i
       - name: Build
         run: |
-          bun --cwd=packages/psytask run build-only
+          mkdir dist
           bun --cwd=packages/benchmark run build-only
+          mv packages/benchmark/dist dist/benchmark
+          bun --cwd=packages/playground run build-only
+          mv packages/playground/dist dist/playground
       - name: Upload
         uses: actions/upload-pages-artifact@v3
         with:
-          path: packages/benchmark/dist
+          path: dist
   deploy:
     environment:
       name: github-pages
@@ -43,7 +44,7 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-  del_runs:
+  cleanup_runs:
     runs-on: ubuntu-latest
     permissions:
       actions: write
@@ -55,4 +56,14 @@ jobs:
           token: ${{ github.token }}
           repository: ${{ github.repository }}
           retain_days: 0
-          keep_minimum_runs: 6
+          keep_minimum_runs: 2
+  cleanup_deployments:
+    runs-on: ubuntu-latest
+    permissions: write-all
+    steps:
+      - name: Delete Deployment Environment
+        uses: strumwolf/delete-deployment-environment@v3
+        with:
+          token: ${{ github.token }}
+          environment: github-pages
+          onlyRemoveDeployments: true

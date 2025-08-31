@@ -50,7 +50,6 @@
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "^18.0.1",
-    "@svgdotjs/svg.js": "^3.2.4",
     "puppeteer-core": "^24.13.0"
   }
 }

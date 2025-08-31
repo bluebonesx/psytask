@@ -1,5 +1,6 @@
-import { createApp, effect, generic, h, StairCase } from '../index';
-import { Form, VirtualChinrest } from '../src/scenes';
+// Visual Short-term Memory
+import { createApp, effect, generic, h, StairCase } from 'psytask';
+import { Form, VirtualChinrest } from 'psytask';
 
 // Initialize app
 using app = await createApp();

@@ -14,22 +14,6 @@ declare global {
     jsPsychModule: any;
   }
 }
-/**
- * Add jsPsychModule in CDN browser build
- *
- * @see https://cdn.jsdelivr.net/npm/jspsych/dist/index.browser.js
- */
-if (process.env.NODE_ENV === 'production') {
-  window['jsPsychModule'] ??= { ParameterType };
-}
-
-const unsupportedParams = new Set([
-  'extensions',
-  'record_data',
-  'save_timeline_variables',
-  'save_trial_parameters',
-  'simulation_options',
-]);
 
 /**
  * Create a scene with jsPsych Plugin
@@ -48,6 +32,14 @@ export const jsPsychStim = function (
   trial: Reactive<TrialType<PluginInfo>>,
   ctx,
 ) {
+  /**
+   * Add jsPsychModule in CDN browser build
+   *
+   * @see https://cdn.jsdelivr.net/npm/jspsych/dist/index.browser.js
+   */
+  if (process.env.NODE_ENV === 'production') {
+    window['jsPsychModule'] ??= { ParameterType };
+  }
   let data: LooseObject;
 
   // create jsPsych DOM
@@ -73,6 +65,13 @@ export const jsPsychStim = function (
 
     // unsupported parameters
     if (process.env.NODE_ENV === 'development') {
+      const unsupportedParams = new Set([
+        'extensions',
+        'record_data',
+        'save_timeline_variables',
+        'save_trial_parameters',
+        'simulation_options',
+      ]);
       for (const key in trial) {
         if (hasOwn(trial, key) && unsupportedParams.has(key)) {
           console.warn(`jsPsych trial "${key}" parameter is not supported`);
