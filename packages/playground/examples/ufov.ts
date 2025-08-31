@@ -1,6 +1,7 @@
+// Useful Field of View
 import { SVG } from '@svgdotjs/svg.js';
-import { createApp, effect, generic, h, StairCase } from '../index';
-import { Form, ImageStim, VirtualChinrest } from '../src/scenes';
+import { createApp, effect, generic, h, StairCase } from 'psytask';
+import { Form, ImageStim, VirtualChinrest } from 'psytask';
 
 // Initialize app
 using app = await createApp();

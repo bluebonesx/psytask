@@ -1,5 +1,6 @@
-import { createApp, generic, StairCase } from '../index';
-import { Form, TextStim } from '../src/scenes';
+// Rapid Serial Visual Presentation
+import { createApp, generic, StairCase } from 'psytask';
+import { Form, TextStim } from 'psytask';
 
 // Initialize app
 using app = await createApp();

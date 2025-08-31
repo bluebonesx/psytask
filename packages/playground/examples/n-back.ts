@@ -1,5 +1,6 @@
-import { createApp, effect, generic } from '../index';
-import { Form, TextStim } from '../src/scenes';
+// N-back
+import { createApp, effect, generic } from 'psytask';
+import { Form, TextStim } from 'psytask';
 
 // Initialize app
 using app = await createApp();

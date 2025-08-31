@@ -2,8 +2,9 @@
   "folders": [
     { "path": ".." },
     { "path": "../packages/psytask" },
-    { "path": "../packages/benchmark" },
     { "path": "../packages/create-psytask" },
+    { "path": "../packages/benchmark" },
+    { "path": "../packages/playground" },
   ],
   "settings": {},
 }
