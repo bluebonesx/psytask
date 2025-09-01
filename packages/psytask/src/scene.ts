@@ -1,26 +1,54 @@
 import type { DeepReadonly, LooseObject, Merge } from '../types';
 import type { App } from './app';
-import { reactive, type Reactive } from './reactive';
+import { reactive } from './reactive';
 import { EventEmitter, h, on, promiseWithResolvers } from './util';
 
 const createShowInfo = () => ({ start_time: 0, frame_times: [] as number[] });
 type SceneShowInfo = ReturnType<typeof createShowInfo>;
 type ForbiddenSceneData = { [K in keyof SceneShowInfo]?: never };
 
-export type SceneSetup<
+/**
+ * @param props - The reactive props to control the scene display
+ * @param ctx - The scene instance, can be used to manage lifecycle and use
+ *   other setups
+ * @see {@link Scene}
+ */
+type SceneSetup<
   P extends LooseObject = any,
   D extends LooseObject = LooseObject & ForbiddenSceneData,
 > = (
-  props: Reactive<P>,
+  props: P,
   ctx: Scene<never>,
-) => { node: string | Node | (string | Node)[]; data?: () => D };
+) => {
+  /** The node(s) appended to the root element of scene */
+  node: string | Node | (string | Node)[];
+  /** Data getter to get data from elements */
+  data?: () => D;
+};
+export type { SceneSetup as Component };
 type SceneShow<
   P extends LooseObject = any,
   D extends LooseObject = LooseObject & ForbiddenSceneData,
 > = (patchProps?: Partial<P>) => Promise<Merge<D, SceneShowInfo>>;
+/** @ignore */
 export type SceneFunction = SceneSetup | SceneShow;
 
-type SceneEventMap = HTMLElementEventMap & {
+/**
+ * Scene lifecycle and root element event name-value pairs.
+ *
+ * | name                  | trigger timing                                                                                           |
+ * | --------------------- | -------------------------------------------------------------------------------------------------------- |
+ * | scene:show            | the scene is shown                                                                                       |
+ * | scene:frame           | on each frame when the scene is shown                                                                    |
+ * | scene:close           | the scene is closed                                                                                      |
+ * | mouse:left            | the left mouse button is pressed                                                                         |
+ * | mouse:middle          | the middle mouse button is pressed                                                                       |
+ * | mouse:right           | the right mouse button is pressed                                                                        |
+ * | mouse:unknown         | an unknown mouse button is pressed                                                                       |
+ * | key:\<key\>           | a {@link https://developer.mozilla.org/docs/Web/API/UI_Events/Keyboard_event_key_values key} is pressed  |
+ * | \<HTMLElement-event\> | an {@link https://developer.mozilla.org/docs/Web/API/HTMLElement#events html element event} is triggered |
+ */
+export type SceneEventMap = HTMLElementEventMap & {
   'scene:show': null;
   'scene:frame': { lastFrameTime: number };
   'scene:close': null;
@@ -31,18 +59,36 @@ type SceneEventMap = HTMLElementEventMap & {
 };
 type SceneEventType = keyof SceneEventMap;
 
-export type SceneOptions<T extends SceneFunction> = DeepReadonly<{
-  defaultProps: T extends SceneSetup<infer P> ? P : LooseObject;
-  /** @unit ms */
-  duration?: number;
-  /** Scene lifecycle and root element events */
-  close_on?: SceneEventType | SceneEventType[];
+/** Scene options (readonly) */
+export type SceneOptions<T extends SceneFunction> = {
+  /** Default props used to call setup */
+  readonly defaultProps: DeepReadonly<
+    T extends SceneSetup<infer P> ? P : LooseObject
+  >;
+  /** Scene duration in milliseconds */
+  readonly duration?: number;
+  /** Close the scene on specific {@link SceneEventMap | events} */
+  readonly close_on?: SceneEventType | DeepReadonly<SceneEventType[]>;
   /** Whether to log frame times */
-  frame_times?: boolean;
-}>;
+  readonly frame_times?: boolean;
+};
 
 const buttonTypeMap = ['mouse:left', 'mouse:middle', 'mouse:right'] as const;
-/** Just for type infer, do nothing in runtime. */
+/**
+ * Provide type infer for generic setup function, do nothing in runtime.
+ *
+ * @example
+ *
+ * ```ts
+ * const genericSetup = <T>(props: T) => ({
+ *   node: h('div'),
+ *   data: () => props,
+ * });
+ * using scene = app.scene(generic(genericSetup), { defaultProps: {} });
+ * const data = await scene.show({ text: '' });
+ * data.text; // is string
+ * ```
+ */
 const setup2show: {
   <P extends LooseObject, D extends LooseObject & ForbiddenSceneData = {}>(
     f: SceneSetup<P, D>,
@@ -60,16 +106,36 @@ export class Scene<
     oncontextmenu: (e) => e.preventDefault(), // prevent context menu
     style: { transform: 'scale(0)' },
   });
-  /** Show params */
-  readonly props: Reactive<SceneOptions<T>['defaultProps']>;
+  /** Reactive props @see {@link reactive} */
+  readonly props: SceneOptions<T>['defaultProps'];
+  /** Data getter */
   data?: T extends SceneSetup<infer P, infer D> ? () => D : () => LooseObject;
+  /**
+   * Show the scene and change props temporarily
+   *
+   * @example
+   *
+   * ```ts
+   * using scene = app.text('', { defaultProps: { children: 'default' } });
+   * await scene.show({ children: 'new' }); // will show `new`
+   * await scene.show(); // will show `default`
+   * ```
+   *
+   * @function
+   */
   //@ts-ignore
   show: T extends SceneSetup<infer P, infer D> ? SceneShow<P, D> : T =
     this.#show;
+  /** Current scene options */
   options: SceneOptions<T>;
   #showPromiseWithResolvers: ReturnType<
     typeof promiseWithResolvers<null>
   > | null = null;
+  /**
+   * @param app - The {@link App} instance
+   * @param setup - The {@link SceneSetup | scene setup function}
+   * @param defaultOptions - Default {@link SceneOptions | scene options}
+   */
   constructor(
     public readonly app: App,
     setup: T,
@@ -78,23 +144,44 @@ export class Scene<
     super();
     this.options = defaultOptions;
 
-    const {
-      node: element,
-      data,
-      props,
-    } = this.use(setup as SceneSetup, {
+    const { node, data, props } = this.use(setup as SceneSetup, {
       ...defaultOptions.defaultProps,
     });
     //@ts-ignore
     this.data = data;
     this.props = props;
-    Array.isArray(element)
-      ? this.root.append(...element)
-      : this.root.append(element);
+    Array.isArray(node) ? this.root.append(...node) : this.root.append(node);
 
     app.root.appendChild(this.root);
     this.on('cleanup', () => app.root.removeChild(this.root));
   }
+  /**
+   * Use component
+   *
+   * @example
+   *
+   * ```ts
+   * using scene = app.scene(
+   *   (props: { text: string }, ctx) => {
+   *     const stim = ctx.use(TextStim); // use other component
+   *     effect(() => {
+   *       stim.props.children = 'Current text is: ' + props.text;
+   *     });
+   *     return {
+   *       node: h('div', null, stim.node),
+   *       data: () => ({
+   *         ...stim.data(),
+   *         length: props.text.length,
+   *       }),
+   *     };
+   *   },
+   *   { defaultProps: { text: 'default text' } },
+   * );
+   * ```
+   *
+   * @param setup Scene setup function
+   * @param defaultProps Default props for the scene
+   */
   use<T extends SceneSetup>(
     setup: T,
     defaultProps: T extends SceneSetup<infer P> ? P : never,
@@ -102,20 +189,31 @@ export class Scene<
     const props = reactive(defaultProps);
     return { ...(setup(props, this) as ReturnType<T>), props };
   }
+  /**
+   * Override default options temporarily
+   *
+   * @example
+   *
+   * ```ts
+   * using scene = app.text('', { duration: 100 });
+   * await scene.config({ duration: 200 }).show(); // will show 200ms
+   * await scene.show(); // will show 100ms
+   * ```
+   */
   config(patchOptions: Partial<SceneOptions<T>>) {
     this.options = { ...this.defaultOptions, ...patchOptions };
     return this;
   }
   close() {
     if (!this.#showPromiseWithResolvers) {
-      throw new Error('Scene is not being shown');
+      throw new Error("Scene hasn't been shown");
     }
     this.root.style.transform = 'scale(0)';
     this.#showPromiseWithResolvers.resolve(null);
   }
   async #show(patchProps?: Partial<LooseObject>) {
     if (this.#showPromiseWithResolvers) {
-      throw new Error('Scene is already being shown');
+      throw new Error('Scene has been shown');
     }
     this.root.focus();
     this.root.style.transform = 'scale(1)';

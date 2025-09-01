@@ -1,8 +1,8 @@
 import type { Data, MaybePromise } from '../types';
+import { TextStim } from './components';
 import { DataCollector } from './data-collector';
 import { effect, reactive } from './reactive';
 import { Scene, type SceneFunction, type SceneOptions } from './scene';
-import { TextStim } from './scenes';
 import { EventEmitter, h, on } from './util';
 
 export class App extends EventEmitter<{}> {
@@ -101,7 +101,30 @@ export class App extends EventEmitter<{}> {
         );
       });
   }
-  /** Load resources to RAM */
+  /**
+   * Load resources to RAM
+   *
+   * It will show loading progress for each resource on page
+   *
+   * @example Load web medias
+   *
+   * ```ts
+   * const [image, audio] = await app.load(['image.png', 'audio.mp3']);
+   * ```
+   *
+   * @example Convert image blob to bitmap
+   *
+   * ```ts
+   * const [image] = await app.load(['image.png'], (blob, url) => {
+   *   console.log('Convert image from', url);
+   *   return window.createImageBitmap(blob);
+   * });
+   * ```
+   *
+   * @param urls - Array of resource URLs to load
+   * @param convertor - Optional function to convert blob data
+   * @returns Promise that resolves to array of loaded resources
+   */
   async load<const T extends readonly string[], D = Blob>(
     urls: T,
     convertor?: (blob: Blob, url: string) => MaybePromise<D>,
@@ -161,20 +184,59 @@ export class App extends EventEmitter<{}> {
   /**
    * Create data collector
    *
-   * @example
-   *   using dc = await app.collector('data.csv');
-   *   dc.add({ name: 'Alice', age: 25 });
-   *   dc.add({ name: 'Bob', age: 30 });
+   * @example Basic usage
    *
-   * @param filename Filename with extension. Default is `data-<timestamp>.csv`.
-   * @param stringifier Using for data transformation.
+   * ```ts
+   * using dc = await app.collector('data.csv');
+   * dc.add({ name: 'Alice', age: 25 });
+   * dc.add({ name: 'Bob', age: 30 });
+   * ```
+   *
+   * @example Custom hooks
+   *
+   * ```ts
+   * using dc = await app
+   *   .collector('data.csv')
+   *   .on('add', ({ row, chunk }) => {
+   *     console.log('add a row', row, 'its chunk is', chunk);
+   *   })
+   *   .on('save', ({ chunk, preventDefault }) => {
+   *     preventDefault(); // Prevent the default save behavior
+   *     console.log('save all rows, the final chunk is', chunk);
+   *   });
+   * ```
+   *
+   * @see {@link DataCollector}
    */
   collector<T extends Data>(
     ...e: ConstructorParameters<typeof DataCollector<T>>
   ) {
     return new DataCollector<T>(...e);
   }
-  /** Create a scene */
+  /**
+   * Create a scene
+   *
+   * @example Creating a text scene
+   *
+   * ```ts
+   * const setup = (props: { text: string }, ctx) => {
+   *   const el = h('div'); // create element
+   *   effect(() => {
+   *     el.textContent = props.text; // update element content when props.text changes
+   *   });
+   *   return { node: el, data: () => ({ text: el.textContent }) }; // return element and data getter
+   * };
+   *
+   * // create scene by setup function
+   * using scene = app.scene(setup, {
+   *   defaultProps: { text: 'default text' },
+   * });
+   * // change props.text and show, then get data
+   * const data = await scene.show({ text: 'new text' });
+   * ```
+   *
+   * @see {@link Scene}
+   */
   scene<T extends SceneFunction>(
     ...e: ConstructorParameters<typeof Scene<T>> extends [infer L, ...infer R]
       ? R
@@ -182,11 +244,20 @@ export class App extends EventEmitter<{}> {
   ) {
     return new Scene(this, ...e);
   }
-  /** Create a text scene */
-  text(content?: string, options?: Partial<SceneOptions<typeof TextStim>>) {
+  /**
+   * Create a text scene
+   *
+   * @param content - Optional text content to display
+   * @param defaultOptions - Optional default scene options
+   * @see {@link TextStim}
+   */
+  text(
+    content?: string,
+    defaultOptions?: Partial<SceneOptions<typeof TextStim>>,
+  ) {
     return this.scene(TextStim, {
-      defaultProps: { children: content, ...options?.defaultProps },
-      ...options,
+      defaultProps: { children: content, ...defaultOptions?.defaultProps },
+      ...defaultOptions,
     });
   }
 }
@@ -199,6 +270,7 @@ function mean_std(arr: number[]) {
   );
   return { mean, std };
 }
+/** @ignore */
 export function detectFPS(opts: { root: Element; framesCount: number }) {
   function checkPageVisibility() {
     if (document.visibilityState === 'hidden') {
@@ -255,10 +327,15 @@ export function detectFPS(opts: { root: Element; framesCount: number }) {
  * Create app
  *
  * @example
- *   using app = await createApp();
- *   using fixation = app.text('+', { duration: 500 });
- *   using blank = app.text('', { duration: 1000 });
- *   using guide = app.text('Welcome to the task!', { close_on: 'key: ' });
+ *
+ * ```ts
+ * using app = await createApp();
+ * using dc = app.collector();
+ * using fixation = app.text('+', { duration: 500 });
+ * using guide = app.text('Welcome to the task!', { close_on: 'key: ' });
+ * ```
+ *
+ * @see {@link App}
  */
 export const createApp = async (options?: Parameters<typeof detectFPS>[0]) => {
   const opts = {

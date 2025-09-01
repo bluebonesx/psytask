@@ -44,6 +44,31 @@ export abstract class ResponsiveTrialIterator<T, R> extends TrialIterator<T> {
 }
 
 // built-in classes
+/**
+ * @example With replace
+ *
+ * ```ts
+ * for (const value of new RandomSampling({
+ *   candidates: [1, 2, 3],
+ *   sampleSize: 5,
+ *   replace: true,
+ * })) {
+ *   console.log(value);
+ * }
+ * ```
+ *
+ * @example Without replace
+ *
+ * ```ts
+ * for (const value of new RandomSampling({
+ *   candidates: [1, 2, 3],
+ *   sampleSize: 2,
+ *   replace: false,
+ * })) {
+ *   console.log(value);
+ * }
+ * ```
+ */
 export class RandomSampling<T> extends TrialIterator<T> {
   #count = 0;
   declare options: { candidates: T[]; sampleSize: number; replace: boolean };
@@ -92,6 +117,27 @@ export class RandomSampling<T> extends TrialIterator<T> {
     return target;
   }
 }
+/**
+ * It will use 1-down-1-up before first reversal.
+ *
+ * @example
+ *
+ * ```ts
+ * const staircase = new StairCase({
+ *   start: 0,
+ *   step: 1,
+ *   down: 3,
+ *   up: 1,
+ *   reversal: 3,
+ *   min: 0,
+ *   max: 3,
+ * });
+ * for (const value of staircase) {
+ *   console.log(value);
+ *   staircase.response(true); // set current trial response to calculate next value
+ * }
+ * ```
+ */
 export class StairCase extends ResponsiveTrialIterator<number, boolean> {
   data: { value: number; response: boolean; isReversal: boolean }[] = [];
   constructor(

@@ -1,5 +1,8 @@
-name: deploy benchmarks to pages
+name: deploy to pages
 on:
+  push:
+    tags:
+      - '*'
   workflow_dispatch:
 permissions:
   contents: read
@@ -24,11 +27,14 @@ jobs:
         run: bun i
       - name: Build
         run: |
-          mkdir dist
+          bun --cwd=packages/psytask run docs
+          mv packages/psytask/docs dist
           bun --cwd=packages/benchmark run build-only
           mv packages/benchmark/dist dist/benchmark
           bun --cwd=packages/playground run build-only
           mv packages/playground/dist dist/playground
+
+          ls -la dist
       - name: Upload
         uses: actions/upload-pages-artifact@v3
         with:

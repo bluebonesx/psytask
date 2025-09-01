@@ -2,14 +2,24 @@ import type { Data, Primitive } from '../types';
 import { EventEmitter, h, on } from './util';
 
 // stringifiers
+/** One-time string transformation */
 export abstract class DataStringifier {
   value = '';
-  /** Transform a data object into a string chunk, and append it to the collector */
+  /**
+   * Transform a data object into a string chunk, and append it to the collector
+   *
+   * @param data - The data object to transform
+   * @returns String representation of the data
+   */
   abstract transform(data: Data): string;
-  /** Create the final chunk, and append it to the collector */
+  /**
+   * Create the final chunk, and append it to the collector
+   *
+   * @returns Final string chunk
+   */
   abstract final(): string;
 }
-/** @see https://www.rfc-editor.org/rfc/rfc4180 */
+/** @see {@link https://www.rfc-editor.org/rfc/rfc4180 | RFC-4180} */
 export class CSVStringifier extends DataStringifier {
   keys: string[] = [];
   normalize(value: Primitive) {
@@ -40,6 +50,7 @@ export class CSVStringifier extends DataStringifier {
     return '';
   }
 }
+/** @see {@link https://www.json.org | JSON} */
 export class JSONStringifier extends DataStringifier {
   transform(data: Data) {
     const chunk = (this.value === '' ? '[' : ',') + JSON.stringify(data);
@@ -53,6 +64,7 @@ export class JSONStringifier extends DataStringifier {
   }
 }
 
+/** One-time data collector. Collect, stringify and save data. */
 export class DataCollector<T extends Data> extends EventEmitter<{
   add: { row: T; chunk: string };
   save: { chunk: string; preventDefault: () => void };
@@ -64,20 +76,25 @@ export class DataCollector<T extends Data> extends EventEmitter<{
    * `DataStringifier` and implement `transform` and `final` methods. The key is
    * the file extension (without the dot), and the value is the class.
    *
-   * @example
-   *   // add support for Markdown files, whose extension is 'md'
-   *   DataCollector.stringifiers['md'] = class MarkDownStringifier extends (
-   *     DataStringifier
-   *   ) {
-   *     transform(data) {
-   *       // write transform logic here
-   *       return '';
-   *     }
-   *     final() {
-   *       // write final logic here
-   *       return '';
-   *     }
-   *   };
+   * @example Adding custom stringifier
+   *
+   * ```ts
+   * // add support for Markdown files, whose extension is 'md'
+   * DataCollector.stringifiers['md'] = class MarkdownStringifier extends (
+   *   DataStringifier
+   * ) {
+   *   transform(data) {
+   *     // write transform logic here
+   *     return '';
+   *   }
+   *   final() {
+   *     // write final logic here
+   *     return '';
+   *   }
+   * };
+   *
+   * using dc = app.collector('data.md'); // now you can save to Markdown file
+   * ```
    */
   static readonly stringifiers: Record<string, new () => DataStringifier> = {
     csv: CSVStringifier,
@@ -86,6 +103,15 @@ export class DataCollector<T extends Data> extends EventEmitter<{
   #saved = false;
   readonly rows: T[] = [];
   readonly stringifier: DataStringifier;
+  /**
+   * Built-in supports for CSV and JSON formats. You can extend this by
+   * {@link DataCollector.stringifiers} or provide `stringifier` parameter.
+   *
+   * @param filename Default is `data-${Date.now()}.csv`
+   * @param stringifier - An instance of {@link DataStringifier}. If not
+   *   provided, a default stringifier will be used based on the file
+   *   extension.
+   */
   constructor(
     public readonly filename = `data-${Date.now()}.csv`,
     stringifier?: DataStringifier,
@@ -126,7 +152,25 @@ export class DataCollector<T extends Data> extends EventEmitter<{
       // save data on dispose
       .on('cleanup', () => this.save());
   }
-  /** Add a data row */
+  /**
+   * Add a data row
+   *
+   * You need to provide
+   * {@link https://developer.mozilla.org/en-US/docs/Glossary/Primitive | primitive value}
+   * only.
+   *
+   * @example
+   *
+   * ```ts
+   * // convert array
+   * dc.add({ array: [0, 1, 2] }); // ❌
+   * dc.add({ array: [0, 1, 2].join(',') }); // ✔️
+   *
+   * // convert object
+   * dc.add({ object: { a: 1, b: 2 } }); // ❌
+   * dc.add({ object: JSON.stringify({ a: 1, b: 2 }) }); // ✔️
+   * ```
+   */
   add(row: T) {
     console.info('data', row);
     this.rows.push(row);
@@ -134,7 +178,21 @@ export class DataCollector<T extends Data> extends EventEmitter<{
     this.emit('add', { row, chunk });
     return chunk;
   }
-  /** Write data to disk */
+  /**
+   * Write data to disk
+   *
+   * In most cases, you don't need to call this method manually. It will be
+   * called automatically when the collector is disposed.
+   *
+   * It is one-time, so multiple calls will be ignored.
+   *
+   * @example
+   *
+   * ```ts
+   * dc.save(); // ✔️ the first call is successful
+   * dc.save(); // ❌ the subsequent calls will be ignored
+   * ```
+   */
   save() {
     if (this.#saved) {
       console.warn('Repeated save is not allowed');
