@@ -193,7 +193,7 @@ describe('Scene', () => {
       const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
       // Scene is initially not shown
-      expect(() => scene.close()).toThrow('Scene is not being shown');
+      expect(() => scene.close()).toThrow("Scene hasn't been shown");
     });
 
     it('should handle close when no show promise exists', () => {
@@ -201,7 +201,7 @@ describe('Scene', () => {
       const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
       // Close without showing - should throw
-      expect(() => scene.close()).toThrow('Scene is not being shown');
+      expect(() => scene.close()).toThrow("Scene hasn't been shown");
     });
   });
 
@@ -232,7 +232,7 @@ describe('Scene', () => {
       const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
       scene.show();
-      expect(() => scene.show()).toThrow('Scene is already being shown');
+      expect(() => scene.show()).toThrow('Scene has been shown');
     });
 
     it('should return a promise that resolves with scene data', async () => {

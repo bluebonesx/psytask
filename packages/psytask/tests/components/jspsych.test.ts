@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import { App } from '../../src/app';
 import { Scene } from '../../src/scene';
-import { jsPsychStim } from '../../src/scenes/jspsych';
+import { jsPsychStim } from '../../src/components/jspsych';
 
 class MockJsPsychPlugin {
   static info = {
@@ -30,7 +30,7 @@ class MockJsPsychPlugin {
           // that create scenes without calling show()
           if (
             !(error instanceof Error) ||
-            !error.message?.includes('Scene is not being shown')
+            !error.message?.includes("Scene hasn't been shown")
           ) {
             throw error;
           }
@@ -420,24 +420,10 @@ describe('jsPsych scene', () => {
 });
 
 describe('App jsPsych integration', () => {
-  let mockEnvData: any;
   let app: App;
 
   beforeEach(() => {
-    mockEnvData = {
-      ua: 'test-user-agent',
-      os: null,
-      browser: 'test-browser/1.0',
-      mobile: false,
-      'in-app': false,
-      screen_wh: [1920, 1080],
-      window_wh: [1024, 768],
-      frame_ms: 16.67,
-    };
-
-    const root = document.createElement('div');
-    document.body.appendChild(root);
-    app = new App(root);
+    app = new App(document.body);
   });
 
   it('should create a scene with jsPsych plugin via app.scene + jsPsychTrial', async () => {

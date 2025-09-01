@@ -10,7 +10,7 @@ import {
   Checkbox,
   Radio,
   Form,
-} from '../../src/scenes/form';
+} from '../../src/components/form';
 
 describe('Form Fields', () => {
   describe('TextField', () => {

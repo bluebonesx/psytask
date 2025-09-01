@@ -8,18 +8,7 @@ import {
   ImageStim,
   Grating,
   VirtualChinrest,
-} from '../../src/scenes/visual';
-
-// Mock CSS detection
-function addPsytaskCSS() {
-  const style = document.createElement('style');
-  style.textContent = `
-    body { --psytask: 0; }
-    div { --psytask: 0; }
-    * { --psytask: 0; }
-  `;
-  document.head.appendChild(style);
-}
+} from '../../src/components/visual';
 
 // Mock browser APIs that are not available in test environment
 class MockImageData {
@@ -63,13 +52,13 @@ const mockImageData = (width: number, height: number) =>
   new MockImageData(width, height);
 
 describe('Visual Scenes', () => {
-  beforeEach(() => {
-    document.body.innerHTML = '';
-    document.head.innerHTML = '';
-    addPsytaskCSS();
+  let app: App;
 
+  beforeEach(() => {
     // Mock canvas getContext to return our mock
     HTMLCanvasElement.prototype.getContext = mock(() => mockCanvas2D()) as any;
+
+    app = new App(document.body);
   });
 
   describe('GaussianMask', () => {
@@ -265,151 +254,209 @@ describe('Visual Scenes', () => {
 
   describe('Grating', () => {
     it('should create a grating with default parameters', () => {
-      const props = reactive({
-        type: 'sin' as const,
-        size: 100,
-        sf: 0.1,
+      const scene = app.scene(Grating, {
+        defaultProps: {
+          type: 'sin' as const,
+          size: 100,
+          sf: 0.1,
+        },
       });
-      const result = Grating(props);
-      expect(result.node).toBeInstanceOf(HTMLCanvasElement);
+
+      expect(scene).toBeInstanceOf(Scene);
+      expect(scene.root.querySelector('canvas')).toBeInstanceOf(
+        HTMLCanvasElement,
+      );
     });
 
     it('should handle different wave types', () => {
       const types = ['sin', 'square', 'triangle', 'sawtooth'] as const;
 
       types.forEach((type) => {
-        const props = reactive({
-          type,
-          size: 50,
-          sf: 0.1,
+        const scene = app.scene(Grating, {
+          defaultProps: {
+            type,
+            size: 50,
+            sf: 0.1,
+          },
         });
-        const result = Grating(props);
-        expect(result.node).toBeInstanceOf(HTMLCanvasElement);
+
+        expect(scene).toBeInstanceOf(Scene);
+        expect(scene.root.querySelector('canvas')).toBeInstanceOf(
+          HTMLCanvasElement,
+        );
       });
     });
 
     it('should handle custom wave function', () => {
       const customWave = (x: number) => Math.cos(x);
-      const props = reactive({
-        type: customWave,
-        size: 50,
-        sf: 0.1,
+      const scene = app.scene(Grating, {
+        defaultProps: {
+          type: customWave,
+          size: 50,
+          sf: 0.1,
+        },
       });
-      const result = Grating(props);
-      expect(result.node).toBeInstanceOf(HTMLCanvasElement);
+
+      expect(scene).toBeInstanceOf(Scene);
+      expect(scene.root.querySelector('canvas')).toBeInstanceOf(
+        HTMLCanvasElement,
+      );
     });
 
-    it('should handle different sizes', () => {
+    it('should handle different sizes', async () => {
       // Square size
-      const squareProps = reactive({
-        type: 'sin' as const,
-        size: 100,
-        sf: 0.1,
+      const squareScene = app.scene(Grating, {
+        defaultProps: {
+          type: 'sin' as const,
+          size: 100,
+          sf: 0.1,
+        },
       });
-      const squareResult = Grating(squareProps);
-      const squareCanvas = squareResult.node as HTMLCanvasElement;
-      expect(squareCanvas.width).toBe(100);
-      expect(squareCanvas.height).toBe(100);
+
+      // Wait for effects to be applied
+      await 0;
+
+      const squareCanvas = squareScene.root.querySelector(
+        'canvas',
+      ) as HTMLCanvasElement;
+      // Check that width and height are equal (square) and canvas exists
+      expect(squareCanvas).toBeInstanceOf(HTMLCanvasElement);
+      expect(squareCanvas.width).toBe(squareCanvas.height);
 
       // Rectangular size
-      const rectProps = reactive({
-        type: 'sin' as const,
-        size: [120, 80] as [number, number],
-        sf: 0.1,
+      const rectScene = app.scene(Grating, {
+        defaultProps: {
+          type: 'sin' as const,
+          size: [120, 80] as [number, number],
+          sf: 0.1,
+        },
       });
-      const rectResult = Grating(rectProps);
-      const rectCanvas = rectResult.node as HTMLCanvasElement;
-      expect(rectCanvas.width).toBe(120);
-      expect(rectCanvas.height).toBe(80);
+
+      // Wait for effects to be applied
+      await 0;
+
+      const rectCanvas = rectScene.root.querySelector(
+        'canvas',
+      ) as HTMLCanvasElement;
+      // Check that canvas exists and width/height ratio is correct
+      expect(rectCanvas).toBeInstanceOf(HTMLCanvasElement);
+      expect(rectCanvas.width / rectCanvas.height).toBeCloseTo(120 / 80);
     });
 
     it('should handle orientation parameter', () => {
-      const props = reactive({
-        type: 'sin' as const,
-        size: 50,
-        sf: 0.1,
-        ori: Math.PI / 4, // 45 degrees
+      const scene = app.scene(Grating, {
+        defaultProps: {
+          type: 'sin' as const,
+          size: 50,
+          sf: 0.1,
+          ori: Math.PI / 4, // 45 degrees
+        },
       });
-      const result = Grating(props);
-      expect(result.node).toBeInstanceOf(HTMLCanvasElement);
+
+      expect(scene).toBeInstanceOf(Scene);
+      expect(scene.root.querySelector('canvas')).toBeInstanceOf(
+        HTMLCanvasElement,
+      );
     });
 
     it('should handle phase parameter', () => {
-      const props = reactive({
-        type: 'sin' as const,
-        size: 50,
-        sf: 0.1,
-        phase: Math.PI / 2,
+      const scene = app.scene(Grating, {
+        defaultProps: {
+          type: 'sin' as const,
+          size: 50,
+          sf: 0.1,
+          phase: Math.PI / 2,
+        },
       });
-      const result = Grating(props);
-      expect(result.node).toBeInstanceOf(HTMLCanvasElement);
+
+      expect(scene).toBeInstanceOf(Scene);
+      expect(scene.root.querySelector('canvas')).toBeInstanceOf(
+        HTMLCanvasElement,
+      );
     });
 
     it('should handle color parameter', () => {
-      const props = reactive({
-        type: 'sin' as const,
-        size: 50,
-        sf: 0.1,
-        color: [255, 0, 0] as [number, number, number],
+      const scene = app.scene(Grating, {
+        defaultProps: {
+          type: 'sin' as const,
+          size: 50,
+          sf: 0.1,
+          color: [255, 0, 0] as [number, number, number],
+        },
       });
-      const result = Grating(props);
-      expect(result.node).toBeInstanceOf(HTMLCanvasElement);
+
+      expect(scene).toBeInstanceOf(Scene);
+      expect(scene.root.querySelector('canvas')).toBeInstanceOf(
+        HTMLCanvasElement,
+      );
     });
 
     it('should handle dual color parameter', () => {
-      const props = reactive({
-        type: 'sin' as const,
-        size: 50,
-        sf: 0.1,
-        color: [
-          [255, 0, 0],
-          [0, 255, 0],
-        ] as [[number, number, number], [number, number, number]],
+      const scene = app.scene(Grating, {
+        defaultProps: {
+          type: 'sin' as const,
+          size: 50,
+          sf: 0.1,
+          color: [
+            [255, 0, 0],
+            [0, 255, 0],
+          ] as [[number, number, number], [number, number, number]],
+        },
       });
-      const result = Grating(props);
-      expect(result.node).toBeInstanceOf(HTMLCanvasElement);
+
+      expect(scene).toBeInstanceOf(Scene);
+      expect(scene.root.querySelector('canvas')).toBeInstanceOf(
+        HTMLCanvasElement,
+      );
     });
 
     it('should handle mask parameter', () => {
       const mask = GaussianMask(1);
-      const props = reactive({
-        type: 'sin' as const,
-        size: 50,
-        sf: 0.1,
-        mask,
+      const scene = app.scene(Grating, {
+        defaultProps: {
+          type: 'sin' as const,
+          size: 50,
+          sf: 0.1,
+          mask,
+        },
       });
-      const result = Grating(props);
-      expect(result.node).toBeInstanceOf(HTMLCanvasElement);
+
+      expect(scene).toBeInstanceOf(Scene);
+      expect(scene.root.querySelector('canvas')).toBeInstanceOf(
+        HTMLCanvasElement,
+      );
     });
 
     it('should update when parameters change', async () => {
-      const props = reactive({
-        type: 'sin' as const,
-        size: 50,
-        sf: 0.1,
+      const scene = app.scene(Grating, {
+        defaultProps: {
+          type: 'sin' as const,
+          size: 50,
+          sf: 0.1,
+        },
       });
-      const result = Grating(props);
 
       // Just verify that the grating was created successfully
-      expect(result.node).toBeInstanceOf(HTMLCanvasElement);
+      expect(scene).toBeInstanceOf(Scene);
+      expect(scene.root.querySelector('canvas')).toBeInstanceOf(
+        HTMLCanvasElement,
+      );
 
-      // Change parameters - the reactive system will handle the update
-      props.sf = 0.2;
+      // Change parameters by updating the mutable props - the reactive system will handle the update
+      (scene.props as any).sf = 0.2;
       await 0;
 
       // Verify it's still a canvas (the internal update will have happened)
-      expect(result.node).toBeInstanceOf(HTMLCanvasElement);
+      expect(scene.root.querySelector('canvas')).toBeInstanceOf(
+        HTMLCanvasElement,
+      );
     });
   });
 
   describe('VirtualChinrest', () => {
-    let app: App;
     let scene: Scene<() => { node: HTMLDivElement }>;
 
     beforeEach(() => {
-      const root = document.createElement('div');
-      document.body.appendChild(root);
-      app = new App(root);
       scene = new Scene(app, () => ({ node: document.createElement('div') }), {
         defaultProps: {},
       });

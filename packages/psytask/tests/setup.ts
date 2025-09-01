@@ -11,7 +11,7 @@ if (!process.argv[1]?.includes('e2e')) {
     <html>
       <head>
         <style>
-          * { --psytask: 0; }
+          body { --psytask: 0; }
         </style>
       </head>
       <body></body>
