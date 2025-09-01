@@ -1,7 +1,23 @@
 import type { PropertiesHyphen as CSSProperties } from 'csstype';
 import type { EventType, LooseObject, Merge } from '../types';
 
-/** Creates HTML element */
+/**
+ * Creates HTML element, shortcut of {@link document.createElement}.
+ *
+ * @example
+ *
+ * ```ts
+ * h('div'); // <div></div>
+ *
+ * h('div', { className: 'psytask-center' }); // <div class="psytask-center"></div>
+ * h('div', { style: { color: 'red' } }); // <div style="color: red;"></div>
+ * h('div', { dataset: { id: 'my-div' } }); // <div data-id="my-div"></div>
+ *
+ * h('div', null, 'text'); // <div>text</div>
+ * h('div', null, h('p')); // <div><p></p></div>
+ * h('div', null, ['text', h('p')]); // <div>text<p></p></div>
+ * ```
+ */
 export const h = <K extends keyof HTMLElementTagNameMap>(
   tagName: K,
   props?: Partial<
@@ -38,6 +54,7 @@ export const h = <K extends keyof HTMLElementTagNameMap>(
   }
   return el;
 };
+/** @ignore */
 export function hasOwn<T extends LooseObject, K extends PropertyKey>(
   obj: T,
   key: K,
@@ -46,6 +63,7 @@ export function hasOwn<T extends LooseObject, K extends PropertyKey>(
   : Extract<T, { [P in K]: unknown }> {
   return Object.prototype.hasOwnProperty.call(obj, key);
 }
+/** @ignore */
 export function proxyNonKey<T extends object>(
   obj: T,
   onNoKey: (key: PropertyKey) => void,
@@ -57,6 +75,7 @@ export function proxyNonKey<T extends object>(
     },
   });
 }
+/** @ignore */
 export const promiseWithResolvers = (
   process.env.NODE_ENV !== 'test' &&
   hasOwn(Promise, 'withResolvers') &&
@@ -78,7 +97,10 @@ export const promiseWithResolvers = (
  * Add event listener and return cleanup function
  *
  * @example
- *   const cleanup = on(window, 'resize', (e) => {});
+ *
+ * ```ts
+ * const cleanup = on(window, 'resize', (e) => {});
+ * ```
  */
 export function on<T extends EventTarget, K extends EventType<T>>(
   target: T,

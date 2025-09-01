@@ -4,8 +4,8 @@ import { KeyboardListenerAPI } from '../../../../node_modules/jspsych/src/module
 import { TimeoutAPI } from '../../../../node_modules/jspsych/src/modules/plugin-api/TimeoutAPI';
 import { ParameterType } from '../../../../node_modules/jspsych/src/modules/plugins';
 import type { LooseObject } from '../../types';
-import { effect, type Reactive } from '../reactive';
-import { type SceneSetup } from '../scene';
+import { effect } from '../reactive';
+import { type Component } from '../scene';
 import { h, hasOwn, proxyNonKey } from '../util';
 
 declare global {
@@ -18,23 +18,31 @@ declare global {
 /**
  * Create a scene with jsPsych Plugin
  *
- * @example
- *   using scene = app.scene(jsPsychStim);
- *   scene.show({
- *     type: jsPsychHtmlKeyboardResponse,
- *     stimulus: 'Hello world',
- *     choices: ['f', 'j'],
- *   });
+ * This function provides a compatibility layer for using jsPsych plugins within
+ * psytask. It handles the integration between jsPsych plugin API and psytask's
+ * scene system.
  *
- * @see https://www.jspsych.org/latest/plugins/
+ * @example
+ *
+ * ```ts
+ * using scene = app.scene(jsPsychStim, {
+ *   defaultProps: {
+ *     type: jsPsychHtmlKeyboardResponse,
+ *     stimulus: 'default',
+ *     choices: ['f', 'j'],
+ *   },
+ * });
+ * await scene.show({ stimulus: 'new' }); // change stimulus
+ * ```
+ *
+ * @see {@link https://www.jspsych.org/latest/plugins/ | jsPsych Plugin}
  */
-export const jsPsychStim = function (
-  trial: Reactive<TrialType<PluginInfo>>,
-  ctx,
-) {
+export const jsPsychStim = function (trial: TrialType<PluginInfo>, ctx) {
   /**
    * Add jsPsychModule in CDN browser build
    *
+   * @remarks
+   * This is required for compatibility with CDN builds of jsPsych
    * @see https://cdn.jsdelivr.net/npm/jspsych/dist/index.browser.js
    */
   if (process.env.NODE_ENV === 'production') {
@@ -152,4 +160,4 @@ export const jsPsychStim = function (
     ),
     data: () => data,
   };
-} satisfies SceneSetup;
+} satisfies Component;

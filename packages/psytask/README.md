@@ -12,20 +12,18 @@ Compare to jsPsych, Psytask has:
 - Higher time precision, try [Benchmark](https://bluebones-team.github.io/psytask/benchmark) on your browser.
 - Smaller bundle size, Faster loading speed.
 
-**🥳 You can play it online now via [Playground](https://bluebones-team.github.io/psytask/playground)**
+**🥳 You can play it online now via [Playground & Examples](https://bluebones-team.github.io/psytask/playground) !**
 
 ## Install
-
-via [create-psytask](https://github.com/bluebones-team/psytask/tree/main/packages/create-psytask):
-
-```bash
-npm create psytask
-```
 
 via NPM:
 
 ```bash
-npm i psytask
+npm create psytask # create a project folder
+```
+
+```bash
+npm i psytask # just install
 ```
 
 via CDN:
@@ -93,10 +91,11 @@ using guide = app.text('Welcome to our task', { close_on: 'key: ' }); // close o
 
 // create custom scene with response collection
 using scene = app.scene(
-  // 1st. argument: setup function
+  // 1st. argument: component (setup function)
   /** @param {{ stimulus: string }} props */
   (props, ctx) => {
-    let data = { response_key: '', response_time: 0 };
+    /** @type {{ response_key: string; response_time: number }} */
+    let data;
 
     // Reset data when scene shows
     ctx
@@ -118,7 +117,7 @@ using scene = app.scene(
     // Create stimulus element
     const el = h('div', { className: 'psytask-center' });
     effect(() => {
-      el.textContent = props.stimulus || '';
+      el.textContent = props.stimulus; // update element when `props.stimulus` changed
     });
 
     // Return the element and data getter
@@ -207,9 +206,9 @@ for (const stimulus of ['A', 'B', 'C']) {
 }
 ```
 
-## Examples
+## Reference
 
-Here are some complete examples of common psychology tasks: [examples](https://github.com/bluebones-team/psytask/tree/main/packages/psytask/examples). For reference only, not for experimental purposes.
+See [API docs](https://bluebones-team.github.io/psytask).
 
 ## Integration
 

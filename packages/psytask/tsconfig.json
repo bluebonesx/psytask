@@ -4,5 +4,5 @@
     "outDir": "dist"
   },
   // "exclude": ["**/jspsych.ts"],
-  "include": ["src", "types", "index.ts", "examples"]
+  "include": ["src", "types", "index.ts"]
 }

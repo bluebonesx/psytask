@@ -1,0 +1,13 @@
+{
+  "entryPoints": ["./src/*"],
+  "out": "./docs",
+  "includeVersion": true,
+  "skipErrorChecking": true,
+  "sort": ["source-order"],
+  "validation": {
+    "notExported": false,
+    "invalidLink": true,
+    "notDocumented": false
+  },
+  "maxTypeConversionDepth": 3
+}

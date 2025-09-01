@@ -3,7 +3,7 @@ import { App } from '../src/app';
 import {
   Scene,
   type SceneOptions,
-  type SceneSetup,
+  type Component,
   generic,
 } from '../src/scene';
 import { h } from '../src/util';
@@ -16,7 +16,7 @@ describe('Scene', () => {
 
   describe('constructor', () => {
     it('should create Scene instance with app and setup function', () => {
-      const setup: SceneSetup<{}> = (props, ctx) => ({
+      const setup: Component<{}> = (props, ctx) => ({
         node: 'test scene',
       });
 
@@ -30,13 +30,13 @@ describe('Scene', () => {
     });
 
     it('should accept options parameter', () => {
-      const options: SceneOptions<SceneSetup<{}>> = {
+      const options: SceneOptions<Component<{}>> = {
         defaultProps: {},
         duration: 1000,
         close_on: 'click',
       };
 
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, options);
 
       expect(scene.options).toBe(options);
@@ -49,7 +49,7 @@ describe('Scene', () => {
         window.Element.prototype,
         'addEventListener',
       );
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
 
       const scene = new Scene(mockApp, setup, {
         defaultProps: {},
@@ -69,7 +69,7 @@ describe('Scene', () => {
         window.Element.prototype,
         'addEventListener',
       );
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
 
       const scene = new Scene(mockApp, setup, {
         defaultProps: {},
@@ -98,7 +98,7 @@ describe('Scene', () => {
         return originalAddEventListener.apply(this, args);
       };
 
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       new Scene(mockApp, setup, { defaultProps: {} });
 
       // Restore
@@ -119,7 +119,7 @@ describe('Scene', () => {
     });
 
     it('should initialize scene as closed', () => {
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
       // Scene should be closed initially
@@ -127,7 +127,7 @@ describe('Scene', () => {
     });
 
     it('should add cleanup function to remove from app root', () => {
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
       // Scene root should be added to app root automatically
@@ -141,7 +141,7 @@ describe('Scene', () => {
 
   describe('config method', () => {
     it('should update options and return scene instance', () => {
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, {
         defaultProps: {},
         duration: 1000,
@@ -155,7 +155,7 @@ describe('Scene', () => {
     });
 
     it('should partially update options', () => {
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, {
         defaultProps: {},
         duration: 1000,
@@ -171,7 +171,7 @@ describe('Scene', () => {
 
   describe('close method', () => {
     it('should close the scene and resolve promise', async () => {
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
       // Show scene first
@@ -189,7 +189,7 @@ describe('Scene', () => {
     });
 
     it('should throw when trying to close not shown scene', () => {
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
       // Scene is initially not shown
@@ -197,7 +197,7 @@ describe('Scene', () => {
     });
 
     it('should handle close when no show promise exists', () => {
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
       // Close without showing - should throw
@@ -208,7 +208,7 @@ describe('Scene', () => {
   describe('show method', () => {
     it('should show the scene and update props', () => {
       let currentText = '';
-      const setup: SceneSetup<{ text?: string }> = (props) => {
+      const setup: Component<{ text?: string }> = (props) => {
         const div = document.createElement('div');
         // Setup reactive effect manually since we can't import `effect` function
         const updateText = () => {
@@ -228,7 +228,7 @@ describe('Scene', () => {
     });
 
     it('should throw when trying to show already shown scene', () => {
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
       scene.show();
@@ -236,7 +236,7 @@ describe('Scene', () => {
     });
 
     it('should return a promise that resolves with scene data', async () => {
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
       const showPromise = scene.show();
@@ -250,7 +250,7 @@ describe('Scene', () => {
     it('should warn when duration is not a multiple of frame_ms (development only)', () => {
       process.env.NODE_ENV = 'development';
       const consoleSpy = spyOn(console, 'warn');
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, {
         defaultProps: {},
         duration: 10,
@@ -266,7 +266,7 @@ describe('Scene', () => {
     it('should not warn when duration aligns with frame multiples (error < 1ms)', () => {
       process.env.NODE_ENV = 'development';
       const consoleSpy = spyOn(console, 'warn');
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, {
         defaultProps: {},
         duration: 1000,
@@ -282,7 +282,7 @@ describe('Scene', () => {
     });
 
     it('should handle scene without duration', async () => {
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
       scene.show();
@@ -295,7 +295,7 @@ describe('Scene', () => {
     });
 
     it('should set start_time on first frame', async () => {
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
       const showPromise = scene.show();
@@ -310,7 +310,7 @@ describe('Scene', () => {
 
     it('should call scene:frame event during animation', async () => {
       const onFrameSpy = mock((event: { lastFrameTime: number }) => {});
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, {
         defaultProps: {},
         duration: 50, // Short duration to auto-close
@@ -326,7 +326,7 @@ describe('Scene', () => {
     });
 
     it('should auto-close when duration is reached', async () => {
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, {
         defaultProps: {},
         duration: 20,
@@ -339,7 +339,7 @@ describe('Scene', () => {
     });
 
     it('should handle multiple parameters in props', () => {
-      const setup: SceneSetup<{ a?: number; b?: string; c?: boolean }> = (
+      const setup: Component<{ a?: number; b?: string; c?: boolean }> = (
         props,
       ) => {
         const div = document.createElement('div');
@@ -362,7 +362,7 @@ describe('Scene', () => {
 
   describe('event handling', () => {
     it('should close scene when close_on event is triggered', () => {
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, {
         defaultProps: {},
         close_on: 'click',
@@ -379,7 +379,7 @@ describe('Scene', () => {
     });
 
     it('should handle multiple close_on events', async () => {
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, {
         defaultProps: {},
         close_on: ['click', 'keydown'],
@@ -403,7 +403,7 @@ describe('Scene', () => {
 
   describe('data handling', () => {
     it('should handle scene data object', () => {
-      const setup: SceneSetup<{}, { custom: string }> = (props, ctx) => ({
+      const setup: Component<{}, { custom: string }> = (props, ctx) => ({
         node: 'test',
         data: () => ({ custom: 'value' }),
       });
@@ -416,7 +416,7 @@ describe('Scene', () => {
     });
 
     it('should preserve custom data when showing scene', async () => {
-      const setup: SceneSetup<{}, { test: string }> = (props, ctx) => ({
+      const setup: Component<{}, { test: string }> = (props, ctx) => ({
         node: 'test',
         data: () => ({ test: 'data' }),
       });
@@ -432,7 +432,7 @@ describe('Scene', () => {
 
   describe('disposal and cleanup', () => {
     it('should dispose properly with cleanup event', () => {
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
       // Scene root should be added to app root automatically
@@ -446,7 +446,7 @@ describe('Scene', () => {
     });
 
     it('should handle disposal when scene is shown', async () => {
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
       // Scene root is already added to app root in constructor
@@ -466,7 +466,7 @@ describe('Scene', () => {
 
   describe('edge cases and error handling', () => {
     it('should handle scene with no update function effects', async () => {
-      const setup: SceneSetup<{}> = () => ({
+      const setup: Component<{}> = () => ({
         node: '', // Empty node
       });
       const scene = new Scene(mockApp, setup, {
@@ -482,7 +482,7 @@ describe('Scene', () => {
     });
 
     it('should handle scene with complex setup', () => {
-      const setup: SceneSetup<{ message?: string; count?: number }> = (
+      const setup: Component<{ message?: string; count?: number }> = (
         props,
         ctx,
       ) => {
@@ -517,7 +517,7 @@ describe('Scene', () => {
     });
 
     it('should handle rapid show/close cycles', async () => {
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
       // Rapid show/close with async waits
@@ -532,7 +532,7 @@ describe('Scene', () => {
     });
 
     it('should handle scene with zero duration', async () => {
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, {
         defaultProps: {},
         duration: 0,
@@ -544,7 +544,7 @@ describe('Scene', () => {
     });
 
     it('should handle scene with very long duration', () => {
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, {
         defaultProps: {},
         duration: 10000,
@@ -560,7 +560,7 @@ describe('Scene', () => {
     });
 
     it('should handle scene with undefined options', async () => {
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
       expect(scene.options.defaultProps).toEqual({});
@@ -574,7 +574,7 @@ describe('Scene', () => {
     });
 
     it('should handle show with no parameters', async () => {
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
       scene.show();
@@ -587,7 +587,7 @@ describe('Scene', () => {
 
   describe('animation timing', () => {
     it('should handle frame timing calculations correctly', async () => {
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, {
         defaultProps: {},
         duration: 100,
@@ -599,7 +599,7 @@ describe('Scene', () => {
 
     it('should use magic number 1.5 in duration calculation', async () => {
       // This tests the magic number 1.5 mentioned in the source code
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, {
         defaultProps: {},
         duration: mockApp.data.frame_ms * 2, // 2 frames
@@ -619,7 +619,7 @@ describe('Scene', () => {
   describe('requestAnimationFrame integration', () => {
     it('should handle requestAnimationFrame properly', () => {
       // This test verifies that Scene uses requestAnimationFrame
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, {
         defaultProps: {},
         duration: 50,
@@ -637,7 +637,7 @@ describe('Scene', () => {
 
   describe('generic function', () => {
     it('should be a type helper that returns a function', () => {
-      const setup: SceneSetup<{ name: string }, { value: number }> = (
+      const setup: Component<{ name: string }, { value: number }> = (
         props,
       ) => ({
         node: 'test',
@@ -653,7 +653,7 @@ describe('Scene', () => {
 
   describe('use method', () => {
     it('should call setup function and return result with props', () => {
-      const setup: SceneSetup<{ name: string }> = (props, ctx) => ({
+      const setup: Component<{ name: string }> = (props, ctx) => ({
         node: h('div', null, 'Test content'),
         data: () => ({ result: props.name }),
       });
@@ -673,7 +673,7 @@ describe('Scene', () => {
 
   describe('context menu prevention', () => {
     it('should prevent context menu on right click', () => {
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
       const contextMenuEvent = new Event('contextmenu') as any;
@@ -688,7 +688,7 @@ describe('Scene', () => {
   describe('mouse event handling', () => {
     it('should handle mouse:left events', async () => {
       const mouseLeftSpy = mock((event: MouseEvent) => {});
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
       scene.on('mouse:left', mouseLeftSpy);
@@ -704,7 +704,7 @@ describe('Scene', () => {
 
     it('should handle mouse:middle events', async () => {
       const mouseMiddleSpy = mock((event: MouseEvent) => {});
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
       scene.on('mouse:middle', mouseMiddleSpy);
@@ -720,7 +720,7 @@ describe('Scene', () => {
 
     it('should handle mouse:right events', async () => {
       const mouseRightSpy = mock((event: MouseEvent) => {});
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
       scene.on('mouse:right', mouseRightSpy);
@@ -736,7 +736,7 @@ describe('Scene', () => {
 
     it('should handle mouse:unknown events for other buttons', async () => {
       const mouseUnknownSpy = mock((event: MouseEvent) => {});
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
       scene.on('mouse:unknown', mouseUnknownSpy);
@@ -755,7 +755,7 @@ describe('Scene', () => {
     it('should handle key:* events', async () => {
       const keyEnterSpy = mock((event: KeyboardEvent) => {});
       const keyEscapeSpy = mock((event: KeyboardEvent) => {});
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
       scene.on('key:Enter', keyEnterSpy);
@@ -777,7 +777,7 @@ describe('Scene', () => {
 
     it('should handle multiple key events for same scene', async () => {
       const keySpy = mock((event: KeyboardEvent) => {});
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
       scene.on('key:a', keySpy);
@@ -798,7 +798,7 @@ describe('Scene', () => {
 
   describe('frame times logging', () => {
     it('should log frame times when frame_times option is enabled', async () => {
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, {
         defaultProps: {},
         duration: 50,
@@ -816,7 +816,7 @@ describe('Scene', () => {
     });
 
     it('should not log frame times when frame_times option is disabled', async () => {
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, {
         defaultProps: {},
         duration: 50,
@@ -836,7 +836,7 @@ describe('Scene', () => {
   describe('non-scene event handling', () => {
     it('should handle custom DOM events that do not start with scene:', async () => {
       const customEventSpy = mock((event: Event) => {});
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
       scene.on('custom' as any, customEventSpy);
@@ -853,7 +853,7 @@ describe('Scene', () => {
   describe('development mode features', () => {
     it('should set global window.s reference in development mode', () => {
       process.env.NODE_ENV = 'development';
-      const setup: SceneSetup<{}> = () => ({ node: '' });
+      const setup: Component<{}> = () => ({ node: '' });
       const scene = new Scene(mockApp, setup, { defaultProps: {} });
 
       scene.show();

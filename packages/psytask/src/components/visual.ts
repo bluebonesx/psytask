@@ -1,17 +1,58 @@
 import type { PropertiesHyphen as CSSProperties } from 'csstype';
 import type { RGB255 } from '../../types';
 import { effect, reactive } from '../reactive';
-import { type SceneSetup } from '../scene';
+import { type Component } from '../scene';
 import { h } from '../util';
 
 // mask
 type MaskFunction = (x: number, y: number) => number;
+
+/**
+ * Creates a Gaussian mask function for use with grating stimuli
+ *
+ * @example
+ *
+ * ```ts
+ * // Create a soft-edged circular mask
+ * const softMask = GaussianMask(0.3);
+ *
+ * using gratingScene = app.scene(Grating, {
+ *   defaultProps: {
+ *     type: 'sin',
+ *     size: [200, 200],
+ *     sf: 0.05,
+ *     mask: softMask,
+ *   },
+ * });
+ * await gratingScene.show();
+ * ```
+ *
+ * @param sigma - Standard deviation of the Gaussian function (controls spread)
+ * @returns A mask function that takes normalized coordinates and returns
+ *   opacity
+ */
 export const GaussianMask =
   (sigma: number): MaskFunction =>
   (x, y) =>
     Math.exp(-(x ** 2 + y ** 2) / (2 * sigma ** 2));
 
-// stim
+/**
+ * Text stimulus component for displaying styled text content
+ *
+ * @example
+ *
+ * ```ts
+ * using textScene = app.scene(TextStim, {
+ *   defaultProps: {
+ *     children: 'Hello, World!',
+ *     color: 'blue',
+ *     'font-size': '24px',
+ *     'font-weight': 'bold',
+ *   },
+ * });
+ * await textScene.show();
+ * ```
+ */
 export const TextStim = function (
   props: CSSProperties & { children?: string | Node | (string | Node)[] },
 ) {
@@ -32,8 +73,33 @@ export const TextStim = function (
       effect(() => (el.style[key] = props[key]));
 
   return { node: el };
-} satisfies SceneSetup;
+} satisfies Component;
 
+/**
+ * Image stimulus component for displaying images or custom canvas drawings
+ *
+ * @example
+ *
+ * ```ts
+ * const [bitmap] = await app.load(['https://picsum.photos/200'], (blob) =>
+ *   window.createImageBitmap(blob),
+ * );
+ * using imageScene = app.scene(ImageStim, {
+ *   defaultProps: {
+ *     image: bitmap,
+ *     draw: (ctx) => {
+ *       ctx.fillStyle = 'red';
+ *       ctx.fillRect(10, 10, 100, 100);
+ *       ctx.fillStyle = 'blue';
+ *       ctx.beginPath();
+ *       ctx.arc(60, 60, 30, 0, 2 * Math.PI);
+ *       ctx.fill();
+ *     },
+ *   },
+ * });
+ * await imageScene.show();
+ * ```
+ */
 export const ImageStim = function (props: {
   image?: ImageBitmap | ImageData;
   draw?(ctx: CanvasRenderingContext2D): void;
@@ -58,7 +124,7 @@ export const ImageStim = function (props: {
   });
 
   return { node: el };
-} satisfies SceneSetup;
+} satisfies Component;
 
 type WaveFunction = (x: number) => number;
 const waves = {
@@ -69,23 +135,48 @@ const waves = {
 } satisfies Record<string, WaveFunction>;
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
-export const Grating = function (props: {
-  /** Wave type or wave function that return [-1, 1] */
-  type: keyof typeof waves | WaveFunction;
-  /** Width or [width, height] @unit pix */
-  size: number | [number, number];
-  /** Spatial frequency @unit cycle/pix */
-  sf: number;
-  /** Orientation @unit rad */
-  ori?: number;
-  /** @unit rad */
-  phase?: number;
-  /** Color or [color, color] @unit rgb255 */
-  color?: RGB255 | [RGB255, RGB255];
-  /** Mask function that inputs [-1, 1] and returns [0, 1] */
-  mask?: MaskFunction;
-}) {
-  const imageProps = reactive({ image: null as unknown as ImageData });
+
+/**
+ * Grating stimulus component for generating sinusoidal, square, triangle, or
+ * sawtooth gratings
+ *
+ * @example
+ *
+ * ```ts
+ * using gratingScene = app.scene(Grating, {
+ *   defaultProps: {
+ *     type: 'sin',
+ *     size: [200, 200],
+ *     sf: 0.05,
+ *     ori: Math.PI / 4,
+ *     phase: 0,
+ *     color: [255, 255, 255],
+ *     mask: GaussianMask(0.3),
+ *   },
+ * });
+ * await gratingScene.show();
+ * ```
+ */
+export const Grating = function (
+  props: {
+    /** Wave type or wave function that return [-1, 1] */
+    type: keyof typeof waves | WaveFunction;
+    /** Width or [width, height] (in pixels) */
+    size: number | [number, number];
+    /** Spatial frequency (cycles per pixel) */
+    sf: number;
+    /** Orientation (in radians) */
+    ori?: number;
+    /** Phase (in radians) */
+    phase?: number;
+    /** Color or [color, color] (RGB255 values) */
+    color?: RGB255 | [RGB255, RGB255];
+    /** Mask function that inputs [-1, 1] and returns [0, 1] */
+    mask?: MaskFunction;
+  },
+  ctx,
+) {
+  const image = ctx.use(ImageStim, {});
   effect(() => {
     const p = { ori: 0, phase: 0, color: [0, 0, 0] as RGB255, ...props };
     const [w, h] = typeof p.size === 'number' ? [p.size, p.size] : p.size;
@@ -131,13 +222,33 @@ export const Grating = function (props: {
       }
     }
 
-    imageProps.image = imageData;
+    image.props.image = imageData;
   });
-  return ImageStim(imageProps);
-} satisfies SceneSetup;
+  return image;
+} satisfies Component;
 
+/**
+ * Virtual chinrest component for calibrating screen distance and
+ * pixel-to-visual-angle conversion
+ *
+ * @example
+ *
+ * ```ts
+ * using chinrestScene = app.scene(VirtualChinrest, {
+ *   defaultProps: {
+ *     usePreviousData: false,
+ *     blindspotDegree: 13.5,
+ *   },
+ * });
+ * const calibrationData = await chinrestScene.show();
+ * console.log(calibrationData.distance_cm); // number
+ * console.log(calibrationData.pix_per_cm); // number
+ * console.log(calibrationData.deg2csspix(1)); // css pixels for 1 degree
+ * ```
+ */
 export const VirtualChinrest = function (
   props: {
+    /** Internationalization strings */
     i18n?: {
       confirm: string;
       yes: string;
@@ -150,7 +261,13 @@ export const VirtualChinrest = function (
       DT_start: string;
       DT_stop: string;
     };
+    /** Blindspot degree (in degrees) @default 13.5 */
     blindspotDegree?: number;
+    /**
+     * Use previous chinrest data.
+     *
+     * If not provided, it will show a confirmation scene.
+     */
     usePreviousData?: boolean;
   },
   ctx,
@@ -546,4 +663,4 @@ export const VirtualChinrest = function (
       };
     },
   };
-} satisfies SceneSetup;
+} satisfies Component;
