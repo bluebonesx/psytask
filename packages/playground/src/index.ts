@@ -89,7 +89,7 @@ const main = async () => {
       h(
         'a',
         {
-          href: 'https://github.com/bluebones-team/psytask/tree/main/packages/playground/examples',
+          href: 'https://github.com/bluebonesx/psytask/tree/main/packages/playground/examples',
           target: '_blank',
         },
         ' here ',

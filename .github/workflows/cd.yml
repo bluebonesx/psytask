@@ -1,8 +1,6 @@
 name: deploy to pages
 on:
   push:
-    tags:
-      - '*'
   workflow_dispatch:
 permissions:
   contents: read
@@ -13,6 +11,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   build:
+    if: contains(github.event.head_commit.message, 'docs:')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

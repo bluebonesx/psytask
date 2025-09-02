@@ -20,7 +20,7 @@
     "index.ts",
     "README.md"
   ],
-  "homepage": "https://github.com/bluebones-team/psytask",
+  "homepage": "https://github.com/bluebonesx/psytask",
   "keywords": [
     "psychology",
     "experiment",
@@ -33,10 +33,10 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/bluebones-team/psytask.git"
+    "url": "https://github.com/bluebonesx/psytask.git"
   },
   "bugs": {
-    "url": "https://github.com/bluebones-team/psytask/issues"
+    "url": "https://github.com/bluebonesx/psytask/issues"
   },
   "scripts": {
     "dev": "bun index.html --host=0.0.0.0",

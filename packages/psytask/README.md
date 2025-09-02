@@ -9,10 +9,12 @@ JavaScript Framework for Psychology tasks. Compatible with the [jsPsych](https:/
 Compare to jsPsych, Psytask has:
 
 - Easier and more flexible development experiment.
-- Higher time precision, try [Benchmark](https://bluebones-team.github.io/psytask/benchmark) on your browser.
+- Higher time precision, try [Benchmark](https://bluebonesx.github.io/psytask/benchmark) on your browser.
 - Smaller bundle size, Faster loading speed.
 
-**🥳 You can play it online now via [Playground & Examples](https://bluebones-team.github.io/psytask/playground) !**
+**🥳 You can play it online now via [Playground & Examples](https://bluebonesx.github.io/psytask/playground) !**
+
+API docs is [here](https://bluebonesx.github.io/psytask).
 
 ## Install
 
@@ -37,13 +39,13 @@ via CDN:
     <!-- load  css -->
     <link
       rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/psytask@1.1/dist/main.css"
+      href="https://cdn.jsdelivr.net/npm/psytask@1/dist/main.css"
     />
   </head>
   <body>
     <script type="module">
       // load  js
-      import { createApp } from 'https://cdn.jsdelivr.net/npm/psytask@1.1/dist/index.min.js';
+      import { createApp } from 'https://cdn.jsdelivr.net/npm/psytask@1/dist/index.min.js';
 
       using app = await creaeApp();
       //...
@@ -88,8 +90,12 @@ using app = await createApp();
 using fixation = app.text('+', { duration: 500 });
 using blank = app.text('');
 using guide = app.text('Welcome to our task', { close_on: 'key: ' }); // close on space key
+```
 
-// create custom scene with response collection
+Most of the time, you need to write the scene yourself:
+
+```js
+// create custom scene
 using scene = app.scene(
   // 1st. argument: component (setup function)
   /** @param {{ stimulus: string }} props */
@@ -206,10 +212,6 @@ for (const stimulus of ['A', 'B', 'C']) {
 }
 ```
 
-## Reference
-
-See [API docs](https://bluebones-team.github.io/psytask).
-
 ## Integration
 
 ### jsPsych
@@ -240,14 +242,14 @@ npm i psytask jspsych @jspsych/plugin-html-button-response
     <!-- load psytask css -->
     <link
       rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/psytask@1.1/dist/main.css"
+      href="https://cdn.jsdelivr.net/npm/psytask@1/dist/main.css"
     />
   </head>
   <body>
     <!-- main script -->
     <script type="module">
       // load psytask js
-      import { createApp } from 'https://cdn.jsdelivr.net/npm/psytask@1.1/dist/index.min.js';
+      import { createApp } from 'https://cdn.jsdelivr.net/npm/psytask@1/dist/index.min.js';
 
       using app = await createApp();
       //...
