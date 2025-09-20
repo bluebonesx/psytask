@@ -91,7 +91,7 @@ for (const lag of staircase) {
 
   // Display instructions (different for first trial vs. subsequent)
   await guide.show({
-    children:
+    content:
       staircase.data.length > 1
         ? `Let's continue with the next series.
 
@@ -120,14 +120,14 @@ Press SPACE key to begin.`,
   await fixation.show();
   // Present rapid sequence of stimuli
   for (const symbol of series) {
-    await stim.show({ children: symbol });
+    await stim.show({ content: symbol });
   }
   // Collect participant response
   const { start_time, response_key, response_time } = await reaction.show();
   // Check if response matches target
   const correct = target === response_key;
   // Provide feedback
-  await feedback.show({ children: correct ? 'Correct!' : 'Incorrect.' });
+  await feedback.show({ content: correct ? 'Correct!' : 'Incorrect.' });
 
   // Update staircase based on accuracy
   staircase.response(correct);

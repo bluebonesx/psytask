@@ -248,7 +248,7 @@ for (const speed of staircase) {
 
   // Show target identification phase
   await guide.show({
-    children: `Current speed: ${speed} deg/s
+    content: `Current speed: ${speed} deg/s
 You should track these objects:\n${target_indexes.join(', ')}
 
 Press SPACE key to continue.`,

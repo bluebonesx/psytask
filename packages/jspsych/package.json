@@ -1,0 +1,15 @@
+{
+  "name": "@psytask/jspsych",
+  "version": "1.0.0",
+  "type": "module",
+  "author": "cubxx",
+  "license": "MIT",
+  "description": "Use jsPsych plugins as Psytask scenes",
+  "scripts": {
+    "build": "bun scripts/build.ts"
+  },
+  "dependencies": {
+    "auto-bind": "^5.0.1",
+    "jspsych": "^8.2.2"
+  }
+}

@@ -56,7 +56,7 @@ const letters = Array.from({ length: opts.trial_num }, () =>
 
 // Display task instructions
 await guide.show({
-  children: `In this task, you will see a sequence of letters appear one by one.
+  content: `In this task, you will see a sequence of letters appear one by one.
 
 Trial sequence:
 1. Fixation cross (+)

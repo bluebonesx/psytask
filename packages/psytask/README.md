@@ -1,3 +1,6 @@
+> [!WARNING]
+> Development of v1.2 is underway and will introduce breaking changes. Please pin your version to v1.1.1.
+
 # Psytask
 
 ![NPM Version](https://img.shields.io/npm/v/psytask)
@@ -65,7 +68,7 @@ via CDN:
 > // Instead of: using app = await createApp();
 > const app = await createApp();
 > // ... your code ...
-> app.emit('cleanup'); // Manually clean up when done
+> app.emit('dispose'); // Manually clean up when done
 > ```
 
 ## Usage

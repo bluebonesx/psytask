@@ -1,0 +1,11 @@
+{
+  "name": "@psytask/core",
+  "version": "1.0.0",
+  "type": "module",
+  "author": "cubxx",
+  "license": "MIT",
+  "description": "Core utilities for psytask",
+  "scripts": {
+    "build": "bun scripts/build.ts"
+  }
+}

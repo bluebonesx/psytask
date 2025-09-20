@@ -1,9 +1,0 @@
-[test]
-root = "tests"
-preload = ["./tests/setup.ts"]
-smol = true
-bail = 1
-coveragePathIgnorePatterns = [
-  "tests/**/*",
-  "**/node_modules/**"
-]

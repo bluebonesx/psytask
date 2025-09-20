@@ -1,0 +1,11 @@
+#app {
+  margin: 2rem 5rem;
+  & * {
+    transition: 0.3s;
+    box-sizing: border-box;
+  }
+  & div {
+    display: grid;
+    gap: 0.5rem;
+  }
+}

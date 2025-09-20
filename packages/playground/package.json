@@ -3,15 +3,11 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "bun build-only --watch",
-    "build": "bun build-only --production",
-    "build-only": "bun scripts/build.ts"
-  },
-  "dependencies": {
-    "@stackblitz/sdk": "^1.11.0"
+    "build": "bun scripts/build.ts",
+    "dev": "bun run build --dev"
   },
   "devDependencies": {
-    "shared": "workspace:*",
+    "@stackblitz/sdk": "^1.11.0",
     "@svgdotjs/svg.js": "^3.2.4"
   }
 }

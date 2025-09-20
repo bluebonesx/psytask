@@ -1,23 +1,9 @@
-import { build } from 'bun';
 import fs from 'node:fs/promises';
-import { clearDirIfExists, fileServe, listenFileChange } from 'shared/script';
+import { buildApp } from 'shared/scripts';
 
-const outdir = 'dist';
-await clearDirIfExists(outdir);
-
-const _build = async () => {
-  await fs.cp('examples', outdir, { recursive: true });
-  await build({
-    entrypoints: ['index.html'],
-    outdir,
-    ...(process.argv.includes('--production')
-      ? { minify: true, define: { 'process.env.NODE_ENV': '"production"' } }
-      : null),
-  });
-};
-_build();
-
-if (process.argv.includes('--watch')) {
-  listenFileChange(['src', 'examples'], _build);
-  fileServe(outdir);
-}
+buildApp([() => fs.cp('./examples', './dist', { recursive: true })], {
+  importmap: {
+    '@stackblitz/sdk':
+      'https://cdn.jsdelivr.net/npm/@stackblitz/sdk@1/bundles/sdk.m.js',
+  },
+});

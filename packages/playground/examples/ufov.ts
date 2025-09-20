@@ -359,7 +359,7 @@ for (const stim_duration of staircase) {
   staircase.response(correct);
   // Show feedback
   await feedback.show({
-    children:
+    content:
       (correct
         ? '✓ Correct!'
         : !identification_correct && !localization_correct
