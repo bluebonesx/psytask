@@ -176,11 +176,9 @@ export const buildApp = createBuilder(
     if (await fs.exists('./main.css')) styles.push('./main.css');
 
     const customHTML =
-      (importmap
-        ? `<script type="importmap">${JSON.stringify({
-            imports: importmap,
-          })}</script>`
-        : '') +
+      `<script type="importmap">${JSON.stringify({
+        imports: importmap,
+      })}</script>` +
       styles.reduce(
         (acc, e) => acc + `<link rel="stylesheet" href="${e}" />`,
         '',

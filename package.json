@@ -4,7 +4,8 @@
     "format": "prettier --write . --ignore-path **/dist/**"
   },
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "apps/*"
   ],
   "dependencies": {
     "vanjs-core": "^1.6.0"

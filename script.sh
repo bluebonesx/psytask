@@ -18,7 +18,7 @@ WORKSPACE=$(realpath packages)
 if [ "$1" == "build" ]; then
     log "Building apps..."
     (cd "$WORKSPACE/psytask" && bun docs && mv docs/* "$DIST")
-    for app in benchmark playground tests; do
+    for app in $(ls apps); do
         (cd "$WORKSPACE/$app" && bun run build && mv dist "$DIST/$app")
     done
 

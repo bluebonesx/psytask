@@ -15,11 +15,26 @@
         "typescript": "^5.8.3",
       },
     },
-    "packages/benchmark": {
+    "apps/benchmark": {
       "name": "benchmark",
       "version": "1.0.0",
       "dependencies": {
         "detect-browser": "^5.3.0",
+      },
+    },
+    "apps/playground": {
+      "name": "playground",
+      "version": "1.0.0",
+      "devDependencies": {
+        "@stackblitz/sdk": "^1.11.0",
+        "@svgdotjs/svg.js": "^3.2.4",
+      },
+    },
+    "apps/tests": {
+      "name": "tests",
+      "version": "1.0.0",
+      "devDependencies": {
+        "@types/chai": "5.2.2",
       },
     },
     "packages/components": {
@@ -55,14 +70,6 @@
         "jspsych": "^8.2.2",
       },
     },
-    "packages/playground": {
-      "name": "playground",
-      "version": "1.0.0",
-      "devDependencies": {
-        "@stackblitz/sdk": "^1.11.0",
-        "@svgdotjs/svg.js": "^3.2.4",
-      },
-    },
     "packages/psytask": {
       "name": "psytask",
       "version": "1.2.0-0",
@@ -73,13 +80,6 @@
     "packages/shared": {
       "name": "shared",
       "version": "1.0.0",
-    },
-    "packages/tests": {
-      "name": "tests",
-      "version": "1.0.0",
-      "devDependencies": {
-        "@types/chai": "5.2.2",
-      },
     },
   },
   "packages": {
@@ -135,7 +135,7 @@
 
     "balanced-match": ["balanced-match@1.0.2", "", {}, "sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw=="],
 
-    "benchmark": ["benchmark@workspace:packages/benchmark"],
+    "benchmark": ["benchmark@workspace:apps/benchmark"],
 
     "binary-searching": ["binary-searching@2.0.5", "", {}, "sha512-v4N2l3RxL+m4zDxyxz3Ne2aTmiPn8ZUpKFpdPtO+ItW1NcTCXA7JeHG5GMBSvoKSkQZ9ycS+EouDVxYB9ufKWA=="],
 
@@ -225,7 +225,7 @@
 
     "picocolors": ["picocolors@1.1.1", "", {}, "sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA=="],
 
-    "playground": ["playground@workspace:packages/playground"],
+    "playground": ["playground@workspace:apps/playground"],
 
     "prettier": ["prettier@3.6.2", "", { "bin": { "prettier": "bin/prettier.cjs" } }, "sha512-I7AIg5boAr5R0FFtJ6rCfD+LFsWHp81dolrFD8S79U9tb8Az2nGrJncnMSnys+bpQJfRUzqs9hnA81OAA3hCuQ=="],
 
@@ -243,7 +243,7 @@
 
     "sisteransi": ["sisteransi@1.0.5", "", {}, "sha512-bLGGlR1QxBcynn2d5YmDX4MGjlZvy2MRBDRNHLJ8VI6l6+9FUiyTFNJ0IveOSP0bcXgVDPRcfGqA0pjaqUpfVg=="],
 
-    "tests": ["tests@workspace:packages/tests"],
+    "tests": ["tests@workspace:apps/tests"],
 
     "type-fest": ["type-fest@2.19.0", "", {}, "sha512-RAH822pAdBgcNMAfWnCBU3CFZcfZ/i1eZjwFU/dsLKumyuuP3niueg2UAukXYF0E2AAoc82ZSSf9J0WQBinzHA=="],
 
