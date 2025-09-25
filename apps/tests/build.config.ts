@@ -1,13 +1,11 @@
-import { buildApp } from 'shared/scripts';
-
-buildApp(
-  [
+export default {
+  tasks: [
     {
       entrypoints: Array.from(new Bun.Glob('./cases/*.test.ts').scanSync()),
       minify: false,
     },
   ],
-  {
+  params: {
     importmap: {
       chai: 'https://cdn.jsdelivr.net/npm/chai@5.2.2/+esm',
       'vanjs-ext': 'https://cdn.jsdelivr.net/npm/vanjs-ext@0.6.3?bundle',
@@ -16,6 +14,5 @@ buildApp(
       '@psytask/components': '/public/components/index.min.js',
       '@psytask/jspsych': '/public/jspsych/index.min.js',
     },
-    styles: ['/public/components/main.css'],
   },
-);
+};

@@ -3,7 +3,11 @@ import { createApp, generic } from 'psytask';
 import { Loader } from '@psytask/components';
 import van from 'vanjs-core';
 
-const { div } = van.tags;
+const { div, link } = van.tags;
+van.add(
+  document.head,
+  link({ rel: 'stylesheet', href: '/public/components/main.css' }),
+);
 
 const app = await createApp();
 const loader = app.scene(generic(Loader), {
