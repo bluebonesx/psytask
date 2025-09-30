@@ -1,30 +1,22 @@
 import { type SceneSetup } from '@psytask/core';
 import autoBind from 'auto-bind';
 import type { PluginInfo, TrialType } from 'jspsych';
-import { KeyboardListenerAPI } from '../../node_modules/jspsych/src/modules/plugin-api/KeyboardListenerAPI';
-import { TimeoutAPI } from '../../node_modules/jspsych/src/modules/plugin-api/TimeoutAPI';
-import { ParameterType } from '../../node_modules/jspsych/src/modules/plugins';
-import { h, isArray, mount } from 'shared/utils';
+import { ERR, h, hasOwn, isArray, modify, mount } from 'shared/utils';
+import { KeyboardListenerAPI } from './node_modules/jspsych/src/modules/plugin-api/KeyboardListenerAPI';
+import { TimeoutAPI } from './node_modules/jspsych/src/modules/plugin-api/TimeoutAPI';
+import { ParameterType } from './node_modules/jspsych/src/modules/plugins';
 
-/** @ignore */
-const hasOwn = <T extends object, K extends PropertyKey>(
+const warnMissingKey = <T extends object>(
   obj: T,
-  key: K,
-): obj is Extract<T, { [P in K]: unknown }> extends never
-  ? T & { [P in K]: unknown }
-  : Extract<T, { [P in K]: unknown }> =>
-  Object.prototype.hasOwnProperty.call(obj, key);
-/** @ignore */
-const proxyNonKey = <T extends object>(
-  obj: T,
-  onNoKey: (key: PropertyKey) => void,
+  handleMissingKey: (key: PropertyKey) => string,
 ) =>
   new Proxy(obj, {
-    get(o, k) {
-      if (hasOwn(o, k)) return o[k as keyof T];
-      return onNoKey(k);
-    },
+    get: (o, k) =>
+      hasOwn(o, k) ? o[k as keyof T] : console.warn(handleMissingKey(k)),
   });
+/** For compatibility with CDN builds of jsPsych */
+//@ts-ignore
+window['jsPsychModule'] ??= { ParameterType };
 /**
  * Create a scene with jsPsych Plugin
  *
@@ -34,45 +26,37 @@ const proxyNonKey = <T extends object>(
  *
  * @example
  *
+ * Use html-keyboard-response plugin
+ *
  * ```ts
  * using scene = app.scene(jsPsychStim, {
- *   defaultProps: () => ({
+ *   defaultProps: {
  *     type: jsPsychHtmlKeyboardResponse,
  *     stimulus: 'default',
  *     choices: ['f', 'j'],
- *   }),
+ *   },
  * });
  * await scene.show({ stimulus: 'new' }); // change stimulus
  * ```
  *
- * @see {@link https://www.jspsych.org/latest/plugins/ jsPsych Plugin}
+ * @see {@link https://www.jspsych.org/latest/plugins/list-of-plugins/ jsPsych Plugin}
  */
-export const jsPsychStim = ((trial: TrialType<PluginInfo>, ctx) => {
-  /**
-   * Add jsPsychModule in CDN browser build. This is required for compatibility
-   * with CDN builds of jsPsych
-   *
-   * @see https://cdn.jsdelivr.net/npm/jspsych/dist/index.browser.js
-   */
-  if (process.env.NODE_ENV === 'production')
-    //@ts-ignore
-    window['jsPsychModule'] ??= { ParameterType };
-
-  let data: object;
+export const jsPsychStim = ((trial: Partial<TrialType<PluginInfo>>, ctx) => {
+  let data: Record<string, any>;
 
   // create jsPsych DOM
   const root = h('div', {
     className: 'jspsych-display-element',
     style: 'height:100%; width:100%',
   });
-
   const content = mount(
     h('div', { id: 'jspsych-content', className: 'jspsych-content' }),
     mount(h('div', { className: 'jspsych-content-wrapper' }), root),
   );
 
-  ctx.on('scene:show', (trial) => {
-    const Plugin = trial.type as Extract<
+  /** @see https://github.com/jspsych/jsPsych/blob/main/packages/jspsych/src/timeline/Trial.ts */
+  ctx.on('scene:show', (props) => {
+    const Plugin = props.type as Extract<
       TrialType<PluginInfo>['type'],
       new (...args: any[]) => any
     > & { info: PluginInfo };
@@ -80,68 +64,42 @@ export const jsPsychStim = ((trial: TrialType<PluginInfo>, ctx) => {
       typeof Plugin !== 'function' ||
       typeof Plugin.prototype === 'undefined' ||
       typeof Plugin.info === 'undefined'
-    ) {
-      throw new Error(
-        `jsPsych trial.type only supports jsPsych class plugins, but got ${Plugin}`,
-      );
-    }
+    )
+      ERR('jsPsych trial.type only supports jsPsych class plugins');
 
-    // unsupported parameters
-    if (process.env.NODE_ENV === 'development') {
-      const unsupportedParams = new Set([
-        'extensions',
-        'record_data',
-        'save_timeline_variables',
-        'save_trial_parameters',
-        'simulation_options',
-      ]);
-      for (const key in trial) {
-        if (hasOwn(trial, key) && unsupportedParams.has(key)) {
-          console.warn(`jsPsych trial "${key}" parameter is not supported`);
-        }
-      }
-    }
     // set default parameters
-    for (const key in Plugin.info.parameters) {
-      if (!hasOwn(trial, key)) {
-        //@ts-ignore
-        trial[key] = Plugin.info.parameters[key]!.default;
-      }
-    }
+    Object.entries(Plugin.info.parameters).map(
+      ([key, info]) => (props[key] ??= info.default),
+    );
 
     // mock jsPsych API
     const mock_jsPsychPluginAPI = [
       new KeyboardListenerAPI(() => ctx.root),
       new TimeoutAPI(),
-    ].reduce((api, item) => Object.assign(api, autoBind(item)), {});
+    ].reduce((api, item) => modify(api, autoBind(item)), {});
     const mock_jsPsych = {
-      finishTrial(_data: object) {
-        data = Object.assign({}, trial.data, _data);
-        trial.on_finish?.(data);
-        if (typeof trial.post_trial_gap === 'number') {
-          setTimeout(() => ctx.close(), trial.post_trial_gap);
-        } else {
-          ctx.close();
-        }
+      finishTrial(trial_data: object) {
+        data = { ...props.data, ...trial_data };
+        props.on_finish?.(data);
+        typeof props.post_trial_gap === 'number'
+          ? setTimeout(() => ctx.close(), props.post_trial_gap)
+          : ctx.close();
       },
-      pluginAPI:
-        process.env.NODE_ENV === 'production'
-          ? mock_jsPsychPluginAPI
-          : proxyNonKey(mock_jsPsychPluginAPI, (key) => {
-              console.warn(
-                `jsPsych.pluginAPI.${key.toString()} is not supported, only supports: ${Object.keys(
-                  mock_jsPsychPluginAPI,
-                ).join(', ')}`,
-              );
-            }),
+      pluginAPI: warnMissingKey(
+        mock_jsPsychPluginAPI,
+        (key) =>
+          `jsPsych.pluginAPI.${key.toString()} is not supported, only supports: ${Object.keys(
+            mock_jsPsychPluginAPI,
+          ).join(', ')}`,
+      ),
     };
 
     // on start
-    trial.on_start?.(trial);
+    props.on_start?.(props);
 
     // change css classes
     content.className = 'jspsych-content';
-    const classes = trial.css_classes;
+    const classes = props.css_classes;
     if (typeof classes === 'string') {
       content.classList.add(classes);
     } else if (isArray(classes)) {
@@ -151,16 +109,14 @@ export const jsPsychStim = ((trial: TrialType<PluginInfo>, ctx) => {
     // execute trial
     content.innerHTML = ''; // clear content
     const plugin = new Plugin(
-      process.env.NODE_ENV === 'production'
-        ? mock_jsPsych
-        : proxyNonKey(mock_jsPsych, (key) => {
-            console.warn(
-              `jsPsych.${key.toString()} is not supported, only supports: ${Object.keys(mock_jsPsych).join(', ')}`,
-            );
-          }),
+      warnMissingKey(
+        mock_jsPsych,
+        (key) =>
+          `jsPsych.${key.toString()} is not supported, only supports: ${Object.keys(mock_jsPsych).join(', ')}`,
+      ),
     );
     //@ts-ignore
-    plugin.trial(content, trial, () => trial.on_load?.());
+    plugin.trial(content, props, () => props.on_load?.());
   });
 
   return { node: root, data: () => data };

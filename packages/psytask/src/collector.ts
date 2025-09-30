@@ -1,199 +1,141 @@
 import { EventEmitter } from '@psytask/core';
-import { h, mount, onPageLeave } from 'shared/utils';
-import type { Primitive, Serializable } from '../types';
+import type { LooseObject } from 'shared/types';
+import { ERR, h, mount } from 'shared/utils';
 
-type MaybeGetter<T> = T | (() => T);
-
-type Stringifier = {
-  value: string;
-  transform: (data: Serializable) => string;
-  final: () => string;
+export type Serializer<T extends LooseObject = LooseObject> = {
+  header: (row: T, rows: T[]) => string;
+  body: (row: T, rows: T[]) => string;
+  footer: (rows: T[]) => string;
 };
-type StringifierBuilder = () => Stringifier;
+type SerializerMap = Record<string, Serializer>;
 
-/** Create data stringifier builder */
-export const createStringifierBuilder =
-  (
-    options: MaybeGetter<{
-      head: (data: Serializable) => string;
-      body: (data: Serializable) => string;
-      tail: () => string;
-    }>,
-  ) =>
-  () => {
-    const opts = typeof options === 'function' ? options() : options;
-    const stringifier: Stringifier = {
-      value: '',
-      transform(data) {
-        const chunk =
-          (stringifier.value === '' ? opts.head(data) : '') + opts.body(data);
-        stringifier.value += chunk;
-        return chunk;
-      },
-      final() {
-        const chunk = stringifier.value === '' ? opts.tail() : '';
-        stringifier.value += chunk;
-        return chunk;
-      },
-    };
-    return stringifier;
-  };
-
-const CSVNormalize = (value: Primitive) =>
+const csv_normalize = (value: any) =>
   value == null
     ? ''
-    : ((value = value + ''),
+    : ((value = typeof value === 'object' ? JSON.stringify(value) : value + ''),
       /[,"\n\r]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value);
-const stringifiers = {
+const serializers = {
   /** @see {@link https://www.rfc-editor.org/rfc/rfc4180 RFC-4180} */
-  csv: createStringifierBuilder({
-    head: (data) =>
-      Object.keys(data).reduce(
-        (acc, key, i) => acc + (i ? ',' : '') + CSVNormalize(key),
+  csv: {
+    header: (row) =>
+      Object.keys(row).reduce(
+        (acc, key, i) => acc + (i ? ',' : '') + csv_normalize(key),
         '',
       ),
-    body: (data) =>
-      Object.values(data).reduce<string>(
-        (acc, value, i) => acc + (i ? ',' : '') + CSVNormalize(value),
-        '\n',
+    body: (row) =>
+      Object.values(row).reduce<string>(
+        (acc, value, i) => acc + (i ? ',' : '\n') + csv_normalize(value),
+        '',
       ),
-    tail: () => '',
-  }),
+    footer: () => '',
+  },
   /** @see {@link https://www.json.org JSON} */
-  json: createStringifierBuilder({
-    head: () => '[',
-    body: (data) => JSON.stringify(data) + ',',
-    tail: () => ']',
-  }),
-};
+  json: {
+    header: () => '[',
+    body: (row, rows) => (rows.length ? ',' : '') + JSON.stringify(row),
+    footer: () => ']',
+  },
+} satisfies SerializerMap;
 
-/** One-time data collector. Collect, stringify and save data. */
-export class Collector<T extends Serializable> extends EventEmitter<{
+/** Data collector. Collect, serialize and save data. */
+export class Collector<T extends LooseObject> extends EventEmitter<{
   add: T;
   chunk: string;
-  save: () => void;
 }> {
   /**
-   * Map of stringifiers by file extension
+   * Map of serializers by file extension
    *
-   * You can add your own {@link StringifierBuilder} to this map.
+   * You can add your own {@link Serializer} to this map.
    *
-   * @example Add Markdown stringifier
+   * @example
+   *
+   * Add Markdown serializer
    *
    * ```ts
-   * Collector.stringifiers['md'] = createStringifierBuilder({
-   *   head: (data) => '', // generate header from the first row
-   *   body: (data) => '', // generate body from each row
+   * Collector.serializers['md'] = {
+   *   head: (row) => '', // generate header from the first row
+   *   body: (row) => '', // generate body from each row
    *   tail: () => '', // generate footer
-   * });
+   * };
    * using dc = new Collector('data.md'); // now you can save to Markdown file
    * ```
    */
-  static readonly stringifiers: typeof stringifiers &
-    Record<string, StringifierBuilder> = stringifiers;
+  static readonly serializers: typeof serializers & SerializerMap = serializers;
   readonly rows: T[] = [];
-  #save_count = 0;
-  #stringifier: Stringifier;
+  #serializer: Serializer<T>;
+  #temp = '';
   /**
    * Built-in supports for CSV and JSON formats. You can extend this by
-   * {@link Collector.stringifiers} or provide `stringifier` parameter.
+   * {@link Collector.serializers} or provide `serializer` parameter.
    *
-   * @param filename Default is `data-${Date.now()}.csv`
-   * @param builder - An {@link StringifierBuilder}. If not provided, a default
-   *   stringifier will be created based on the file extension.
+   * @param serializer - An {@link Serializer}. If not provided, a default
+   *   serializer based on the file extension will be used.
    */
   constructor(
+    /** @default `data-${Date.now()}.csv` */
     public readonly filename = `data-${Date.now()}.csv`,
-    builder?: StringifierBuilder,
+    serializer?: Serializer<T>,
   ) {
     super();
 
-    // set stringifier
+    // set serializer
     const match = filename.match(/\.([^\.]+)$/);
-    const defaultExt = 'csv';
     const extname = match
       ? match[1]!
-      : (console.warn(`Cannot detect extension from ${filename}.`), defaultExt);
-    if (builder) {
-      this.#stringifier = builder();
+      : ERR(`Can't detect extension from "${filename}".`);
+    if (serializer) {
+      this.#serializer = serializer;
     } else {
-      const extnames = Object.keys(stringifiers);
-      if (extnames.includes(extname)) {
-        this.#stringifier = (
-          stringifiers as (typeof Collector)['stringifiers']
-        )[extname]!();
-      } else {
-        console.warn(
-          `Expect file extension: ${extnames.join(
-            ', ',
-          )}, but got "${extname}".\nOr, add custom Stringifier creator to Collector.stringifiers.`,
-        );
-        this.#stringifier = stringifiers[defaultExt]!();
-      }
+      const extnames = Object.keys(serializers);
+      this.#serializer = extnames.includes(extname)
+        ? (serializers as SerializerMap)[extname]!
+        : ERR(
+            `Unsupported file extension: "${extname}", please use one of: ${extnames.join(', ')}.
+Or add custom Serializer to Collector.serializers.`,
+          );
     }
-
-    // backup when the page is hidden
-    this.on(
-      'dispose',
-      onPageLeave(() => this.download(`-${Date.now()}.backup`)),
-    )
-      // save data on dispose
-      .on('dispose', () => this.save());
   }
   /**
-   * Add a data row
+   * Add a data row. For the default serializer, object fields will be
+   * serialized using {@link JSON.stringify}.
    *
-   * Only supports
-   * {@link https://developer.mozilla.org/en-US/docs/Glossary/Primitive primitive value}
-   * .
-   *
-   * @example
-   *
-   * ```ts
-   * // convert array
-   * dc.add({ array: [0, 1, 2] }); // ❌
-   * dc.add({ array: [0, 1, 2].join(',') }); // ✅
-   *
-   * // convert object
-   * dc.add({ object: { a: 1, b: 2 } }); // ❌
-   * dc.add({ object: JSON.stringify({ a: 1, b: 2 }) }); // ✅
-   * ```
+   * @returns The total serialized data up to now.
    */
   add(row: T) {
-    this.rows.push(row);
-    this.emit('add', row).emit('chunk', this.#stringifier.transform(row));
+    this.emit('add', row); // modify row
+    const { rows } = this;
+    const chunk =
+      (this.#temp ? '' : this.#serializer.header(row, rows)) +
+      this.#serializer.body(row, rows);
+    rows.push(row);
+    return (this.emit('chunk', chunk).#temp += chunk);
   }
   /**
-   * Write data to disk
-   *
-   * In most cases, you don't need to call this method manually. It will be
-   * called automatically when the collector is disposed.
-   *
-   * It is one-time, so multiple calls will be ignored.
+   * Get the final serialized data.
    *
    * @example
    *
+   * Call multiple times
+   *
    * ```ts
-   * dc.save(); // ✅ the first call is successful
-   * dc.save(); // ❌ the subsequent calls will be ignored
+   * using dc = new Collector('test.csv');
+   *
+   * dc.add({ a: 1, b: 'hello' });
+   * dc.final() === 'a,b\n1,hello'; // true
+   *
+   * dc.add({ a: 2, b: 'world' });
+   * dc.final() === 'a,b\n1,hello\n2,world'; //true
    * ```
    */
-  save() {
-    if (this.#save_count++)
-      return console.warn('Repeated save is not allowed.', this.#save_count);
-    let prevented = 0;
-    this.emit('chunk', this.#stringifier.final()).emit(
-      'save',
-      () => (prevented = 1),
-    );
-    if (!prevented) this.download();
+  final() {
+    const chunk = this.#temp ? this.#serializer.footer(this.rows) : '';
+    return this.emit('chunk', chunk).#temp + chunk;
   }
-  /** Download data to disk */
+  /** Download final serialized data */
   download(suffix = '') {
-    if (!this.#stringifier.value) return;
-    const url = URL.createObjectURL(
-      new Blob([this.#stringifier.value], { type: 'text/plain' }),
-    );
+    const output = this.final();
+    if (!output) return;
+    const url = URL.createObjectURL(new Blob([output], { type: 'text/plain' }));
     const el = mount(h('a', { download: this.filename + suffix, href: url }));
     el.click();
     URL.revokeObjectURL(url);

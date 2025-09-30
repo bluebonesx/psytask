@@ -1,3 +1,5 @@
+/// <reference types="node" />
+
 import { confirm, isCancel, outro, select, text } from '@clack/prompts';
 import fs from 'node:fs/promises';
 import path from 'node:path';

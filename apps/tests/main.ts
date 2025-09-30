@@ -1,111 +1,138 @@
-import { useHash } from 'shared/hook';
+import { isObject, mount } from 'shared/utils';
 import van from 'vanjs-core';
-import { getTestFiles } from './macro' with { type: 'macro' };
-const { a, div, h3, p, pre, section } = van.tags;
+import { calc, noreactive, reactive } from 'vanjs-ext';
+import { spy_functionCall } from './cases/utils';
+const { button, details, div, section, span, summary } = van.tags;
 
-const todos = new Set<() => Promise<void>>();
-const runJobs = async () => {
-  for (const job of todos) {
-    try {
-      await job();
-    } catch (err) {
-      console.error('job error:', err);
-    } finally {
-      todos.delete(job);
-    }
-  }
+type ViewRaw = { [key: string]: Function | ViewRaw };
+type CaseView = {
+  render(): HTMLElement;
+  state: 'pending' | 'passed' | 'error';
+  job(e?: PointerEvent): void;
+  raw: Function;
+  error?: any;
 };
-const addJob = (job: () => Promise<void>) => {
-  todos.size === 0 && window.queueMicrotask(runJobs);
+type CaseSetView = {
+  render(): HTMLElement;
+  state: 'pending' | 'passed' | 'error';
+  job(e?: PointerEvent): void;
+  tree: ViewTree;
+  size: number;
+};
+type ViewTree = { [key: string]: CaseView | CaseSetView };
+
+const mods = {
+  psytask: await import('./cases/psytask.test'),
+  core: await import('./cases/core.test'),
+  components: await import('./cases/components.test'),
+  jspsych: await import('./cases/jspsych.test'),
+} satisfies ViewRaw;
+const raw2tree = (raw: ViewRaw): ViewTree =>
+  Object.entries(raw).reduce((acc, [name, val]) => {
+    if (typeof val === 'function') {
+      const view: CaseView = reactive({
+        render: () =>
+          div(
+            { 'data-test': () => view.state },
+            section(button({ onclick: view.job }, '▶'), name),
+            () =>
+              view.error
+                ? span(
+                    { style: 'color:red' },
+                    ' ' + (view.error.stack ?? view.error),
+                  )
+                : '',
+          ),
+        state: 'pending',
+        job(e) {
+          e?.preventDefault();
+          runJob(async () => {
+            try {
+              view.state = 'pending';
+              await val();
+              view.state = 'passed';
+              view.error = null;
+            } catch (err) {
+              view.state = 'error';
+              view.error = isObject(err) ? noreactive(err) : err;
+              throw err;
+            }
+          });
+        },
+        raw: val,
+        error: null,
+      });
+      return { ...acc, [name]: view };
+    }
+    const tree = raw2tree(val);
+    const cases = Object.values(tree);
+    const view: CaseSetView = reactive({
+      render: () =>
+        details(
+          {
+            'data-test': () => view.state,
+            open: true, // for debugger
+          },
+          summary(
+            button({ onclick: view.job }, '▶'),
+            name.replace(/_/g, ' ') + ` - ${view.size}`,
+          ),
+          div(...cases.map((c) => c.render())),
+        ),
+      state: calc(() => {
+        const states = cases.map((e) => e.state);
+        let hasPassed = !!states.length;
+        for (const s of states) {
+          if (s === 'error') return s;
+          if (s === 'pending') hasPassed = false;
+        }
+        return hasPassed ? 'passed' : 'pending';
+      }),
+      job: () => cases.map((c) => c.job()),
+      tree,
+      size: cases.reduce((acc, c) => acc + ('size' in c ? c.size : 1), 0),
+    });
+    return { ...acc, [name]: view };
+  }, {});
+
+// Job queue to run tests sequentially
+const todos = new Set<() => Promise<void>>();
+const runJob = (job: () => Promise<void>) => {
+  todos.size === 0 &&
+    window.queueMicrotask(async () => {
+      for (const job of todos) {
+        try {
+          await job();
+          todos.delete(job);
+        } catch (err) {
+          todos.clear();
+          throw err; // stop on error
+        }
+      }
+    });
   todos.add(job);
 };
 
-const format = (raw: string) => {
-  const indent = raw.match(/\n( *)\}$/)?.[1];
-  if (indent == null) throw new Error('Cannot determine indent:\n' + raw);
-  // console.log(raw);
-  return raw
-    .slice(raw.indexOf('{') + 1, raw.lastIndexOf('}'))
-    .replace(new RegExp(`^${indent}  `, 'gm'), '')
-    .trim();
-};
-function TestCase(fn: Function) {
-  const status = van.state('⏸ Pending');
-  const color = van.state('#aaa');
-  const run = async () => {
-    status.val = '⏳ Running...';
-    color.val = '#ffb347';
-    try {
-      await fn();
-      status.val = '✅ Passed';
-      color.val = '#4ade80';
-    } catch (err) {
-      status.val = '❌ Failed: ' + err;
-      color.val = '#f87171';
-      console.error(`test error [${fn.name}]:`, err);
-    }
-  };
-  return div(
-    p({ onclick: () => addJob(run) }, fn.name),
-    pre(format(fn.toString())),
-    pre({ style: () => 'color:' + color.val }, status),
-  );
-}
-function App() {
-  const hash = useHash();
-  const status = van.derive(() =>
-    hash.val ? `Loading case ${hash.val}...` : getTestFiles(),
-  );
-  const mod = van.state<Record<string, Record<string, Function>>>({});
+mount(
+  div(
+    { id: 'app', style: 'height:100dvh;overflow:auto' },
+    ...Object.values(
+      //@ts-ignore
+      (window['store'] = raw2tree({ ALL: mods })),
+    ).map((v) => v.render()),
+  ),
+);
 
-  van.derive(() => {
-    if (!hash.val) {
-      mod.val = {};
-      return;
-    }
-    import(`./${hash.val}.test.js?t=${Date.now()}`).then(
-      (_mod) => {
-        status.val = '';
-        mod.val = _mod;
-      },
-      (err) => {
-        status.val = `Failed to load ${hash.val}: ` + err;
-      },
-    );
-  });
-
-  const root = div(
-    { id: 'app' },
-    () =>
-      typeof status.val === 'string'
-        ? pre(status.val)
-        : div(...status.val.map((f) => a({ href: `#${f}` }, f))),
-    h3(
-      {
-        hidden: () => !hash.val,
-        style: 'text-transform: uppercase; padding: 0.75rem;',
-        onclick: () => root.querySelectorAll('p').forEach((e) => e.click()),
-      },
-      hash,
-    ),
-    () =>
-      div(
-        ...Object.entries(mod.val).map(([name, casesObj]) => {
-          const root = div(
-            h3(
-              {
-                onclick: () =>
-                  root.querySelectorAll('p').forEach((e) => e.click()),
-              },
-              name.replace(/_/g, ' '),
-            ),
-            section(Object.values(casesObj).map((caseFn) => TestCase(caseFn))),
-          );
-          return root;
-        }),
-      ),
-  );
-  return root;
-}
-
-van.add(document.body, App());
+// override fetch to use test server
+const _fetch = fetch;
+spy_functionCall(globalThis, 'fetch', (input, init) =>
+  _fetch(
+    input instanceof Request
+      ? input
+      : new URL(
+          input,
+          'https://httpcan.org' /** @link httpbin.org mockhttp.org */,
+        ),
+    init,
+  ),
+);

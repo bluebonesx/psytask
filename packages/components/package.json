@@ -4,15 +4,24 @@
   "type": "module",
   "author": "cubxx",
   "license": "MIT",
-  "description": "Psytask basic components and hooks",
-  "scripts": {
-    "build": "bun scripts/build.ts"
+  "description": "basic psytask components and hooks",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "dependencies": {
     "vanjs-core": "^1.6.0",
-    "vanjs-ext": "^0.6.3"
+    "vanjs-ext": "^0.6.3",
+    "shared": "workspace:*",
+    "@psytask/core": "workspace:*"
   },
   "devDependencies": {
-    "@psytask/core": "workspace:*"
+    "csstype": "^3.1.3"
   }
 }

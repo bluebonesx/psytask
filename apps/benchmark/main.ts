@@ -12,7 +12,6 @@ declare global {
 
 import { detect } from 'detect-browser';
 import { useHash } from 'shared/hook';
-import { detect_fps } from 'shared/utils';
 import van, { type State } from 'vanjs-core';
 import {
   getLibConfigs,
@@ -67,7 +66,6 @@ async function detectEnvironment() {
       });
       return wh;
     })(),
-    frame_ms: await detect_fps({ root: panel }),
   } as const;
 
   panel.remove();

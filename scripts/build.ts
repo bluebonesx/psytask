@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { blue, cyan, red } from 'picocolors';
+import { blue, cyan, red } from './utils';
 import { CONFIG_FILENAME, DEV, log, projects, ROOT } from './utils';
 
 declare global {
@@ -15,8 +15,14 @@ type BuildOptions = {
   config?: Partial<Bun.BuildConfig>;
 };
 
-const cwd = process.cwd();
 const buildables = projects.filter((e) => e.buildable);
+!DEV &&
+  process.argv[2] &&
+  process.chdir(
+    buildables.find((e) => e.name === process.argv[2])?.path ?? process.cwd(),
+  ); // support build a specific project by name
+
+const cwd = process.cwd();
 const shared = {
   outdir: 'dist',
   target: 'browser',
@@ -34,14 +40,17 @@ const getAppOptions = async ({
   importmap?: Record<string, string>;
   styles?: string[];
 } = {}) => {
-  importmap['vanjs-core'] ??=
-    'https://cdn.jsdelivr.net/gh/vanjs-org/van/public/van-1.6.0.min.js';
-  styles.push(
-    path.relative(
-      cwd,
-      Bun.fileURLToPath(import.meta.resolve('shared/main.css')), // shared/main.css absolute path
-    ), // only support relative path
-  );
+  importmap = {
+    'vanjs-core':
+      'https://cdn.jsdelivr.net/npm/vanjs-core@1.6.0/src/van.min.js',
+    'vanjs-ext':
+      'https://cdn.jsdelivr.net/npm/vanjs-ext@0.6.3/src/van-x.min.js',
+    psytask: '/public/psytask/index.min.js?v=' + Date.now(),
+    '@psytask/core': '/public/core/index.min.js?v=' + Date.now(),
+    '@psytask/components': '/public/components/index.min.js?v=' + Date.now(),
+    '@psytask/jspsych': '/public/jspsych/index.min.js?v=' + Date.now(),
+    ...importmap,
+  };
   if (await fs.exists('main.css')) styles.push('main.css');
   return {
     config: { external: Object.keys(importmap) },
@@ -62,12 +71,13 @@ const getAppOptions = async ({
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Psytask - ${path.basename(process.cwd()).toUpperCase()}</title>
+    <title>PsyTask - ${path.basename(process.cwd()).toUpperCase()}</title>
     <script type="importmap">${JSON.stringify({ imports: importmap })}</script> 
     ${styles.reduce(
       (acc, e) => acc + `<link rel="stylesheet" href="${e}" />`,
       '',
     )}
+    <style>*{margin:0;padding:0;box-sizing:border-box;}</style>
   </head>
   <body>
     <script type="module" src="./main.ts"></script>
@@ -84,38 +94,26 @@ const getAppOptions = async ({
   } satisfies BuildOptions;
 };
 const getPkgOptions = async () => {
-  const pkg = await import(path.resolve('package.json'));
-  // minified global js for browser
-  setTimeout(async () => {
-    const raw = await Bun.file('dist/index.min.js').text();
-    const code = raw.replace(/\*\/\n/, '*/\n(()=>{').replace(
-      /export\{(.+)\};\n/,
-      (str, g1: string) =>
-        `globalThis['${pkg.name}']={${g1
-          .split(',')
-          .map((e) => e.split(' as ').reverse().join(':'))
-          .join(',')}}`,
-    );
-    Bun.file('dist/index.global.min.js').write(`${code}})();`);
-  }, 1e2);
-
+  const pkg = await import(path.join(cwd, 'package.json'));
+  const external = Object.keys(pkg.dependencies ?? {});
+  external.splice(external.indexOf('shared'), 1);
   return {
     config: {
       banner: `/** ${pkg.name} v${pkg.version} ${pkg.author} ${pkg.license} */`,
-      external: ['vanjs-core', 'vanjs-ext'],
     },
     tasks: [
       // for Node.js
       {
         entrypoints: ['index.ts'],
-        external: Object.keys(pkg.dependencies ?? {}),
         minify: false,
+        external,
         define: { 'process.env.NODE_ENV': 'process.env.NODE_ENV' },
       },
       // minified js for browser
       {
         entrypoints: ['index.ts'],
         naming: 'index.min.js',
+        external: ['vanjs-core', 'vanjs-ext', '@psytask/core'],
       },
     ],
   } satisfies BuildOptions;
@@ -125,6 +123,8 @@ const buildCwd = async () => {
   const proj = buildables.find((e) => e.path === cwd);
   if (!proj) return log(red(`It is not a buildable project: ${cwd}`));
 
+  await Bun.$`mkdir -p dist && rm -rf dist`;
+
   const { tasks, params }: BuildParams = (
     await import(path.join(proj.path, CONFIG_FILENAME))
   ).default;
@@ -132,7 +132,6 @@ const buildCwd = async () => {
     proj.root === 'apps' ? await getAppOptions(params) : await getPkgOptions();
   tasks && options.tasks.push(...tasks);
 
-  await Bun.$`mkdir -p dist && rm -rf dist`;
   await Promise.all(
     options.tasks.map((e) =>
       Bun.build({ ...shared, ...options.config, ...e }).then(

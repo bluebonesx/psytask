@@ -1,8 +1,8 @@
-export const getLibs = () =>
+export const getLibs = (): string[] =>
   Array.from(
     new Bun.Glob('*').scanSync({ cwd: 'cases', onlyFiles: false }),
   ).sort();
-export const getTasks = () =>
+export const getTasks = (): string[] =>
   Array.from(
     new Bun.Glob('*.bench.ts').scanSync({ cwd: 'cases/psytask' }),
     (f) => f.replace('.bench.ts', ''),

@@ -1,4 +1,4 @@
-import type { SceneSetup } from 'psytask';
+import { createApp, type SceneSetup } from 'psytask';
 
 const TextStim = ((props: { content: string }, ctx) => {
   const node = document.createElement('p');
@@ -6,19 +6,18 @@ const TextStim = ((props: { content: string }, ctx) => {
   ctx.on('scene:show', (props) => {
     node.textContent = props.content;
   });
-  return { node };
+  return node;
 }) satisfies SceneSetup;
 
 window.__benchmark__ = async (mark, params) => {
-  const { createApp } = psytask;
   using app = await createApp();
 
   using fixation = app.scene(TextStim, {
-    defaultProps: () => ({ content: '+' }),
+    defaultProps: { content: '+' },
     duration: 5e2,
   });
   using letter = app.scene(TextStim, {
-    defaultProps: () => ({ content: '' }),
+    defaultProps: { content: '' },
     duration: 1e2,
   });
 

@@ -1,8 +1,12 @@
 {
   "name": "tests",
   "version": "1.0.0",
-  "devDependencies": {
-    "@types/chai": "5.2.2"
-  },
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "shared": "workspace:*",
+    "psytask": "workspace:*",
+    "@psytask/components": "workspace:*",
+    "@psytask/core": "workspace:*",
+    "@psytask/jspsych": "workspace:*"
+  }
 }

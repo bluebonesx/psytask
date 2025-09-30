@@ -5,20 +5,14 @@
   "author": "cubxx",
   "license": "MIT",
   "description": "JavaScript Framework for Psychology task",
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
   "exports": {
     ".": {
-      "types": "./index.ts",
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    },
-    "./main.css": "./dist/main.css"
+    }
   },
   "files": [
     "dist",
-    "src",
-    "types",
-    "index.ts",
     "README.md"
   ],
   "homepage": "https://github.com/bluebonesx/psytask",
@@ -43,6 +37,7 @@
     "docs": "typedoc --options typedoc.json"
   },
   "dependencies": {
+    "shared": "workspace:*",
     "@psytask/core": "workspace:*"
   }
 }

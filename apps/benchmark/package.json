@@ -7,6 +7,10 @@
     "dev": "bun run build --dev"
   },
   "dependencies": {
+    "shared": "workspace:*",
     "detect-browser": "^5.3.0"
+  },
+  "devDependencies": {
+    "psytask": "workspace:*"
   }
 }

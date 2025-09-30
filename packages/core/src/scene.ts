@@ -1,18 +1,17 @@
-import { isArray, on, rAF } from 'shared/utils';
-import type { LooseObject } from '../types';
+import type { LooseObject, Merge } from 'shared/types';
+import { array_normalize, ERR, rAF } from 'shared/utils';
 import { EventEmitter } from './event-emitter';
+import { on } from './utils';
 
-type Merge<T, U> = Omit<T, Extract<keyof T, keyof U>> & U;
-
-const createShowInfo = () => ({ start_time: 0, frame_times: [] as number[] });
+const createShowInfo = () => ({ start_time: NaN, frame_times: [] as number[] });
 type SceneShowInfo = ReturnType<typeof createShowInfo>;
 type ForbiddenSceneData = { [K in keyof SceneShowInfo]?: never };
 
 export type SceneTimerCreator = (options: {
   frame_ms: number;
   duration?: number;
-  onStart?: (time: number) => void;
-  onFrame?: (time: number) => void;
+  onStart: (time: number) => void;
+  onFrame: (time: number) => void;
 }) => { promise: Promise<void>; close: () => void };
 /**
  * ## Render logic
@@ -47,14 +46,14 @@ const createRAFTimer: SceneTimerCreator = (opts) => {
   let start_time: number, close: () => void;
 
   const frame = (last_time: number) => (
-    opts.onFrame?.(last_time),
+    opts.onFrame(last_time),
     typeof opts.duration === 'number' &&
     last_time - start_time >= opts.duration - opts.frame_ms * 1.5
       ? close()
       : (handle = rAF(frame))
   );
   let handle = rAF(
-    (last_time) => (opts.onStart?.(last_time), frame((start_time = last_time))),
+    (last_time) => (opts.onStart(last_time), frame((start_time = last_time))),
   );
 
   return {
@@ -66,6 +65,7 @@ const createRAFTimer: SceneTimerCreator = (opts) => {
   };
 };
 
+type NodeLike = string | Node | (string | Node)[];
 /**
  * Scene setup function, only called once when the scene is created.
  *
@@ -79,12 +79,14 @@ export type SceneSetup<
 > = (
   props: P,
   ctx: Scene<any>,
-) => {
-  /** The node(s) appended to the root element of scene */
-  node: string | Node | (string | Node)[];
-  /** Data getter to get data from elements */
-  data?: () => D;
-};
+) =>
+  | NodeLike
+  | {
+      /** The node(s) appended to the root element of scene */
+      node: NodeLike;
+      /** Data getter to get data from elements */
+      data: () => D;
+    };
 type SceneShow<
   P extends LooseObject = any,
   D extends LooseObject = LooseObject & ForbiddenSceneData,
@@ -99,16 +101,15 @@ type GenericSceneSetup<
  *
  * @example
  *
+ * Support generic scene setup function
+ *
  * ```ts
  * using scene = new Scene(
- *   generic(<T>(props: T) => ({
- *     node: [],
- *     data: () => props,
- *   })),
+ *   generic(<T>(props: T) => ({ node: [], data: () => props })),
  *   //...
  * );
  * const data = await scene.show({ text: 'hello' });
- * data.text; // type: string
+ * data; // expect: { text: string }
  * ```
  */
 export const generic: {
@@ -145,25 +146,31 @@ export type SceneEventMap = HTMLElementEventMap & {
 };
 type SceneEventType = keyof SceneEventMap;
 
-/** Scene options (readonly) */
+/** Scene options */
 export type SceneOptions<T extends MaybeGenericSceneSetup> = {
-  /** The root element to append the scene element, default to document.body */
-  readonly root: HTMLDivElement;
-  /** Frame duration in milliseconds, default to detect device refresh rate */
-  readonly frame_ms: number;
-  /** Default props getter */
-  readonly defaultProps: () => Required<Parameters<T>[0]>;
+  /** Root element */
+  root: HTMLDivElement;
+  /** Frame duration in milliseconds */
+  frame_ms: number;
+  /** Default props */
+  defaultProps: Parameters<T>[0];
   /** Scene duration in milliseconds */
-  readonly duration?: number;
-  /** Close the scene on specific {@link SceneEventMap | events} */
-  readonly close_on?: SceneEventType | SceneEventType[];
+  duration?: number;
+  /** Close on specific {@link SceneEventMap events} */
+  close_on?: SceneEventType | SceneEventType[];
   /** Whether to record frame times */
-  readonly record_frame_times?: boolean;
-  /** Control scene display timing */
-  readonly createTimer?: SceneTimerCreator;
+  record_frame_times?: boolean;
+  /** Control display timing */
+  createTimer?: SceneTimerCreator;
 };
 
-const buttonTypeMap = ['mouse:left', 'mouse:middle', 'mouse:right'] as const;
+const mouseSuffixs = ['left', 'middle', 'right'] as const;
+const prefix2type: Record<string, 0 | keyof HTMLElementEventMap> = {
+  scene: 0,
+  dispose: 0,
+  key: 'keydown',
+  mouse: 'mousedown',
+};
 
 export class Scene<
   T extends MaybeGenericSceneSetup,
@@ -176,18 +183,20 @@ export class Scene<
    *
    * @example
    *
+   * Basic usage
+   *
    * ```ts
    * using scene = new Scene(
    *   (props: { text: string }, ctx) => {
    *     const node = document.createElement('div');
-   *     ctx.on('scene:show', ({ newProps }) => {
+   *     ctx.on('scene:show', (newProps) => {
    *       node.textContent = newProps.text;
    *     });
-   *     return { node };
+   *     return node;
    *   },
    *   {
    *     //...
-   *     defaultProps: () => ({ text: 'default' }),
+   *     defaultProps: { text: 'default' },
    *   },
    * );
    * await scene.show({ text: 'new' }); // show `new`
@@ -218,22 +227,30 @@ export class Scene<
       this.#timer = void 0;
     };
     reset();
-    this.on('scene:close', reset).on('dispose', () => root.remove());
-
-    const { node, data } = (setup as SceneSetup)(defaultProps(), this);
-    root.append(...(isArray(node) ? node : [node]));
-    this.#data = data;
+    const metaOrNode = (setup as SceneSetup)(
+      defaultProps, // WARN: may modify defaultProps
+      this.on('scene:close', reset).on('dispose', () => root.remove()),
+    );
+    root.append(
+      ...array_normalize(
+        typeof metaOrNode === 'object' && 'node' in metaOrNode
+          ? ((this.#data = metaOrNode.data), metaOrNode.node)
+          : metaOrNode,
+      ),
+    );
   }
   /**
    * Override default options one-time
    *
    * @example
    *
+   * Change duration temporarily
+   *
    * ```ts
-   * using scene = new Scene(() => ({ node: [] }), {
-   *   root: document.body,
+   * using scene = new Scene(() => '', {
+   *   root: document.appendChild(document.createElement('div')),
    *   frame_ms: 16.67,
-   *   defaultProps: () => ({}),
+   *   defaultProps: {},
    *   duration: 100,
    * });
    * await scene.config({ duration: 200 }).show(); // show 200ms
@@ -250,11 +267,13 @@ export class Scene<
     this.#options = { ...this.#defaultOptions, ...patchOptions };
     return this;
   }
-  close() {
+  /** Add a microtask to close the scene. It is useful when close in 'scene:show' */
+  async close() {
+    await 0;
     this.#timer?.close();
   }
   async #show(patchProps?: Partial<LooseObject>) {
-    if (this.#timer) throw new Error('Scene is showing');
+    if (this.#timer) ERR('Scene is showing');
     const {
       root,
       frame_ms,
@@ -265,14 +284,14 @@ export class Scene<
       record_frame_times,
     } = this.#options;
 
-    this.emit('scene:show', { ...defaultProps(), ...patchProps });
+    this.emit('scene:show', { ...defaultProps, ...patchProps }); // WARN: may modify defaultProps
     root.style.transform = 'scale(1)';
     root.focus();
 
     // use event listener
     if (typeof close_on !== 'undefined') {
       const close = () => this.close();
-      (isArray(close_on) ? close_on : [close_on]).map((type) =>
+      array_normalize(close_on).map((type) =>
         this.on(type, close).once('scene:close', () => this.off(type, close)),
       );
     }
@@ -280,34 +299,26 @@ export class Scene<
       hasKeyType = 0;
     const cleanups = (Object.keys(this.listeners) as SceneEventType[]).map(
       (type) => {
-        const prefix = type.split(':', 1)[0];
-        if (!hasKeyType++ && prefix === 'key')
-          return on(root, 'keydown', (e) => this.emit(`key:${e.key}`, e));
-        if (!hasMouseType++ && prefix === 'mouse')
-          return on(root, 'mousedown', (e) =>
-            this.emit(buttonTypeMap[e.button] ?? 'mouse:unknown', e),
-          );
-        if (prefix !== 'scene')
-          //@ts-ignore
-          return on(root, type, (e) => this.emit(type, e));
+        const DOM_type = prefix2type[type.split(':', 1)[0]!] ?? type;
+        return DOM_type === 'keydown'
+          ? !hasKeyType++ &&
+              on(root, DOM_type, (e) =>
+                this.emit(`key:${e.key}`, e).emit(DOM_type, e),
+              )
+          : DOM_type === 'mousedown'
+            ? !hasMouseType++ &&
+              on(root, DOM_type, (e) =>
+                this.emit(
+                  `mouse:${mouseSuffixs[e.button] ?? 'unknown'}`,
+                  e,
+                ).emit(DOM_type, e),
+              )
+            : DOM_type &&
+              //@ts-ignore
+              on(root, DOM_type, (e) => this.emit(type, e));
       },
     );
-    this.once('scene:close', () => cleanups.map((f) => f?.()));
-
-    // check duration
-    if (
-      process.env.NODE_ENV === 'development' &&
-      typeof duration === 'number'
-    ) {
-      const theoretical_duration = Math.round(duration / frame_ms) * frame_ms;
-      const error = theoretical_duration - duration;
-      if (Math.abs(error) >= 1) {
-        console.warn(
-          `Scene duration is not a multiple of frame_ms.
-Theoretical duration is ${theoretical_duration} ms, but got ${duration} ms (error: ${error} ms)`,
-        );
-      }
-    }
+    this.once('scene:close', () => cleanups.map((fn) => fn && fn()));
 
     // use timer
     const showInfo = createShowInfo();

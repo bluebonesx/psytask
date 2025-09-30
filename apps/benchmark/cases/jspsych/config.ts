@@ -1,7 +1,7 @@
 declare global {
   const jsPsychModule: typeof import('jspsych');
   const initJsPsych: typeof jsPsychModule.initJsPsych;
-  const jsPsychHtmlKeyboardResponse: typeof import('@jspsych/plugin-html-keyboard-response').default;
+  const jsPsychHtmlKeyboardResponse: any;
 }
 
 export default {

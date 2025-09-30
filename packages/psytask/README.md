@@ -1,7 +1,7 @@
 > [!WARNING]
 > Development of v1.2 is underway and will introduce breaking changes. Please pin your version to v1.1.1.
 
-# Psytask
+# PsyTask
 
 ![NPM Version](https://img.shields.io/npm/v/psytask)
 ![NPM Downloads](https://img.shields.io/npm/dm/psytask)
@@ -9,7 +9,7 @@
 
 JavaScript Framework for Psychology tasks. Compatible with the [jsPsych](https://github.com/jspsych/jsPsych) plugin.
 
-Compare to jsPsych, Psytask has:
+Compare to jsPsych, PsyTask has:
 
 - Easier and more flexible development experiment.
 - Higher time precision, try [Benchmark](https://bluebonesx.github.io/psytask/benchmark) on your browser.
@@ -24,11 +24,11 @@ API docs is [here](https://bluebonesx.github.io/psytask).
 via NPM:
 
 ```bash
-npm create psytask # create a project folder
+npm create psytask # create a project
 ```
 
 ```bash
-npm i psytask # just install
+npm i psytask # only install
 ```
 
 via CDN:
@@ -58,7 +58,7 @@ via CDN:
 ```
 
 > [!WARNING]
-> Psytask uses the modern JavaScript [`using` keyword](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Statements/using) for automatic resource cleanup.
+> PsyTask uses the modern JavaScript [`using` keyword](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Statements/using) for automatic resource cleanup.
 >
 > When using bundlers (like Vite, Bun, etc.), the `using` keyword will be transpiled automatically, so you don't need to worry about browser compatibility.
 >
@@ -134,7 +134,7 @@ using scene = app.scene(
   },
   // 2nd. argument: scene options
   {
-    defaultProps: { stimulus: '' },
+    defaultProps: () => ({ stimulus: '' }),
   },
 );
 ```
@@ -146,17 +146,8 @@ Based on the above example:
 ```js
 // show with parameters
 const data = await scene.show({ stimulus: 'Press F or J' });
-console.log(`Response: ${data.response_key}, RT: ${data.response_time}ms`);
-
 // show with new scene options
 const data = await scene.config({ duration: Math.random() * 1000 }).show();
-```
-
-Scene will log the first frame time in each show:
-
-```js
-const data = await scene.show();
-console.log("this scene's start time is", data.start_time);
 ```
 
 Usually, we need to show a series of scenes:
@@ -179,7 +170,7 @@ for (const stimulus of new RandomSampling({
 }
 
 // adaptive testing with staircase
-const staircase = new StairCase({
+const staircase = StairCase({
   start: 10,
   step: 1,
   up: 3,
@@ -190,7 +181,6 @@ const staircase = new StairCase({
 });
 for (const duration of staircase) {
   const data = await scene.config({ duration }).show({ stimulus: 'X' });
-
   const correct = data.response_key === 'f'; // example response
   staircase.response(correct); // set this trial response
 }
@@ -217,9 +207,9 @@ for (const stimulus of ['A', 'B', 'C']) {
 
 ## Integration
 
-### jsPsych
+### [jsPsych](https://www.jspsych.org)
 
-Psytask is compatible with jsPsych plugins. Here's how to integrate jsPsych with Psytask:
+PsyTask is compatible with jsPsych plugins. Here's how to integrate jsPsych with PsyTask:
 
 #### Installation with jsPsych
 
@@ -293,31 +283,9 @@ const data = await jsPsychScene.show();
 console.log(data);
 ```
 
-### JATOS
+### [JATOS](https://www.jatos.org/)
 
-JATOS (Just Another Tool for Online Studies) is a popular platform for running online psychology experiments. Psytask integrates seamlessly with JATOS for data collection and experiment management. See more: https://www.jatos.org/Write-your-own-Study-Basics-and-Beyond.html
-
-#### Setup with JATOS
-
-```html
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- load jatos.js -->
-    <script src="jatos.js"></script>
-  </head>
-  <body>
-    <!-- load your task script -->
-    <script type="module" src="./index.js"></script>
-  </body>
-</html>
-```
-
-#### Data Upload
-
-Psytask's data collector can automatically send data to JATOS using event listeners:
+Data collector can automatically send data to JATOS using event listeners. See more: https://www.jatos.org/Submit-and-upload-data-to-the-server.html
 
 ```js
 import { createApp } from 'psytask';

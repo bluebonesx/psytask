@@ -1,60 +1,44 @@
 import {
   EventEmitter,
-  Scene,
   on,
+  Scene,
   type MaybeGenericSceneSetup,
 } from '@psytask/core';
-import { detect_fps, h, modify, mount, onPageLeave } from 'shared/utils';
-import type { Serializable } from '../types';
+import type { LooseObject } from 'shared/types';
+import { doc, ERR, h, modify, mount } from 'shared/utils';
 import { Collector } from './collector';
+import { onPageLeave } from './utils';
 
-const createDefaultI18n = () => ({
-  leave_alert: "DON'T leave the page.\nLeave count: ",
-  unload_alert: 'Leaving the page will discard progress.\nAre you sure?',
-});
-class App extends EventEmitter<{}> {
-  data = { frame_ms: 16.67, leave_count: 0 };
+// import styles
+mount(h('style'), doc.head).textContent =
+  '.psytask-scene{all:unset;position:fixed;inset:0;overflow:hidden;will-change:transform;user-select:none}';
+
+type AppDefaultData = { frame_ms: number };
+class App<T extends AppDefaultData = AppDefaultData> extends EventEmitter<{}> {
   constructor(
     /** Root element of the app */
     public readonly root: HTMLElement,
-    i18n: ReturnType<typeof createDefaultI18n>,
+    /** Data will be collected automatically */
+    public data: T & LooseObject,
   ) {
     super();
-
-    // check styles
-    root.classList.add('psytask-app');
-    if (getComputedStyle(root).getPropertyValue('--psytask') === '')
-      alert('Please import psytask CSS file');
-
-    // alert on leave
-    this.on(
-      'dispose',
-      onPageLeave(() => alert(i18n.leave_alert + ++this.data.leave_count)),
-    )
-      // warn before unloading the page, not compatible with IOS
-      .on(
-        'dispose',
-        on(
-          window,
-          'beforeunload',
-          (e) => (e.preventDefault(), (e.returnValue = i18n.unload_alert)),
-        ),
-      )
-      // remove self
-      .on('dispose', () => root.remove());
   }
   /**
    * Create data collector
    *
-   * @example Basic usage
+   * @example
+   *
+   * Basic usage
    *
    * ```ts
    * using dc = await app.collector('data.csv');
    * dc.add({ name: 'Alice', age: 25 });
    * dc.add({ name: 'Bob', age: 30 });
+   * dc.final(); // get final text
+   * dc.download(); // download data.csv
    * ```
    *
-   * @example Add listeners
+   * Add listeners
    *
    * ```ts
    * using dc = await app
@@ -64,24 +48,29 @@ class App extends EventEmitter<{}> {
    *   })
    *   .on('chunk', (chunk) => {
    *     console.log('a chunk of raw is ready', chunk);
-   *   })
-   *   .on('save', (prevent) => {
-   *     prevent(); // don't download
-   *     // your custom save logic here
    *   });
    * ```
    *
    * @see {@link Collector}
    */
-  collector<T extends Serializable>(
+  collector<T extends LooseObject>(
     ...e: ConstructorParameters<typeof Collector<T>>
   ) {
-    return new Collector<T>(...e).on('add', (row) => modify(row, this.data));
+    const dc = new Collector<T>(...e)
+      .on('add', (row) => modify(row, this.data))
+      .on(
+        'dispose',
+        // backup when the page is hidden
+        onPageLeave(() => dc.download(`.${Date.now()}.bak`)),
+      );
+    return dc;
   }
   /**
    * Create a scene
    *
-   * @example Creating a text scene
+   * @example
+   *
+   * Create text scene
    *
    * ```ts
    * const setup = (props: { text: string }, ctx: Scene<any>) => {
@@ -94,7 +83,7 @@ class App extends EventEmitter<{}> {
    *
    * // create scene by setup function
    * using scene = app.scene(setup, {
-   *   defaultProps: () => ({ text: 'default text' }), // default props is required
+   *   defaultProps: { text: 'default text' }, // default props is required
    *   close_on: 'key: ', // close when space is pressed
    *   duration: 100, // auto close after 100ms
    * });
@@ -112,13 +101,17 @@ class App extends EventEmitter<{}> {
       ? [L, Omit<R, 'root' | 'frame_ms'>]
       : never
   ) {
-    const scene = new Scene<T>(setup, {
+    return new Scene<T>(setup, {
       ...options,
-      root: h('div', { oncontextmenu: (e) => e.preventDefault() }),
+      root: mount(
+        h('div', {
+          className: 'psytask-scene',
+          oncontextmenu: (e) => e.preventDefault(),
+        }),
+        this.root,
+      ),
       frame_ms: this.data.frame_ms,
     });
-    mount(scene.root, this.root).dataset.scene = setup.name;
-    return scene;
   }
 }
 
@@ -126,6 +119,8 @@ class App extends EventEmitter<{}> {
  * Create app
  *
  * @example
+ *
+ * Basic usage
  *
  * ```ts
  * using app = await createApp();
@@ -137,7 +132,7 @@ class App extends EventEmitter<{}> {
  *     return { node };
  *   },
  *   {
- *     defaultProps: () => ({}),
+ *     defaultProps: {},
  *     duration: 500,
  *   },
  * );
@@ -145,29 +140,99 @@ class App extends EventEmitter<{}> {
  *
  * @see {@link App} {@link App.scene}
  */
-export const createApp = async (
-  options?: Partial<
-    Parameters<typeof detect_fps>[0] & {
-      i18n: ReturnType<typeof createDefaultI18n> & {
-        leave_alert_on_fps: string;
-      };
-    }
-  >,
-) => {
-  const root = options?.root ?? h('div');
+export const createApp = async ({
+  root = h('div'),
+  alert_on_leave = true,
+  i18n = {
+    leave_alert_on_fps: "Please DON'T leave the page during the FPS detection!",
+    leave_alert_on_task:
+      "Please DON'T leave the page during the task! Attempts: ",
+    beforeunload_alert: 'Your progress will be lost. Are you sure?',
+  },
+  frame_ms,
+  frames_count = 60,
+}: Partial<{
+  /** @default document.createElement('div') */
+  root: HTMLElement;
+  /** @default true */
+  alert_on_leave: boolean;
+  i18n: {
+    /** Alert after leaving the page during the FPS detection */
+    leave_alert_on_fps: string;
+    /** Alert after leaving the page during the task */
+    leave_alert_on_task: string;
+    /** Alert before close or reload the page, not compatible with IOS */
+    beforeunload_alert: string;
+  };
+  /** Frame duration in milliseconds */
+  frame_ms: number;
+  /** @default 60 */
+  frames_count: number;
+}> = {}) => {
+  root === doc.body && ERR('Cannot use document.body as app root');
   if (!root.isConnected) mount(root);
+  root.classList.add('psytask-app'); // only for marking
 
-  const i18n = options?.i18n ?? createDefaultI18n();
-  const app = new App(root, i18n);
+  const { leave_alert_on_fps, leave_alert_on_task, beforeunload_alert } = i18n;
 
-  const panel = mount(h('div'), root);
-  app.data.frame_ms = await detect_fps({
-    root: panel,
-    frames_count: options?.frames_count ?? 60,
-    //@ts-ignore
-    leave_alert: i18n.leave_alert_on_fps,
-  });
-  root.innerHTML = '';
+  // detect fps if not provided
+  if (!frame_ms) {
+    const { frame_times } = await new Scene(
+      (p: { count: number; leave_alert: string }, ctx) => {
+        let count = 0;
+        ctx
+          .on('scene:frame', () => {
+            const progress = Math.floor((count++ / p.count) * 100);
+            ctx.root.textContent = `Detect FPS ${progress}%`;
+            progress === 100 && ctx.emit('dispose', null).close();
+          })
+          .on(
+            'scene:close',
+            onPageLeave(() => (alert(p.leave_alert), history.go())),
+          );
+        return [];
+      },
+      {
+        root: mount(
+          h('div', {
+            className: 'psytask-scene',
+            style: 'text-align:center;line-height:100dvh;',
+          }),
+          root,
+        ),
+        frame_ms: 16.67,
+        defaultProps: {
+          count: frames_count,
+          leave_alert: leave_alert_on_fps,
+        },
+        record_frame_times: true,
+      },
+    ).show();
+    const frame_ms_arr = frame_times
+      .map((t, i, arr) => (i > 0 ? t - arr[i - 1]! : 0))
+      .slice(1); // first is 0
+    console.info(
+      'detected fps',
+      // frame_ms_arr,
+      (frame_ms = frame_ms_arr.reduce((a, b) => a + b) / frame_ms_arr.length),
+    );
+  }
 
-  return app;
+  // setup app data
+  const data = { frame_ms, leave_count: 0 };
+  const cleanups = [
+    ...(alert_on_leave
+      ? [
+          onPageLeave(() => alert(leave_alert_on_task! + ++data.leave_count)),
+          on(
+            window,
+            'beforeunload',
+            (e) => (e.preventDefault(), (e.returnValue = beforeunload_alert)),
+          ),
+        ]
+      : []),
+    // remove self
+    () => root.remove(),
+  ];
+  return new App(root, data).on('dispose', () => cleanups.map((fn) => fn()));
 };

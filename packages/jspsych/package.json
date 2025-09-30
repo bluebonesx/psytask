@@ -4,12 +4,23 @@
   "type": "module",
   "author": "cubxx",
   "license": "MIT",
-  "description": "Use jsPsych plugins as Psytask scenes",
-  "scripts": {
-    "build": "bun scripts/build.ts"
+  "description": "Use jsPsych plugins as PsyTask scenes",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "dependencies": {
-    "auto-bind": "^5.0.1",
-    "jspsych": "^8.2.2"
+    "shared": "workspace:*",
+    "auto-bind": "^4.0.0"
+  },
+  "devDependencies": {
+    "jspsych": "^8.2.2",
+    "@psytask/core": "workspace:*"
   }
 }

@@ -13,18 +13,27 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "verbatimModuleSyntax": true,
-    "composite": true,
 
     // best practices
     "strict": true,
-    "skipLibCheck": true,
+    "skipLibCheck": false,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
+    "checkJs": true,
+    "allowJs": true,
 
     // compile
+    "outDir": "dist",
+    "composite": false,
     "declaration": true,
     "sourceMap": false
   },
-  "include": ["**/src", "**/cases", "**/examples", "packages/shared"]
+  "include": [
+    "**/src",
+    "**/cases",
+    "**/examples",
+    "packages/shared",
+    "apps/*/main.ts"
+  ]
 }

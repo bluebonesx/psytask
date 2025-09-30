@@ -1,27 +1,32 @@
-import type { LooseObject } from '../types';
+import type { LooseObject } from 'shared/types';
 
 const symbol: typeof Symbol.dispose =
   Symbol.dispose ?? Symbol.for('Symbol.dispose');
-
+/** Out-of-order event emitter */
 export class EventEmitter<
-  M extends LooseObject & { dispose?: never },
+  M extends LooseObject & { dispose?: never } = {},
   EventMap extends { dispose: null } = M & { dispose: null },
 > implements Disposable
 {
-  protected listeners: {
-    [K in keyof EventMap]?: Set<(e: EventMap[K]) => void>;
+  readonly listeners: {
+    readonly [K in keyof EventMap]?: Set<(e: EventMap[K]) => void>;
   } = {};
   [symbol]() {
     this.emit('dispose', null);
   }
   /** Add event listener */
   on<K extends keyof EventMap>(type: K, listener: (evt: EventMap[K]) => void) {
+    //@ts-ignore
     (this.listeners[type] ??= new Set<any>()).add(listener);
     return this;
   }
   /** Remove event listener */
   off<K extends keyof EventMap>(type: K, listener: (evt: EventMap[K]) => void) {
-    this.listeners[type]?.delete(listener);
+    const listeners = this.listeners[type];
+    if (listeners) {
+      listeners.delete(listener);
+      listeners.size === 0 && delete this.listeners[type];
+    }
     return this;
   }
   /** Add one-time event listener, can not be removed manually */
@@ -42,7 +47,7 @@ export class EventEmitter<
   /** Emit event listeners */
   emit<K extends keyof EventMap>(type: K, e: EventMap[K]) {
     const listeners = this.listeners[type];
-    if (listeners) for (const listener of listeners) listener(e);
+    if (listeners) for (const listener of [...listeners]) listener(e);
     return this;
   }
 }

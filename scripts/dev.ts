@@ -1,9 +1,10 @@
 import fs from 'fs/promises';
 import { networkInterfaces } from 'os';
 import path from 'path';
-import { cyan, green, yellow } from 'picocolors';
-import { projects, log } from './utils';
+import { cyan, green, log, projects, yellow } from './utils';
+import ignore from 'ignore';
 
+const ig = ignore().add((await Bun.file('.gitignore').text()).split('\n')); // use .gitignore
 const listened = new Set<string>();
 const build = (cwd: string) =>
   Bun.spawn({
@@ -13,18 +14,20 @@ const build = (cwd: string) =>
 const listen = async (cwd: string) => {
   log(green(`Listening ${cwd}`));
   listened.add(cwd);
-  await build(cwd);
+  await build(cwd); // init build
 
-  (async () => {
-    for await (const { eventType, filename } of fs.watch(cwd, {
-      recursive: true,
-    })) {
-      if (eventType === 'change' && filename?.includes('dist') === false) {
-        log(yellow(`File changed: ${path.join(cwd, filename ?? '')}`));
-        await build(cwd);
+  const subdirpaths = (await fs.readdir(cwd, { withFileTypes: true }))
+    .filter((e) => e.isDirectory() && !ig.ignores(e.name))
+    .map((e) => path.join(cwd, e.name));
+  for (const dirpath of [...subdirpaths, cwd])
+    (async () => {
+      for await (const { eventType, filename } of fs.watch(dirpath)) {
+        if (filename && !ig.ignores(filename)) {
+          log(yellow(`File changed: ${path.join(cwd, filename ?? '')}`));
+          await build(cwd);
+        }
       }
-    }
-  })();
+    })();
 };
 const createRouteHandler = async (root: (typeof projects)[number]['root']) => {
   const projs = projects.filter((e) => e.root === root);
@@ -54,6 +57,20 @@ const server = Bun.serve({
   port: 3000,
   hostname: '0.0.0.0',
   routes: {
+    '/': (req) =>
+      new Response(
+        `<!doctype html>
+<html style="font-family:system-ui; color-scheme:dark;">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  </head>
+  <body>
+    <ul>${projects.map((proj) => `<li><a href="/${proj.root === 'apps' ? `${proj.name}/` : `public/${proj.name}/index.js`}">${proj.root + '/' + proj.name}</a></li>`).join('')}</ul>
+  </body>
+</html>`,
+        { headers: { 'Content-Type': 'text/html' } },
+      ),
     '/:item/': (req) =>
       appHandler({ item: req.params.item, file: 'index.html' }),
     '/:item/:file': (req) => appHandler(req.params),
