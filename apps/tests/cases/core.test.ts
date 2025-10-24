@@ -20,7 +20,6 @@ import {
   mock_event,
   spy_listeners,
 } from './utils';
-
 const { div } = van.tags;
 
 let frame_ms: number;

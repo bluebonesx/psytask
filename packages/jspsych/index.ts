@@ -1,6 +1,7 @@
-import { type SceneSetup } from '@psytask/core';
+import type { SceneSetup } from '@psytask/core';
 import autoBind from 'auto-bind';
 import type { PluginInfo, TrialType } from 'jspsych';
+import type { LooseObject } from 'shared/types';
 import { ERR, h, hasOwn, isArray, modify, mount } from 'shared/utils';
 import { KeyboardListenerAPI } from './node_modules/jspsych/src/modules/plugin-api/KeyboardListenerAPI';
 import { TimeoutAPI } from './node_modules/jspsych/src/modules/plugin-api/TimeoutAPI';
@@ -42,7 +43,7 @@ window['jsPsychModule'] ??= { ParameterType };
  * @see {@link https://www.jspsych.org/latest/plugins/list-of-plugins/ jsPsych Plugin}
  */
 export const jsPsychStim = ((trial: Partial<TrialType<PluginInfo>>, ctx) => {
-  let data: Record<string, any>;
+  let data: LooseObject;
 
   // create jsPsych DOM
   const root = h('div', {

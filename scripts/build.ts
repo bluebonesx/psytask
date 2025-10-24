@@ -1,36 +1,38 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { blue, cyan, red } from './utils';
-import { CONFIG_FILENAME, DEV, log, projects, ROOT } from './utils';
+import { rollup } from 'rollup';
+import { dts } from 'rollup-plugin-dts';
+import {
+  blue,
+  __CONFIG_FILE__,
+  cyan,
+  __DEV__,
+  log,
+  projects,
+  red,
+  __ROOT__,
+  type Project,
+  yellow,
+} from './utils';
 
-declare global {
-  type BuildParams = {
-    tasks?: Bun.BuildConfig[];
-    params?: Parameters<typeof getAppOptions>[0] /* &
-      Parameters<typeof getPkgOptions>[0]; */;
-  };
-}
+type BuildConfig = Partial<{
+  configs: Bun.BuildConfig[];
+  params: Parameters<typeof getAppOptions>[0];
+}>;
 type BuildOptions = {
-  tasks: Bun.BuildConfig[];
-  config?: Partial<Bun.BuildConfig>;
+  configs: Bun.BuildConfig[];
+  sharedConfig?: Partial<Bun.BuildConfig>;
 };
 
-const buildables = projects.filter((e) => e.buildable);
-!DEV &&
-  process.argv[2] &&
-  process.chdir(
-    buildables.find((e) => e.name === process.argv[2])?.path ?? process.cwd(),
-  ); // support build a specific project by name
-
-const cwd = process.cwd();
 const shared = {
   outdir: 'dist',
   target: 'browser',
   minify: true,
-  define: { 'process.env.NODE_ENV': DEV ? '"development"' : '"production"' },
-  //@ts-ignore
+  define: {
+    'process.env.NODE_ENV': __DEV__ ? '"development"' : '"production"',
+  },
   splitting: true,
-  sourcemap: DEV ? 'linked' : 'none',
+  sourcemap: __DEV__ ? 'linked' : 'none',
 } satisfies Partial<Bun.BuildConfig>;
 
 const getAppOptions = async ({
@@ -45,16 +47,16 @@ const getAppOptions = async ({
       'https://cdn.jsdelivr.net/npm/vanjs-core@1.6.0/src/van.min.js',
     'vanjs-ext':
       'https://cdn.jsdelivr.net/npm/vanjs-ext@0.6.3/src/van-x.min.js',
-    psytask: '/public/psytask/index.min.js?v=' + Date.now(),
-    '@psytask/core': '/public/core/index.min.js?v=' + Date.now(),
-    '@psytask/components': '/public/components/index.min.js?v=' + Date.now(),
-    '@psytask/jspsych': '/public/jspsych/index.min.js?v=' + Date.now(),
+    psytask: '../public/psytask/index.min.js?v=' + Date.now(),
+    '@psytask/core': '../public/core/index.min.js?v=' + Date.now(),
+    '@psytask/components': '../public/components/index.min.js?v=' + Date.now(),
+    '@psytask/jspsych': '../public/jspsych/index.min.js?v=' + Date.now(),
     ...importmap,
   };
   if (await fs.exists('main.css')) styles.push('main.css');
   return {
-    config: { external: Object.keys(importmap) },
-    tasks: [
+    sharedConfig: { external: Object.keys(importmap) },
+    configs: [
       {
         entrypoints: ['index.html'],
         plugins: [
@@ -93,20 +95,18 @@ const getAppOptions = async ({
     ],
   } satisfies BuildOptions;
 };
-const getPkgOptions = async () => {
-  const pkg = await import(path.join(cwd, 'package.json'));
-  const external = Object.keys(pkg.dependencies ?? {});
-  external.splice(external.indexOf('shared'), 1);
+const getPkgOptions = async (pkg: Record<string, any>) => {
+  const deps = Object.keys(pkg.dependencies ?? {});
   return {
-    config: {
+    sharedConfig: {
       banner: `/** ${pkg.name} v${pkg.version} ${pkg.author} ${pkg.license} */`,
     },
-    tasks: [
+    configs: [
       // for Node.js
       {
         entrypoints: ['index.ts'],
         minify: false,
-        external,
+        external: deps,
         define: { 'process.env.NODE_ENV': 'process.env.NODE_ENV' },
       },
       // minified js for browser
@@ -118,53 +118,122 @@ const getPkgOptions = async () => {
     ],
   } satisfies BuildOptions;
 };
-const buildCwd = async () => {
-  DEV || log(blue(`Building ${cwd}`));
-  const proj = buildables.find((e) => e.path === cwd);
-  if (!proj) return log(red(`It is not a buildable project: ${cwd}`));
 
-  await Bun.$`mkdir -p dist && rm -rf dist`;
+const bundleDts = async (cwd: string) => {
+  const bundle = await rollup({
+    input: path.join(cwd, 'index.ts'),
+    plugins: [
+      dts({
+        includeExternal: ['shared'],
+        tsconfig: path.join(__ROOT__, 'tsconfig.app.json'),
+      }),
+    ],
+  });
+  const { output } = await bundle.write({
+    file: path.join(cwd, 'dist/index.d.ts'),
+    format: 'esm',
+  });
+  if (__DEV__) return;
+  for (const chunkOrAsset of output) {
+    log(
+      `  ${cyan(chunkOrAsset.fileName)}  ${
+        (chunkOrAsset.type === 'asset'
+          ? chunkOrAsset.source
+          : chunkOrAsset.code
+        ).length / 1024
+      } KB`,
+    );
+  }
+};
+export const buildProject = async (proj: Project) => {
+  if (proj.state === 1) return;
+  proj.state = 1; // built
 
-  const { tasks, params }: BuildParams = (
-    await import(path.join(proj.path, CONFIG_FILENAME))
-  ).default;
-  const options: BuildOptions =
-    proj.root === 'apps' ? await getAppOptions(params) : await getPkgOptions();
-  tasks && options.tasks.push(...tasks);
+  const cwd = process.cwd();
+  process.chdir(proj.path);
 
+  log(blue(`Building ${proj.name}`));
+  await fs.rm('dist', { recursive: true, force: true });
+
+  const configFilepath = path.join(proj.path, __CONFIG_FILE__);
+  const isConfigFileExists = await fs.exists(configFilepath);
+  if (!isConfigFileExists) {
+    if (proj.pkgJson.scripts?.build) {
+      const code = await Bun.spawn({
+        cwd: proj.path,
+        cmd: ['bun', 'run', 'build'],
+        stdout: 'inherit',
+      }).exited;
+      if (code === 0) return;
+      throw Error('Build failed: ' + proj.name);
+    }
+  }
+
+  const { configs, params }: BuildConfig = isConfigFileExists
+    ? await import(configFilepath)
+    : {};
+
+  const isPkg = proj.root === 'packages';
+  const options: BuildOptions = isPkg
+    ? await getPkgOptions(proj.pkgJson)
+    : await getAppOptions(params);
+  configs && options.configs.push(...configs);
+
+  // build
   await Promise.all(
-    options.tasks.map((e) =>
-      Bun.build({ ...shared, ...options.config, ...e }).then(
-        (out) =>
-          DEV ||
-          out.outputs.map((f) =>
-            log(
-              `  ${cyan(path.relative(shared.outdir, f.path))}  ${f.size / 1024} KB`,
-            ),
-          ),
-      ),
-    ),
+    options.configs.map(async (config) => {
+      const { outputs } = await Bun.build({
+        ...shared,
+        ...options.sharedConfig,
+        ...config,
+      });
+      if (__DEV__) return;
+      for (const output of outputs)
+        log(
+          `  ${cyan(path.relative(shared.outdir, output.path))}  ${output.size / 1024} KB`,
+        );
+    }),
   );
+  isPkg && (await bundleDts(proj.path));
+
+  process.chdir(cwd);
 };
 const buildAll = async () => {
   log(
-    blue('Building all:\n') +
-      cyan(buildables.reduce((acc, e, i) => acc + e.path + '\n', '')),
+    blue('Building all:') +
+      cyan(projects.reduce((acc, e) => acc + ' ' + e.name, '')),
   );
-  await Bun.$`mkdir -p dist && rm -rf dist && mkdir -p dist/public`;
-  for (const proj of buildables) {
-    const exitCode = await Bun.spawn({
-      cwd: proj.path,
-      cmd: ['bun', process.argv[1]!],
-      stdout: 'inherit',
-      async onExit(subprocess, exitCode, signalCode, error) {
-        exitCode === 0 &&
-          (await Bun.$`mv ${proj.path}/dist ./dist/${proj.root === 'apps' ? '' : 'public/'}${proj.name}`);
-      },
-    }).exited;
-    if (exitCode !== 0) throw new Error(`Build failed: ${proj.path}`);
-    log('');
+
+  await fs.rm('dist', { recursive: true, force: true });
+  await fs.mkdir('dist/public', { recursive: true });
+
+  for (const proj of projects) {
+    await buildProject(proj);
+    await fs.cp(
+      path.join(proj.path, 'dist'),
+      path.join(
+        __ROOT__,
+        'dist',
+        proj.root === 'packages' ? 'public' : '',
+        proj.name,
+      ),
+      { recursive: true },
+    );
   }
 };
 
-cwd === ROOT ? await buildAll() : await buildCwd();
+// bun run build.ts [project-name]
+if (import.meta.main) {
+  const name = process.argv[2];
+  if (!name) {
+    await buildAll();
+    process.exit(0);
+  }
+  const proj = projects.find((e) => e.name === name);
+  proj
+    ? await buildProject(proj)
+    : log(
+        red(`${name} is not project, choose one:`) +
+          cyan(projects.reduce((acc, e, i) => acc + ' ' + e.name, '')),
+      );
+}

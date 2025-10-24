@@ -6,8 +6,8 @@ import {
   StairCase,
   type Serializer,
 } from 'psytask';
-import { doc, ERR, mount, rAF } from 'shared/utils';
 import van from 'vanjs-core';
+import { doc, ERR, mount, rAF } from 'shared/utils';
 import {
   expect,
   expect_closeTo,

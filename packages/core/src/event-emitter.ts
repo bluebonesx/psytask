@@ -2,7 +2,7 @@ import type { LooseObject } from 'shared/types';
 
 const symbol: typeof Symbol.dispose =
   Symbol.dispose ?? Symbol.for('Symbol.dispose');
-/** Out-of-order event emitter */
+/** {@link Disposable} event emitter, use {@link Set} to manage listeners */
 export class EventEmitter<
   M extends LooseObject & { dispose?: never } = {},
   EventMap extends { dispose: null } = M & { dispose: null },

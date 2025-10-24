@@ -1,27 +1,13 @@
 import path from 'path';
-import { cyan, green, yellow } from 'picocolors';
-import { DEV, log, projects } from './utils';
+import { cyan, __DEV__, green, log, projects, yellow } from './utils';
+import { buildProject } from './build';
 
-const pkgs = projects.filter(
-  (e) => e.root === 'packages' && e.name !== 'shared',
-);
-const formatRGX = /["\r\n]/g;
+const pkgs = projects.filter((e) => e.root === 'packages');
 
-if (DEV) log(cyan('Checking publish status (dev mode)...'));
+if (__DEV__) log(cyan('Checking publish status (dev mode)...'));
 for (const pkg of pkgs) {
   // get package name and version
-  const name = (
-    await Bun.spawn({
-      cwd: pkg.path,
-      cmd: ['bun', 'pm', 'pkg', 'get', 'name'],
-    }).stdout.text()
-  ).replace(formatRGX, '');
-  const version = (
-    await Bun.spawn({
-      cwd: pkg.path,
-      cmd: ['bun', 'pm', 'pkg', 'get', 'version'],
-    }).stdout.text()
-  ).replace(formatRGX, '');
+  const { name, version } = await import(path.join(pkg.path, 'package.json'));
 
   // fetch published version
   const view = (await (
@@ -39,23 +25,20 @@ for (const pkg of pkgs) {
     log(yellow('Skipping ') + `${name} (${publishedVersion} == ${version})`);
     continue;
   }
-  if (DEV) {
-    log(
-      green('Would publish ') + `${name} (${publishedVersion} -> ${version})`,
-    );
-    continue;
-  }
 
   // publish
-  (await Bun.spawn({
+  log(green('Publishing ') + `${name} (${publishedVersion} -> ${version})`);
+  await buildProject(pkg); // build
+  await Bun.spawn({
     cwd: pkg.path,
-    cmd: ['bun', path.join(import.meta.dir, 'build.ts')], // build
+    cmd: [
+      'bun',
+      'publish',
+      '-p',
+      '--access',
+      'public',
+      __DEV__ ? '--dry-run' : '',
+    ], // publish
     stdout: 'inherit',
-  }).exited) ||
-    (await Bun.spawn({
-      cwd: pkg.path,
-      cmd: ['bun', 'pm', 'publish', '-p', '--access', 'public'], // publish
-      stdout: 'inherit',
-    }).exited) ||
-    log(green('Published ') + `${name} (${publishedVersion} -> ${version})\n`);
+  }).exited;
 }

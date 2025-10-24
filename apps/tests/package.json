@@ -2,11 +2,13 @@
   "name": "tests",
   "version": "1.0.0",
   "type": "module",
-  "dependencies": {
-    "shared": "workspace:*",
+  "private": true,
+  "devDependencies": {
     "psytask": "workspace:*",
     "@psytask/components": "workspace:*",
     "@psytask/core": "workspace:*",
-    "@psytask/jspsych": "workspace:*"
+    "@psytask/jspsych": "workspace:*",
+    "vanjs-core": "catalog:",
+    "vanjs-ext": "catalog:"
   }
 }

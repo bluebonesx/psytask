@@ -4,7 +4,7 @@
   "type": "module",
   "author": "cubxx",
   "license": "MIT",
-  "description": "basic psytask components and hooks",
+  "description": "basic PsyTask components and hooks",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -16,9 +16,8 @@
     "README.md"
   ],
   "dependencies": {
-    "vanjs-core": "^1.6.0",
-    "vanjs-ext": "^0.6.3",
-    "shared": "workspace:*",
+    "vanjs-core": "catalog:",
+    "vanjs-ext": "catalog:",
     "@psytask/core": "workspace:*"
   },
   "devDependencies": {

@@ -142,7 +142,7 @@ export const StairCase = createIterableBuilder(function* ({
 
     // determine next value
     let value: number;
-    const prev = data.at(-1);
+    const prev = data[trial_num - 1];
 
     if (!prev)
       // first trial

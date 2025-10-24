@@ -2,17 +2,12 @@
   "name": "play",
   "version": "1.0.0",
   "type": "module",
-  "scripts": {
-    "build": "bun scripts/build.ts",
-    "dev": "bun run build --dev"
-  },
-  "dependencies": {
-    "shared": "workspace:*",
+  "private": true,
+  "devDependencies": {
     "psytask": "workspace:*",
     "@psytask/components": "workspace:*",
-    "@psytask/jspsych": "workspace:*"
-  },
-  "devDependencies": {
-    "@svgdotjs/svg.js": "^3.2.4"
+    "@psytask/jspsych": "workspace:*",
+    "vanjs-core": "catalog:",
+    "vanjs-ext": "catalog:"
   }
 }

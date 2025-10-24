@@ -1,5 +1,7 @@
 export default {
-  tasks: [
-    { entrypoints: Array.from(new Bun.Glob('cases/*/*.bench.ts').scanSync()) },
-  ],
+  params: {
+    importmap: {
+      jspsych: 'https://cdn.jsdelivr.net/npm/jspsych@8.2.2/+esm',
+    },
+  },
 };

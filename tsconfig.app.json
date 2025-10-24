@@ -1,8 +1,8 @@
 {
   "compilerOptions": {
     // environment
-    "lib": ["DOM", "ES2022", "ESNext.Disposable"],
-    "target": "es2022",
+    "lib": ["DOM", "ES2017", "ESNext.Disposable"],
+    "target": "es2017",
     "module": "esnext",
     "moduleDetection": "force",
     "jsx": "preserve",
@@ -29,11 +29,5 @@
     "declaration": true,
     "sourceMap": false
   },
-  "include": [
-    "**/src",
-    "**/cases",
-    "**/examples",
-    "packages/shared",
-    "apps/*/main.ts"
-  ]
+  "exclude": ["**/dist", "**/*.config.ts"]
 }

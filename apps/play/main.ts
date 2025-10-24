@@ -1,10 +1,9 @@
 import { useFetch } from '@psytask/components';
-import { useHash } from 'shared/hook';
-import { ERR, map, mount } from 'shared/utils';
 import van from 'vanjs-core';
 import { reactive } from 'vanjs-ext';
-//@ts-ignore
-import { getExamples } from './macro' with { type: 'macro' };
+import { useHash } from 'shared/hook';
+import { ERR, map, mount } from 'shared/utils'; //@ts-ignore
+import { glob } from 'shared/macros' with { type: 'macro' };
 
 const { a, button, div, h1, iframe, option, select } = van.tags;
 
@@ -23,16 +22,18 @@ See `,
   ) && ERR('not support');
 
 // static data
-const examples = getExamples();
+const examples = glob('*.js', { cwd: 'examples' }).map((f) =>
+  f.replace('.js', ''),
+);
 const importMap = map(
   JSON.parse(
     document.querySelector('script[type="importmap"]')?.textContent ?? '{',
   ).imports as Record<string, string>,
   (value) => {
     const data = { import: value, types: value.replace('.min.js', '.d.ts') };
-    if (value.startsWith('/')) {
-      data.import = location.origin + data.import;
-      data.types = location.origin + data.types;
+    if (value.startsWith('../')) {
+      data.import = new URL(data.import, location.href).href;
+      data.types = new URL(data.types, location.href).href;
     }
     return data;
   },
@@ -41,7 +42,7 @@ const files = {
   JavaScript: { uri: 'main.js', value: '/* Write your code here */\n' },
   CSS: {
     uri: 'main.css',
-    value: `@import "https://cdn.jsdelivr.net/npm/jspsych/css/jspsych.css";
+    value: `@import "https://cdn.jsdelivr.net/npm/jspsych@8.2.2/css/jspsych.css";
 @import "https://cdn.jsdelivr.net/npm/@jspsych/plugin-survey/css/survey.css";`,
   },
   ImportMap: {
@@ -57,9 +58,7 @@ const exampleRes = useFetch(() =>
   hash.val ? `./${hash.val}.js` : 'about:blank',
 );
 const store = reactive({
-  monaco: {
-    text: 'monaco is loading...',
-  },
+  indication: 'Loading resources...',
   editor: {
     files: map(files, (file) => file.value),
     activeTab: 'JavaScript' as keyof typeof files,
@@ -79,7 +78,7 @@ const store = reactive({
               {
                 'data-selected': () => store.editor.activeTab === name,
                 onclick: (e) => (store.editor.activeTab = name),
-                disabled: () => !!store.monaco.text,
+                disabled: () => !!store.indication,
               },
               name,
             ),
@@ -88,12 +87,12 @@ const store = reactive({
             {
               onchange: (e) =>
                 (location.hash = (e.target as HTMLSelectElement).value),
-              disabled: () => !!store.monaco.text,
+              disabled: () => !!store.indication,
             },
             ...examples.map((example) =>
               option(
                 { value: example, selected: () => example === hash.val },
-                example.replaceAll('-', ' '),
+                example.replace(/-/g, ' '),
               ),
             ),
           ),
@@ -101,7 +100,7 @@ const store = reactive({
             {
               title: 'Ctrl + S to run',
               onclick: (e) => (e.stopPropagation(), store.editor.save()),
-              disabled: () => !!store.monaco.text,
+              disabled: () => !!store.indication,
             },
             'RUN',
           ),
@@ -151,11 +150,11 @@ window.onunhandledrejection = ({ reason }) => root.textContent += \`===\n\${reas
 van.derive(
   () =>
     // change tab
-    !store.monaco.text && editor.setModel(models[store.editor.activeTab]),
+    !store.indication && editor.setModel(models[store.editor.activeTab]),
 );
 van.derive(async () => {
   // load example
-  if (store.monaco.text || !hash.val) return;
+  if (store.indication || !hash.val) return;
   exampleRes.loading
     ? (store.editor.files.JavaScript = `/* Loading ${hash.val} */`)
     : exampleRes.status === 'failed'
@@ -165,7 +164,7 @@ van.derive(async () => {
 });
 
 // dom
-const root = div(() => store.monaco.text);
+const root = div(() => store.indication);
 mount(div({ id: 'app' }, store.editor.render(), store.preview.render()));
 
 // load monaco-related
@@ -176,9 +175,12 @@ const [{ loadMonaco }, { shikiToMonaco }, { createHighlighter }] =
       'https://esm.sh/@shikijs/monaco@3.13.0?exports=shikiToMonaco',
       'https://esm.sh/shiki@3.13.0?exports=createHighlighter',
     ].map((url) => import(url)),
-  );
+  ).catch((e: unknown) => {
+    store.indication = 'Resource load failed: ' + e;
+    throw e;
+  });
 const monaco = await loadMonaco().catch((e: unknown) => {
-  store.monaco.text = e + '';
+  store.indication = 'Monaco load failed: ' + e;
   throw e;
 });
 // init monaco
@@ -275,7 +277,7 @@ const models = map(files, (file) =>
   window.onresize = () => editor.layout({ width: 0, height: 0 });
 }
 
-store.monaco.text = '';
+store.indication = '';
 
 //@ts-ignore
 window.monaco = monaco;

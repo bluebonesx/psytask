@@ -1,7 +1,7 @@
 import { jsPsychStim } from '@psytask/jspsych';
 import { createApp } from 'psytask';
-import { mount } from 'shared/utils';
 import van from 'vanjs-core';
+import { mount } from 'shared/utils';
 
 const { link } = van.tags;
 
@@ -12,7 +12,7 @@ const loadJsPsychCss = () => {
     link({
       'data-id': id,
       rel: 'stylesheet',
-      href: 'https://cdn.jsdelivr.net/npm/jspsych/css/jspsych.css',
+      href: 'https://cdn.jsdelivr.net/npm/jspsych@8.2.2/css/jspsych.css',
     }),
     link({
       'data-id': id,

@@ -1,7 +1,7 @@
 import { Scene, type SceneSetup } from '@psytask/core';
-import { error_normalize, getter_normalize } from 'shared/utils';
 import van from 'vanjs-core';
 import { list, reactive } from 'vanjs-ext';
+import { error_normalize, getter_normalize } from 'shared/utils';
 import { useFetch } from './hooks';
 import { adapter, css, type MaybeGetter } from './utils';
 

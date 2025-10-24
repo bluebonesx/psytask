@@ -1,4 +1,4 @@
-import { Scene, type SceneSetup } from '@psytask/core';
+import type { Scene, SceneSetup } from '@psytask/core';
 import type { PropertiesHyphen } from 'csstype';
 import type { LooseObject, Merge } from 'shared/types';
 import { hasOwn, isObject, modify } from 'shared/utils';

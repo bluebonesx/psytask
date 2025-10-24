@@ -16,11 +16,10 @@
     "README.md"
   ],
   "dependencies": {
-    "shared": "workspace:*",
     "auto-bind": "^4.0.0"
   },
   "devDependencies": {
-    "jspsych": "^8.2.2",
+    "jspsych": "catalog:",
     "@psytask/core": "workspace:*"
   }
 }

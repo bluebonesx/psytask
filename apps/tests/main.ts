@@ -1,6 +1,6 @@
-import { isObject, mount } from 'shared/utils';
 import van from 'vanjs-core';
 import { calc, noreactive, reactive } from 'vanjs-ext';
+import { isObject, mount } from 'shared/utils';
 import { spy_functionCall } from './cases/utils';
 const { button, details, div, section, span, summary } = van.tags;
 
@@ -21,11 +21,15 @@ type CaseSetView = {
 };
 type ViewTree = { [key: string]: CaseView | CaseSetView };
 
+import * as psytask from './cases/psytask.test';
+import * as core from './cases/core.test';
+import * as components from './cases/components.test';
+import * as jspsych from './cases/jspsych.test';
 const mods = {
-  psytask: await import('./cases/psytask.test'),
-  core: await import('./cases/core.test'),
-  components: await import('./cases/components.test'),
-  jspsych: await import('./cases/jspsych.test'),
+  psytask,
+  core,
+  components,
+  jspsych,
 } satisfies ViewRaw;
 const raw2tree = (raw: ViewRaw): ViewTree =>
   Object.entries(raw).reduce((acc, [name, val]) => {

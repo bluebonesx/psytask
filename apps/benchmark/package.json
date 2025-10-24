@@ -2,15 +2,13 @@
   "name": "benchmark",
   "version": "1.0.0",
   "type": "module",
-  "scripts": {
-    "build": "bun scripts/build.ts",
-    "dev": "bun run build --dev"
-  },
-  "dependencies": {
-    "shared": "workspace:*",
-    "detect-browser": "^5.3.0"
-  },
+  "private": true,
   "devDependencies": {
-    "psytask": "workspace:*"
+    "jspsych": "catalog:",
+    "psytask": "workspace:*",
+    "@psytask/components": "workspace:*",
+    "@psytask/jspsych": "workspace:*",
+    "vanjs-core": "catalog:",
+    "vanjs-ext": "catalog:"
   }
 }

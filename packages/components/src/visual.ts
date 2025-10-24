@@ -1,10 +1,9 @@
-import type { PropertiesHyphen as CSSProperties } from 'csstype';
-import { clamp, ERR, getter_normalize, modify } from 'shared/utils';
 import van from 'vanjs-core';
-import { calc, list, reactive } from 'vanjs-ext';
+import { list, reactive } from 'vanjs-ext';
+import { clamp, ERR, getter_normalize, modify } from 'shared/utils';
+import { Container } from './base';
 import { useDevicePixelRatio, useScreenPhysicalPix } from './hooks';
 import { adapter, css, defaultProps, type MaybeGetter } from './utils';
-import { Container } from './base';
 
 const { canvas, div, input, label, h2, h3, pre, span, button, form } = van.tags;
 

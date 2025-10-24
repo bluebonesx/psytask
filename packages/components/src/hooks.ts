@@ -48,23 +48,15 @@ export const useFetch = (
     return typeof r === 'string' ? { url: r } : r;
   });
   const store = reactive<
-    (
-      | { status: 'waiting'; loading: true }
-      | { status: 'loading'; loading: true; total: number; loaded: number }
-      | { status: 'success'; loading: false; data: Blob }
-      | { status: 'failed'; loading: false; error: Error }
-    ) & {
-      abort: () => void;
-    }
-  >({ status: 'waiting', loading: true, abort: () => ac.abort() });
+    | { status: 'waiting'; loading: true }
+    | { status: 'loading'; loading: true; total: number; loaded: number }
+    | { status: 'success'; loading: false; data: Blob }
+    | { status: 'failed'; loading: false; error: Error }
+  >({ status: 'waiting', loading: true });
 
-  let ac: AbortController;
   van.derive(async () => {
-    ac?.abort();
-    ac = new AbortController();
-
     const opts = options.val;
-    opts.signal = ac.signal;
+    modify(store, { status: 'waiting', loading: true });
 
     try {
       const res = await fetch(opts.url, opts);

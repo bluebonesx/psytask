@@ -18,6 +18,23 @@ export const extend = <T extends {}, U extends object>(
 export const doc = document;
 export const mount = <T extends HTMLElement>(child: T, root = doc.body) =>
   root.appendChild(child);
+export const h = <T extends keyof HTMLElementTagNameMap>(
+  tag: T,
+  props?: Omit<Partial<HTMLElementTagNameMap[T]>, 'style'> & { style?: string },
+): HTMLElementTagNameMap[T] => modify(doc.createElement(tag), props);
+export const loadCss = (url: string) =>
+  new Promise<void>((resolve, reject) =>
+    mount(
+      h('link', {
+        rel: 'stylesheet',
+        href: url,
+        onload: () => resolve(),
+        onerror: () => reject(new Error(`Failed to load CSS: ${url}`)),
+      }),
+      doc.head,
+    ),
+  );
+
 export const hasOwn = <T extends {}, K extends PropertyKey>(
   obj: T,
   key: K,
@@ -25,14 +42,11 @@ export const hasOwn = <T extends {}, K extends PropertyKey>(
   ? T & { [P in K]: unknown }
   : Extract<T, { [P in K]: unknown }> =>
   Object.prototype.hasOwnProperty.call(obj, key);
-export const h = <T extends keyof HTMLElementTagNameMap>(
-  tag: T,
-  props?: Omit<Partial<HTMLElementTagNameMap[T]>, 'style'> & { style?: string },
-): HTMLElementTagNameMap[T] => modify(doc.createElement(tag), props);
 export const clamp = (value: number, min: number, max: number) =>
   value < min ? min : value > max ? max : value;
 export const isObject = (value: unknown) =>
   value != null && typeof value === 'object';
+
 export const map = <T extends object, U>(
   obj: T,
   fn: <K extends keyof T>(value: T[K], key: K) => U,
@@ -44,14 +58,11 @@ export const map = <T extends object, U>(
     }),
     {} as { [K in keyof T]: U },
   );
-export const onError = (cb: (msg: string) => void) => {
-  window.addEventListener('error', ({ message, error }) =>
-    cb(`Error: ${message}\n\n${error?.stack || error}`),
-  );
-  window.addEventListener('unhandledrejection', ({ reason }) =>
-    cb(`Unhandled Rejection: ${reason.stack || reason}`),
-  );
-};
+export const mapValues = <T extends object, U>(
+  obj: T,
+  fn: <K extends keyof T>(value: T[K], key: K) => U,
+) => Object.entries(obj).map(([key, value]) => fn(value, key as keyof T));
+
 export const error_normalize = (err: unknown) =>
   err instanceof Error ? err : Error('' + err);
 export const array_normalize = <T>(e: T | T[]) => (Array.isArray(e) ? e : [e]);
