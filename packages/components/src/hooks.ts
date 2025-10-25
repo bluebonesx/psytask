@@ -1,10 +1,10 @@
-import { type EventEmitter, on } from '@psytask/core';
+import { getCurrentScene, on } from 'psytask';
 import { ERR, error_normalize, modify } from 'shared/utils';
 import van, { type State } from 'vanjs-core';
 import { calc, noreactive, reactive } from 'vanjs-ext';
-import type { MaybeGetter } from './utils';
 
-export const useDevicePixelRatio = (ee: EventEmitter<{}>) => {
+/** {@link devicePixelRatio} */
+export const useDevicePixelRatio = () => {
   const dpr = van.state(devicePixelRatio);
   let cleanup: () => void;
   van.derive(() => {
@@ -15,23 +15,22 @@ export const useDevicePixelRatio = (ee: EventEmitter<{}>) => {
       () => (dpr.val = devicePixelRatio),
     );
   });
-  ee.on('dispose', () => cleanup());
+  getCurrentScene().on('dispose', () => cleanup());
   return dpr;
 };
+/** {@link screen.width} */
 export const useScreenPhysicalPix = (dpr: State<number>) =>
   reactive({
     width: calc(() => screen.width * dpr.val),
     height: calc(() => screen.height * dpr.val),
   });
-export const useWindowPhysicalPix = (
-  dpr: State<number>,
-  ee: EventEmitter<{}>,
-) => {
+/** {@link innerWidth} */
+export const useWindowPhysicalPix = (dpr: State<number>) => {
   const size = reactive({
     width: calc(() => innerWidth * dpr.val),
     height: calc(() => innerHeight * dpr.val),
   });
-  ee.on(
+  getCurrentScene().on(
     'dispose',
     on(window, 'resize', () => {
       size.width = innerWidth * dpr.val;
@@ -40,12 +39,20 @@ export const useWindowPhysicalPix = (
   );
   return size;
 };
+
+type MaybeGetter<T> = T | (() => T);
+/** {@link window.fetch} */
 export const useFetch = (
-  e: MaybeGetter<string | (Parameters<typeof fetch>[1] & { url: string })>,
+  getterOrUrlOrInit: MaybeGetter<
+    string | (Parameters<typeof fetch>[1] & { url: string })
+  >,
 ) => {
   const options = van.derive(() => {
-    const r = typeof e === 'function' ? e() : e;
-    return typeof r === 'string' ? { url: r } : r;
+    const urlOrInit =
+      typeof getterOrUrlOrInit === 'function'
+        ? getterOrUrlOrInit()
+        : getterOrUrlOrInit;
+    return typeof urlOrInit === 'string' ? { url: urlOrInit } : urlOrInit;
   });
   const store = reactive<
     | { status: 'waiting'; loading: true }

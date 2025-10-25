@@ -1,32 +1,38 @@
-import { adapter, Container } from '@psytask/components';
 import { jsPsychStim } from '@psytask/jspsych';
-import { createApp } from 'psytask';
+import { createApp, getCurrentScene, on } from 'psytask';
+import van from 'vanjs-core';
+
+const { div } = van.tags;
 
 using app = await createApp({ alert_on_leave: false });
 using dc = app.collector('n-back.csv').on('add', console.log);
 
 using jspsych = app.scene(jsPsychStim, { defaultProps: {} });
-using simpleText = app.scene(Container, { defaultProps: { content: '' } });
+using simpleText = app.scene(
+  /** @param {{ content: string }} props */
+  (props) => div({ class: 'psytask-container' }, () => props.content),
+  { defaultProps: { content: '' } },
+);
 using stimulus = app.scene(
-  adapter(
-    /** @param {{ letter: string }} props */
-    (props, ctx) => {
-      /** @type {{ has_response: boolean; response_time: number }} */
-      let data;
-      ctx
-        .on('scene:show', () => {
-          data = { has_response: false, response_time: NaN };
-        })
-        .on('pointerup', (e) => {
-          data = { has_response: true, response_time: e.timeStamp };
-        });
+  /** @param {{ letter: string }} props */
+  (props) => {
+    /** @type {{ has_response: boolean; response_time: number }} */
+    let data;
+    const ctx = getCurrentScene();
+    ctx.on('scene:show', () => {
+      data = { has_response: false, response_time: NaN };
 
-      return {
-        node: Container({ content: () => props.letter }, ctx),
-        data: () => data,
-      };
-    },
-  ),
+      const cleanup = on(ctx.root, 'pointerup', (e) => {
+        data = { has_response: true, response_time: e.timeStamp };
+      });
+      ctx.once('scene:close', cleanup);
+    });
+
+    return {
+      node: div({ class: 'psytask-container' }, () => props.letter),
+      data: () => data,
+    };
+  },
   { defaultProps: { letter: '' }, duration: 300 },
 );
 

@@ -1,6 +1,8 @@
 import { EventEmitter } from '@psytask/core';
 import type { LooseObject } from 'shared/types';
-import { ERR, h, mount } from 'shared/utils';
+import { ERR, mount } from 'shared/utils';
+import van from 'vanjs-core';
+import { onPageLeave } from './utils';
 
 export type Serializer<T extends LooseObject = LooseObject> = {
   header: (row: T, rows: T[]) => string;
@@ -36,7 +38,6 @@ const serializers = {
   },
 } satisfies Record<string, Serializer>;
 
-/** Data collector. Collect, serialize and save data. */
 export class Collector<T extends LooseObject> extends EventEmitter<{
   add: T;
   chunk: string;
@@ -65,6 +66,8 @@ export class Collector<T extends LooseObject> extends EventEmitter<{
   #serializer: Serializer<T>;
   #temp = '';
   /**
+   * Collect, serialize and save data.
+   *
    * Built-in supports for CSV and JSON formats. You can extend this by
    * {@link Collector.serializers} or provide `serializer` parameter.
    *
@@ -74,7 +77,11 @@ export class Collector<T extends LooseObject> extends EventEmitter<{
   constructor(
     /** @default `data-${Date.now()}.csv` */
     public readonly filename = `data-${Date.now()}.csv`,
-    serializer?: Serializer<T>,
+    options?: {
+      /** @default true */
+      backup_on_leave?: boolean;
+      serializer?: Serializer<T>;
+    },
   ) {
     super();
 
@@ -83,8 +90,8 @@ export class Collector<T extends LooseObject> extends EventEmitter<{
     const extname = match
       ? match[1]!
       : ERR(`Can't detect extension from "${filename}".`);
-    if (serializer) {
-      this.#serializer = serializer;
+    if (options?.serializer) {
+      this.#serializer = options.serializer;
     } else {
       const extnames = Object.keys(serializers);
       this.#serializer = extnames.includes(extname)
@@ -94,6 +101,15 @@ export class Collector<T extends LooseObject> extends EventEmitter<{
 Or add custom Serializer to Collector.serializers.`,
           );
     }
+
+    // setup backup on leave
+    if (options?.backup_on_leave ?? true) {
+      this.on(
+        'dispose',
+        // backup when the page is hidden
+        onPageLeave(() => this.download(`.${Date.now()}.bak`)),
+      );
+    }
   }
   /**
    * Add a data row. For the default serializer, object fields will be
@@ -102,6 +118,7 @@ Or add custom Serializer to Collector.serializers.`,
    * @returns The total serialized data up to now.
    */
   add(row: T) {
+    //@ts-ignore
     this.emit('add', row); // modify row
     const { rows } = this;
     const chunk =
@@ -136,7 +153,9 @@ Or add custom Serializer to Collector.serializers.`,
     const output = this.final();
     if (!output) return;
     const url = URL.createObjectURL(new Blob([output], { type: 'text/plain' }));
-    const el = mount(h('a', { download: this.filename + suffix, href: url }));
+    const el = mount(
+      van.tags.a({ download: this.filename + suffix, href: url }),
+    );
     el.click();
     URL.revokeObjectURL(url);
     el.remove();

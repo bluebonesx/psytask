@@ -1,6 +1,6 @@
-import { adapter, Container, css, VirtualChinrest } from '@psytask/components';
+import { VirtualChinrest } from '@psytask/components';
 import { jsPsychStim } from '@psytask/jspsych';
-import { createApp, StairCase } from 'psytask';
+import { createApp, css, getCurrentScene, on, StairCase } from 'psytask';
 import van from 'vanjs-core';
 
 const { b, div, span } = van.tags;
@@ -9,7 +9,11 @@ using app = await createApp({ alert_on_leave: false });
 using dc = app.collector('multiple-object-tracking.csv').on('add', console.log);
 
 using jspsych = app.scene(jsPsychStim, { defaultProps: {} });
-using simpleText = app.scene(Container, { defaultProps: { content: '' } });
+using simpleText = app.scene(
+  /** @param {{ content: string }} props */
+  (props) => div({ class: 'psytask-container' }, () => props.content),
+  { defaultProps: { content: '' } },
+);
 using chinrest = app.scene(VirtualChinrest, { defaultProps: {} });
 
 // get task parameters
@@ -66,133 +70,140 @@ const { deg2csspix } = await chinrest.show();
 
 // create objects scene with deg2csspix available
 using objects = app.scene(
-  adapter(
-    /**
-     * @param {{
-     *   speed: number;
-     *   indexes: boolean;
-     *   response: boolean;
-     *   click: boolean;
-     * }} props
-     */
-    (props, ctx) => {
-      const data = {
-        response_indexes: /** @type {Set<number>} */ new Set(),
-        response_time: 0,
-      };
-      const size = van.derive(() => deg2csspix(opts.object_size));
-      const boundary_wh = van.derive(
-        () =>
-          /** @type {const} */ ([
-            window.innerWidth - size.val,
-            window.innerHeight - size.val,
-          ]),
-      );
-      const frame_pix = van.derive(
-        () => deg2csspix(props.speed) * app.data.frame_ms * 1e-3,
-      );
+  /**
+   * @param {{
+   *   speed: number;
+   *   indexes: boolean;
+   *   response: boolean;
+   *   click: boolean;
+   * }} props
+   */
+  (props) => {
+    const data = {
+      response_indexes: /** @type {Set<number>} */ new Set(),
+      response_time: 0,
+    };
+    const size = van.derive(() => deg2csspix(opts.object_size));
+    const boundary_wh = van.derive(
+      () =>
+        /** @type {const} */ ([
+          window.innerWidth - size.val,
+          window.innerHeight - size.val,
+        ]),
+    );
+    const frame_pix = van.derive(
+      () => deg2csspix(props.speed) * app.data.frame_ms * 1e-3,
+    );
 
-      const objSharedStyle = css({
-        position: 'absolute',
-        'border-radius': '50%',
-        'text-align': 'center',
-      });
-      const Obj = /** @param {Number} index */ (index) =>
-        span(
-          {
-            'data-index': index,
-            'data-selected': false,
-            style() {
-              const sizePx = size.val + 'px';
-              return (
-                objSharedStyle +
-                css({ width: sizePx, height: sizePx, 'line-height': sizePx })
-              );
-            },
+    const objSharedStyle = css({
+      position: 'absolute',
+      'border-radius': '50%',
+      'text-align': 'center',
+    });
+    const Obj = /** @param {number} index */ (index) =>
+      span(
+        {
+          'data-index': index,
+          'data-selected': false,
+          style() {
+            const sizePx = size.val + 'px';
+            return (
+              objSharedStyle +
+              css({ width: sizePx, height: sizePx, 'line-height': sizePx })
+            );
           },
-          b({ hidden: () => !props.indexes }, index),
-        );
+        },
+        b({ hidden: () => !props.indexes }, index),
+      );
 
-      const handles = Array.from({ length: opts.object_num }, (_, i) => {
-        const rad = Math.floor(Math.random() * 2 * Math.PI);
-        return {
-          obj: Obj(i),
-          vel: /** @type {[number, number]} */ ([Math.cos(rad), Math.sin(rad)]),
-          pos: /** @type {[number, number]} */ (
-            boundary_wh.val.map((v) => Math.floor(Math.random() * v))
-          ),
-        };
+    const handles = Array.from({ length: opts.object_num }, (_, i) => {
+      const rad = Math.floor(Math.random() * 2 * Math.PI);
+      return {
+        obj: Obj(i),
+        vel: /** @type {[number, number]} */ ([Math.cos(rad), Math.sin(rad)]),
+        pos: /** @type {[number, number]} */ (
+          boundary_wh.val.map((v) => Math.floor(Math.random() * v))
+        ),
+      };
+    });
+
+    const ctx = getCurrentScene();
+    ctx
+      .on('scene:show', () => {
+        data.response_indexes.clear();
+        data.response_time = NaN;
+        handles.map(({ obj }) => (obj.style.backgroundColor = '#000'));
+
+        const cleanups = [
+          on(ctx.root, 'pointerup', (e) => {
+            if (!props.click) return;
+            const el = e.target;
+            if (!el || !(el instanceof HTMLSpanElement)) return;
+            if (el.dataset.selected === 'true') {
+              el.dataset.selected = 'false';
+              el.style.backgroundColor = '#000';
+              data.response_indexes.delete(
+                +(/** @type {string} */ (el.dataset.index)),
+              );
+            } else {
+              el.dataset.selected = 'true';
+              el.style.backgroundColor = '#afa';
+              data.response_indexes.add(
+                +(/** @type {string} */ (el.dataset.index)),
+              );
+            }
+          }),
+          on(ctx.root, 'keydown', (e) => {
+            if (
+              !props.response ||
+              e.key !== ' ' ||
+              (props.click && data.response_indexes.size === 0)
+            )
+              return;
+            data.response_time = e.timeStamp;
+            ctx.close();
+          }),
+        ];
+        ctx.once('scene:close', () => cleanups.map((f) => f()));
+      })
+      .on('scene:frame', () => {
+        for (const handle of handles) {
+          if (frame_pix.val) {
+            const [w, h] = boundary_wh.val;
+
+            if (handle.pos[0] > w) {
+              handle.pos[0] = w;
+              handle.vel[0] *= -1;
+            } else if (handle.pos[0] < 0) {
+              handle.pos[0] = 0;
+              handle.vel[0] *= -1;
+            } else {
+              handle.pos[0] += handle.vel[0] * frame_pix.val;
+            }
+
+            if (handle.pos[1] > h) {
+              handle.pos[1] = h;
+              handle.vel[1] *= -1;
+            } else if (handle.pos[1] < 0) {
+              handle.pos[1] = 0;
+              handle.vel[1] *= -1;
+            } else {
+              handle.pos[1] += handle.vel[1] * frame_pix.val;
+            }
+          }
+          // update position
+          handle.obj.style.transform = `translate(${handle.pos[0]}px, ${handle.pos[1]}px)`;
+        }
       });
 
-      ctx
-        .on('scene:show', () => {
-          data.response_indexes.clear();
-          data.response_time = NaN;
-          handles.map(({ obj }) => (obj.style.backgroundColor = '#000'));
-        })
-        .on('scene:frame', () => {
-          for (const handle of handles) {
-            if (frame_pix.val) {
-              const [w, h] = boundary_wh.val;
-
-              if (handle.pos[0] > w) {
-                handle.pos[0] = w;
-                handle.vel[0] *= -1;
-              } else if (handle.pos[0] < 0) {
-                handle.pos[0] = 0;
-                handle.vel[0] *= -1;
-              } else {
-                handle.pos[0] += handle.vel[0] * frame_pix.val;
-              }
-
-              if (handle.pos[1] > h) {
-                handle.pos[1] = h;
-                handle.vel[1] *= -1;
-              } else if (handle.pos[1] < 0) {
-                handle.pos[1] = 0;
-                handle.vel[1] *= -1;
-              } else {
-                handle.pos[1] += handle.vel[1] * frame_pix.val;
-              }
-            }
-            // update position
-            handle.obj.style.transform = `translate(${handle.pos[0]}px, ${handle.pos[1]}px)`;
-          }
-        })
-        .on('pointerup', (e) => {
-          if (!props.click) return;
-          const el = e.target;
-          if (!el || !(el instanceof HTMLSpanElement)) return;
-          if (el.dataset.selected === 'true') {
-            el.dataset.selected = 'false';
-            el.style.backgroundColor = '#000';
-            data.response_indexes.delete(
-              +(/** @type {string} */ (el.dataset.index)),
-            );
-          } else {
-            el.dataset.selected = 'true';
-            el.style.backgroundColor = '#afa';
-            data.response_indexes.add(
-              +(/** @type {string} */ (el.dataset.index)),
-            );
-          }
-        })
-        .on('key: ', (e) => {
-          if (!props.response) return;
-          if (props.click && data.response_indexes.size === 0) return;
-          data.response_time = e.timeStamp;
-          ctx.close();
-        });
-
-      return {
-        node: div(
-          { style: css({ position: 'relative', color: '#fff' }) },
-          ...handles.map((e) => e.obj),
-        ),
-        data: () => data,
-      };
-    },
-  ),
+    return {
+      node: div(
+        { style: css({ position: 'relative', color: '#fff' }) },
+        ...handles.map((e) => e.obj),
+      ),
+      data: () => data,
+    };
+  },
   {
     defaultProps: {
       speed: 0,

@@ -18,7 +18,7 @@
   "dependencies": {
     "vanjs-core": "catalog:",
     "vanjs-ext": "catalog:",
-    "@psytask/core": "workspace:*"
+    "psytask": "workspace:*"
   },
   "devDependencies": {
     "csstype": "^3.1.3"

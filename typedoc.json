@@ -14,6 +14,8 @@
   "maxTypeConversionDepth": 3,
   "externalSymbolLinkMappings": {
     "typescript": {
+      "devicePixelRatio": "https://developer.mozilla.org/docs/Web/API/Window/devicePixelRatio",
+      "innerWidth": "https://developer.mozilla.org/docs/Web/API/Window/innerWidth",
       "Disposable": "https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Symbol/dispose"
     }
   },

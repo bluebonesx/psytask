@@ -1,6 +1,6 @@
-import { adapter, Container, css, VirtualChinrest } from '@psytask/components';
+import { VirtualChinrest } from '@psytask/components';
 import { jsPsychStim } from '@psytask/jspsych';
-import { createApp, StairCase } from 'psytask';
+import { createApp, getCurrentScene, on, StairCase, css } from 'psytask';
 import van from 'vanjs-core';
 import { list, reactive, replace } from 'vanjs-ext';
 
@@ -10,78 +10,88 @@ using app = await createApp({ alert_on_leave: false });
 using dc = app.collector('visual-short-term-memory.csv').on('add', console.log);
 
 using jspsych = app.scene(jsPsychStim, { defaultProps: {} });
-using simpleText = app.scene(Container, { defaultProps: { content: '' } });
+using simpleText = app.scene(
+  /** @param {{ content: string }} props */
+  (props) => div({ class: 'psytask-container' }, () => props.content),
+  { defaultProps: { content: '' } },
+);
 using chinrest = app.scene(VirtualChinrest, { defaultProps: {} });
 /** @typedef {{ pos: [number, number]; color: string; size: number }} BoxParams */
 using boxes = app.scene(
-  adapter(
-    /** @param {{ params: BoxParams[]; target_index?: number }} props */
-    (props, ctx) => {
-      /** @type {{ response: boolean; response_time: number }} */
-      let data;
-      ctx
-        .on('key:f', (e) => {
+  /** @param {{ params: BoxParams[]; target_index?: number }} props */
+  (props) => {
+    /** @type {{ response: boolean; response_time: number }} */
+    let data;
+    const ctx = getCurrentScene();
+    ctx.on('scene:show', () => {
+      ctx.once(
+        'scene:close',
+        on(ctx.root, 'keydown', (e) => {
           if (props.target_index == null) return;
-          data = { response: true, response_time: e.timeStamp };
-          ctx.close();
-        })
-        .on('key:j', (e) => {
-          if (props.target_index == null) return;
-          data = { response: false, response_time: e.timeStamp };
-          ctx.close();
-        });
-
-      /** @type {BoxParams[]} */
-      const boxParams = reactive([]);
-      van.derive(() => replace(boxParams, props.params));
-
-      const targetParams = van.derive(
-        () => props.target_index != null && props.params[props.target_index],
+          if (e.key === 'f') {
+            data = { response: true, response_time: e.timeStamp };
+            ctx.close();
+            return;
+          }
+          if (e.key === 'j') {
+            data = { response: false, response_time: e.timeStamp };
+            ctx.close();
+            return;
+          }
+        }),
       );
-      return {
-        node: div(
-          div({
-            hidden: () => !targetParams.val,
-            style: () => {
-              const borderSize = 3;
-              const sharedStyle = css({
-                position: 'absolute',
-                border: borderSize + 'px solid #000',
-              });
-              const p = targetParams.val;
-              if (!p) return sharedStyle;
-              const diff = 0.5 * p.size;
-              return (
-                sharedStyle +
+    });
+
+    /** @type {BoxParams[]} */
+    const boxParams = reactive([]);
+    van.derive(() => replace(boxParams, props.params));
+
+    const targetParams = van.derive(
+      () => props.target_index != null && props.params[props.target_index],
+    );
+    return {
+      node: div(
+        div({
+          hidden: () => !targetParams.val,
+          style: () => {
+            const borderSize = 3;
+            const sharedStyle = css({
+              position: 'absolute',
+              border: borderSize + 'px solid #000',
+            });
+            const p = targetParams.val;
+            if (!p) return sharedStyle;
+            const diff = 0.5 * p.size;
+            return (
+              sharedStyle +
+              css({
+                'box-sizing': 'border-box',
+                width: diff + p.size + 'px',
+                height: diff + p.size + 'px',
+                transform: `translate(${p.pos[0] - diff / 2}px, ${p.pos[1] - diff / 2}px)`,
+              })
+            );
+          },
+        }),
+        list(
+          () => div(),
+          boxParams,
+          (p) =>
+            div({
+              style: () =>
                 css({
-                  'box-sizing': 'border-box',
-                  width: diff + p.size + 'px',
-                  height: diff + p.size + 'px',
-                  transform: `translate(${p.pos[0] - diff / 2}px, ${p.pos[1] - diff / 2}px)`,
-                })
-              );
-            },
-          }),
-          list(
-            () => div(),
-            boxParams,
-            (p) =>
-              div({
-                style: () =>
-                  css({
-                    position: 'absolute',
-                    width: `${p.val.size}px`,
-                    height: `${p.val.size}px`,
-                    'background-color': p.val.color,
-                    transform: `translate(${p.val.pos[0]}px, ${p.val.pos[1]}px)`,
-                  }),
-              }),
-          ),
+                  position: 'absolute',
+                  width: `${p.val.size}px`,
+                  height: `${p.val.size}px`,
+                  'background-color': p.val.color,
+                  transform: `translate(${p.val.pos[0]}px, ${p.val.pos[1]}px)`,
+                }),
+            }),
         ),
-        data: () => data,
-      };
-    },
-  ),
+      ),
+      data: () => data,
+    };
+  },
   { defaultProps: { params: [], target_index: void 0 } },
 );
 

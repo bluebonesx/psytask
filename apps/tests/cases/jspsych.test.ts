@@ -1,7 +1,7 @@
 import { jsPsychStim } from '@psytask/jspsych';
 import { createApp } from 'psytask';
-import van from 'vanjs-core';
 import { mount } from 'shared/utils';
+import van from 'vanjs-core';
 
 const { link } = van.tags;
 
@@ -26,13 +26,13 @@ const loadJsPsychPlugin = (name: string) =>
     (mod) => (plugins[name] = mod.default),
   );
 const plugins = new Proxy({} as { [K in string]: Promise<any> }, {
-  get: async (obj, name: string) => (
-    loadJsPsychCss(),
-    (obj[name] ??= await loadJsPsychPlugin(name))
-  ),
+  async get(obj, name: string) {
+    loadJsPsychCss();
+    return (obj[name] ??= await loadJsPsychPlugin(name));
+  },
 });
 
-const survey_text = {
+export const survey_text = {
   async 'basic usage'() {
     using app = await createApp();
     using scene = app.scene(jsPsychStim, {

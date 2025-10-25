@@ -1,17 +1,43 @@
 import {
+  createTimer,
   EventEmitter,
-  on,
+  getCurrentScene,
   Scene,
-  type MaybeGenericSceneSetup,
+  type MaybeGenericComponent,
+  type SceneOptions,
 } from '@psytask/core';
+import { css } from 'shared/macro' with { type: 'macro' };
 import type { LooseObject } from 'shared/types';
-import { doc, ERR, h, modify, mount } from 'shared/utils';
+import { array_normalize, doc, modify, mount } from 'shared/utils';
+import van from 'vanjs-core';
 import { Collector } from './collector';
-import { onPageLeave } from './utils';
+import { adapter, on, onPageLeave } from './utils';
+
+const { div, style } = van.tags;
 
 // import styles
-mount(h('style'), doc.head).textContent =
-  '.psytask-app>.scene{all:unset;position:fixed;inset:0;overflow:hidden;will-change:transform;user-select:none}';
+mount(style(), doc.head).textContent = `.psytask-scene{${css({
+  all: 'unset',
+  position: 'fixed',
+  inset: 0,
+  overflow: 'hidden',
+})}}`;
+
+// extend scene
+type ExtendedSceneEventMap = HTMLElementEventMap & {
+  [K in `mouse:${'left' | 'middle' | 'right' | 'unknown'}`]: MouseEvent;
+} & {
+  [K in `key:${string}`]: KeyboardEvent;
+};
+type ExtendedSceneOptions = {
+  duration?: number;
+  close_on?: keyof ExtendedSceneEventMap | (keyof ExtendedSceneEventMap)[];
+};
+const mouseSuffixs = ['left', 'middle', 'right'] as const;
+const prefix2type: Record<string, keyof HTMLElementEventMap> = {
+  key: 'keydown',
+  mouse: 'mousedown',
+};
 
 export class App<
   T extends { frame_ms: number } = { frame_ms: number },
@@ -57,15 +83,8 @@ export class App<
    */
   collector<T extends LooseObject>(
     ...e: ConstructorParameters<typeof Collector<T>>
-  ) {
-    const dc = new Collector<T>(...e)
-      .on('add', (row) => modify(row, this.data))
-      .on(
-        'dispose',
-        // backup when the page is hidden
-        onPageLeave(() => dc.download(`.${Date.now()}.bak`)),
-      );
-    return dc;
+  ): Collector<T> {
+    return new Collector<T>(...e).on('add', (row) => modify(row, this.data));
   }
   /**
    * Create a scene
@@ -95,24 +114,81 @@ export class App<
    *
    * @see {@link Scene}
    */
-  scene<T extends MaybeGenericSceneSetup>(
-    ...[setup, options]: ConstructorParameters<typeof Scene<T>> extends [
+  scene<T extends MaybeGenericComponent>(
+    ...[component, opts]: ConstructorParameters<typeof Scene<T>> extends [
       infer L,
-      infer R,
+      infer R extends SceneOptions<T>,
     ]
-      ? [L, Omit<R, 'root' | 'frame_ms'>]
+      ? [
+          L,
+          Pick<R, 'defaultProps'> &
+            Partial<Omit<R, 'defaultProps'>> &
+            ExtendedSceneOptions,
+        ]
       : never
   ) {
-    return new Scene<T>(setup, {
-      ...options,
+    const options = {
       root: mount(
-        h('div', {
-          className: 'scene',
+        div({
+          class: 'psytask-scene',
           oncontextmenu: (e) => e.preventDefault(),
         }),
         this.root,
       ),
-      frame_ms: this.data.frame_ms,
+      timer: createTimer(
+        opts.duration == null
+          ? () => false
+          : (records) =>
+              records[records.length - 1]! - records[0]! >
+              opts.duration! - this.data.frame_ms * 1.5,
+      ),
+      adapter,
+      ...opts,
+    };
+    const scene = new Scene<T>(component, options);
+    const close = () => scene.close();
+
+    return modify(scene, {
+      /** Change options one-time */
+      config(patchOptions: Partial<ExtendedSceneOptions>) {
+        modify(opts, patchOptions);
+        return scene.on('scene:close', () => modify(opts, options));
+      },
+    }).on('scene:show', () => {
+      if (typeof opts.close_on === 'undefined') return;
+      const close_ons = array_normalize(opts.close_on);
+      const close_on_set = new Set(close_ons);
+
+      let hasKeyType = 0,
+        hasMouseType = 0;
+      const cleanups = close_ons.map((type) => {
+        const DOM_type =
+          prefix2type[type.split(':', 1)[0]!] ??
+          (type as keyof HTMLElementEventMap);
+        return DOM_type === 'keydown'
+          ? !hasKeyType++ &&
+              on(options.root, DOM_type, (e: KeyboardEvent) => {
+                (close_on_set.has(DOM_type) ||
+                  close_on_set.has(`key:${e.key}`)) &&
+                  close();
+              })
+          : DOM_type === 'mousedown'
+            ? !hasMouseType++ &&
+              on(options.root, DOM_type, (e: MouseEvent) => {
+                (close_on_set.has(DOM_type) ||
+                  close_on_set.has(
+                    `mouse:${mouseSuffixs[e.button] ?? 'unknown'}`,
+                  )) &&
+                  close();
+              })
+            : on(
+                options.root,
+                //@ts-ignore
+                DOM_type,
+                close,
+              );
+      });
+      scene.once('scene:close', () => cleanups.map((fn) => fn && fn()));
     });
   }
 }
@@ -143,7 +219,7 @@ export class App<
  * @see {@link App} {@link App.scene}
  */
 export const createApp = async ({
-  root = h('div'),
+  root = div(),
   alert_on_leave = true,
   i18n = {
     leave_alert_on_fps: "Please DON'T leave the page during the FPS detection!",
@@ -171,45 +247,34 @@ export const createApp = async ({
   /** @default 60 */
   frames_count: number;
 }> = {}) => {
-  root === doc.body && ERR('Cannot use document.body as app root');
   if (!root.isConnected) mount(root);
   root.classList.add('psytask-app');
 
   const { leave_alert_on_fps, leave_alert_on_task, beforeunload_alert } = i18n;
+  const app = new App(root, { frame_ms: 16.67, leave_count: 0 });
 
   // detect fps if not provided
   if (!frame_ms) {
-    const { frame_times } = await new Scene(
-      (p: { count: number; leave_alert: string }, ctx) => {
-        let count = 0;
-        ctx
-          .on('scene:frame', () => {
-            const progress = Math.floor((count++ / p.count) * 100);
-            ctx.root.textContent = `Detect FPS ${progress}%`;
-            progress === 100 && ctx.emit('dispose', null).close();
-          })
-          .on(
-            'scene:close',
-            onPageLeave(() => (alert(p.leave_alert), history.go())),
-          );
-        return [];
-      },
-      {
-        root: mount(
-          h('div', {
-            className: 'scene',
-            style: 'text-align:center;line-height:100dvh;',
-          }),
-          root,
-        ),
-        frame_ms: 16.67,
-        defaultProps: {
-          count: frames_count,
-          leave_alert: leave_alert_on_fps,
+    const { frame_times } = await app
+      .scene(
+        (p: {}) => {
+          let count = 0;
+          const ctx = getCurrentScene();
+          ctx
+            .on('scene:frame', () => {
+              const progress = Math.floor((count++ / frames_count) * 100);
+              ctx.root.textContent = `Detect FPS ${progress}%`;
+              progress === 100 && ctx.emit('dispose').close();
+            })
+            .on(
+              'scene:close',
+              onPageLeave(() => (alert(leave_alert_on_fps), history.go())),
+            );
+          return [];
         },
-        record_frame_times: true,
-      },
-    ).show();
+        { defaultProps: {} },
+      )
+      .show();
     const frame_ms_arr = frame_times
       .map((t, i, arr) => (i > 0 ? t - arr[i - 1]! : 0))
       .slice(1); // first is 0
@@ -221,10 +286,9 @@ export const createApp = async ({
   }
 
   // setup app data
-  const data = { frame_ms, leave_count: 0 };
   const cleanups = alert_on_leave
     ? [
-        onPageLeave(() => alert(leave_alert_on_task! + ++data.leave_count)),
+        onPageLeave(() => alert(leave_alert_on_task! + ++app.data.leave_count)),
         on(
           window,
           'beforeunload',
@@ -232,5 +296,5 @@ export const createApp = async ({
         ),
       ]
     : [];
-  return new App(root, data).on('dispose', () => cleanups.map((fn) => fn()));
+  return app.on('dispose', () => cleanups.map((fn) => fn()));
 };

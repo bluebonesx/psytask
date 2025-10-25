@@ -1,59 +1,59 @@
-import { adapter, Container } from '@psytask/components';
-import { createApp } from 'psytask';
+import { createApp, css, getCurrentScene } from 'psytask';
 import van from 'vanjs-core';
 
 const { button, div, input } = van.tags;
 
 using app = await createApp({ alert_on_leave: false });
-using dc = app.collector('hello-world.csv');
+using dc = app.collector('hello-world.csv', { backup_on_leave: false });
 
 // create scenes
-using simpleText = app.scene(Container, { defaultProps: { content: '' } });
+using simpleText = app.scene(
+  /** @param {{ content: string }} props */
+  (props) => div({ class: 'psytask-container' }, () => props.content),
+  { defaultProps: { content: '' } },
+);
 using question = app.scene(
-  adapter(
-    /** @param {{ placeholder: string }} props */
-    (props, ctx) => {
-      let response_time = NaN;
-      const answer = van.state('');
+  /** @param {{ placeholder: string }} props */
+  (props) => {
+    let response_time = NaN;
+    const answer = van.state('');
+    const ctx = getCurrentScene();
 
-      ctx.on('scene:show', () => {
-        answer.val = ''; // reset answer
-      });
-      return {
-        node: Container(
-          {
-            content: div(
-              { style: 'display:grid;gap:1rem;width:20rem;' },
-              input({
-                type: 'number',
-                value: answer,
-                placeholder: () => props.placeholder,
-                onchange(e) {
-                  response_time = e.timeStamp;
-                  answer.val = e.target.value;
-                },
-              }),
-              button(
-                {
-                  onclick() {
-                    if (answer.val !== '') {
-                      ctx.close();
-                    }
-                  },
-                },
-                'OK',
-              ),
-            ),
+    ctx.on('scene:show', () => {
+      answer.val = ''; // reset answer
+    });
+    return {
+      node: div(
+        {
+          class: 'psytask-container',
+          style: css({ gap: '1rem', width: '20rem' }),
+        },
+        input({
+          type: 'number',
+          value: answer,
+          placeholder: () => props.placeholder,
+          onchange(e) {
+            response_time = e.timeStamp;
+            answer.val = e.target.value;
           },
-          ctx,
-        ),
-        data: () => ({
-          answer: +answer.val, // convert to number
-          response_time,
         }),
-      };
-    },
-  ),
+        button(
+          {
+            onclick() {
+              if (answer.val !== '') {
+                ctx.close();
+              }
+            },
+          },
+          'OK',
+        ),
+      ),
+      data: () => ({
+        answer: +answer.val, // convert to number
+        response_time,
+      }),
+    };
+  },
   { defaultProps: { placeholder: '' } },
 );
 

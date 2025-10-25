@@ -5,10 +5,10 @@
 ![jsDelivr hits (npm)](https://img.shields.io/jsdelivr/npm/hm/psytask)
 
 JavaScript Framework for Psychology tasks.
-Make psychology task development like making PPT.
+Make psychology task development like making PPTs.
 Compatible with the [jsPsych](https://github.com/jspsych/jsPsych) plugins.
 
-Compare to jsPsych, PsyTask has:
+Compared to jsPsych, PsyTask has:
 
 - Easier and more flexible development experiment.
 - Higher time precision.
@@ -54,7 +54,7 @@ via CDN:
 > [!WARNING]
 > PsyTask uses the modern JavaScript [`using` keyword](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Statements/using) for automatic resource cleanup.
 >
-> For CDN usage in old browsers that don't support the `using` keyword, you will see `Uncaught SyntaxError: Unexpected identifier 'app'`. You need to change code:
+> For CDN usage in old browsers that don't support the `using` keyword, you will see `Uncaught SyntaxError: Unexpected identifier 'app'`. You need to change the code:
 >
 > ```js
 > // Instead of: using app = await createApp();
@@ -63,11 +63,11 @@ via CDN:
 > app.emit('dispose'); // Manually clean up when done
 > ```
 >
-> Or, you can use the bundlers (like Vite, Bun, etc.) to transpiled it.
+> Or, you can use the bundlers (like Vite, Bun, etc.) to transpile it.
 
 ## Usage
 
-The psycholoy tasks are just like PPTs, they both have s series of scenes.
+The psychology tasks are just like PPTs, they both have a series of scenes.
 So writing a psychology task only requires 2 steps:
 
 1. create scene
@@ -90,13 +90,9 @@ using simpleText = app.scene(
 );
 ```
 
-Most of the time, you need to write the scene yourself:
+Most of the time, you need to write the scene yourself, see [setup scene](#setup-scene):
 
 ```js
-import van from 'vanjs-core';
-
-const { div } = van.tags;
-
 using scene = app.scene(
   /** @param {{ text: string }} props */
   (props, ctx) => {
@@ -106,7 +102,7 @@ using scene = app.scene(
 
     ctx
       .on('scene:show', (newProps) => {
-        // Reset data when scene shows
+        // Reset data when the scene shows
         data = { response_key: '', response_time: 0 };
         // update DOM
         node.textContent = newProps.text;
@@ -136,6 +132,9 @@ using scene = app.scene(
   },
 );
 ```
+
+> [!TIP]
+> use [JSDoc Comment](https://www.typescriptlang.org/docs/handbook/jsdoc-supported-types.html) to get type hint in JavaScript.
 
 ### Show Scene
 
@@ -207,10 +206,10 @@ dc.download(); // download file
 
 ### [jsPsych](https://www.jspsych.org)
 
-Install packages:
+Add packages:
 
 ```bash
-npm i psytask @psytask/jspsych @jspsych/plugin-cloze
+npm i @psytask/jspsych @jspsych/plugin-cloze
 npm i -d jspsych # for type hint
 ```
 
@@ -234,8 +233,8 @@ Or using CDN:
 </script>
 ```
 
-> ![NOTE]
-> For CDNer, you should add `+esm` after jspsych plugin CDN url, because jspsych plugins do not release ESM version.
+> [!IMPORTANT]
+> For CDNer, you should add the `+esm` after the jspsych plugin CDN URL, because jspsych plugins do not release ESM versions.
 
 Then use it:
 
@@ -253,7 +252,7 @@ const data = await jspsych.show({
 
 ### [JATOS](https://www.jatos.org/)
 
-See [offical docs](https://www.jatos.org/Submit-and-upload-data-to-the-server.html)
+See [official docs](https://www.jatos.org/Submit-and-upload-data-to-the-server.html)
 
 ```html
 <script src="jatos.js"></script>
@@ -268,3 +267,112 @@ using dc = app.collector().on('add', (row) => {
   jatos.appendResultData(row);
 });
 ```
+
+## Learn more
+
+So, how it works.
+
+### Setup Scene
+
+To create a scene, we need a setup function
+that inputs **Props** and **Context**,
+and outputs a object includes **Node** and **Data Getter**:
+
+```js
+const setup = (props, ctx) => ({
+  node: '',
+  data: () => ({}),
+});
+using scene = app.scene(setup);
+```
+
+- **Props** means show params that control the display of the scene.
+- **Context** is the current scene itself,
+  which is usually used to add [event](https://bluebonesx.github.io/psytask/types/_psytask_core.SceneEventMap.html) listeners.
+- **Node** is the string or element which be mounted to the scene root element.
+- **Data Getter** is used to get generated data for each show.
+
+If you don't want to generate any data, just return **Node**:
+
+```js
+const setup = (props, ctx) => '';
+```
+
+> [!CAUTION]
+> You shouldn't modify props, as it may change the default props.
+>
+> If you don't know whether you modify the default props, try to recursively [freeze](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/freeze) all its properties:
+>
+> ```js
+> const recurFreeze =
+>   /**
+>    * @template {object} T
+>    * @param {T} obj
+>    * @returns {T}
+>    */
+>   (obj) => {
+>     for (const v of Object.values(obj))
+>       v != null && typeof v === 'object' && recurFreeze(v);
+>     return Object.freeze(obj);
+>   };
+> const createProps =
+>   /**
+>    * @template {object} T
+>    * @param {T} obj
+>    * @returns {T}
+>    */
+>   (obj) => Object.create(recurFreeze(obj));
+>
+> using scene = app.scene(
+>   /**
+>    * @param {{
+>    *   a: string;
+>    *   b: number[];
+>    *   c: { d: string[] };
+>    * }} props
+>    */
+>   (props) => '',
+>   {
+>     defaultProps: createProps({
+>       a: '',
+>       b: [],
+>       c: { d: [] },
+>     }),
+>   },
+> );
+> ```
+
+### Update DOM
+
+When you create a scene, the setup function will be called with the default **Props**, then the **Node** will be mounted. So if you want to update **Node** in each show, you should listen `scene:show` event:
+
+```js
+const setup = (props, ctx) => {
+  const node = document.createElement('div');
+  ctx.on('scene:show', (newProps) => {
+    node.textContent = newProps.text;
+  });
+  return node;
+};
+```
+
+Or, you can use [VanJS](https://vanjs.org) power via `adapter`, which provides [reactivity](#reactivity) update:
+
+```js
+import { adapter } from '@psytask/components';
+import van from 'vanjs-core';
+
+const { div } = van.tags;
+const setup = adapter((props, ctx) => div(() => props.text));
+```
+
+### Show
+
+```mermaid
+graph TD
+scene:show --> b[show & focus root<br>add listeners to root] --> d[wait timer] --> scene:frame --> d --> e[hide root] --> scene:close
+```
+
+### Reactivity
+
+Stay tuned...

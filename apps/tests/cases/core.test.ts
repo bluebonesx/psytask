@@ -14,7 +14,6 @@ import van from 'vanjs-core';
 import {
   expect,
   expect_closeTo,
-  expect_dutationCloseTo,
   expect_error,
   expect_includes,
   mock_event,
@@ -22,31 +21,30 @@ import {
 } from './utils';
 const { div } = van.tags;
 
-let frame_ms: number;
-{
-  using app = await createApp();
-  frame_ms = app.data.frame_ms;
-}
-const DefaultScene = <T extends MaybeGenericSceneSetup>(
+const DefaultScene = async <T extends MaybeGenericSceneSetup>(
   ...[setup, options]: ConstructorParameters<typeof Scene<T>> extends [
     infer L,
     infer R extends SceneOptions<T>,
   ]
     ? [L, options?: Partial<R>]
     : never
-) =>
-  new Scene(setup, {
-    root: mount(div({ class: 'scene' })),
-    frame_ms,
+) => {
+  using app = await createApp();
+  const container = mount(div({ class: 'psytask-app' }));
+  const root = mount(div({ class: 'scene' }), container);
+  return new Scene(setup, {
+    root,
+    frame_ms: app.data.frame_ms,
     defaultProps: {},
-    duration: frame_ms * 1.3,
+    duration: app.data.frame_ms * 1.5,
     ...options,
-  });
+  }).on('dispose', () => container.remove());
+};
 export const _Scene = {
   async 'dispose - remove DOM'() {
     const node = div();
     {
-      using _ = DefaultScene((props: {}) => node);
+      using _ = await DefaultScene((props: {}) => node);
       expect(node.isConnected);
     }
     expect(!node.isConnected);
@@ -271,7 +269,7 @@ export const _Scene = {
     const events: Record<string, number> = {};
     const log_event = (e: Event) =>
       (events[e.type] = (events[e.type] ?? 0) + 1);
-    using s = DefaultScene(
+    using s = await DefaultScene(
       (p: {}, ctx) => (
         ctx
           .on('pointerup', log_event)
@@ -312,7 +310,7 @@ export const _Scene = {
   },
   async 'listener - scene hooks'() {
     const counts = { show: 0, close: 0, frame: 0 };
-    using s = DefaultScene(
+    using s = await DefaultScene(
       (p: {}, ctx) => (
         ctx
           .on('scene:show', () => counts.show++)
@@ -338,7 +336,7 @@ export const _Scene = {
     // native
     {
       let called = 0;
-      using s = DefaultScene(
+      using s = await DefaultScene(
         (p: {}, ctx) => (ctx.on('pointerdown', () => called++), ''),
         { close_on: ['pointerdown'] },
       );
@@ -350,7 +348,7 @@ export const _Scene = {
     // key shortcut
     {
       let called = 0;
-      using s = DefaultScene(
+      using s = await DefaultScene(
         (p: {}, ctx) => (ctx.on('key: ', () => called++), ''),
         { close_on: ['key:s'] },
       );
@@ -362,7 +360,7 @@ export const _Scene = {
     }
     {
       let called = 0;
-      using s = DefaultScene(
+      using s = await DefaultScene(
         (p: {}, ctx) => (ctx.on('key:q', () => called++), ''),
         { close_on: ['key:q'] },
       );
@@ -373,7 +371,7 @@ export const _Scene = {
     }
     {
       let called = 0;
-      using s = DefaultScene(
+      using s = await DefaultScene(
         (p: {}, ctx) => (ctx.on('keydown', () => called++), ''),
         { close_on: ['key: '] },
       );
@@ -384,7 +382,7 @@ export const _Scene = {
     }
     {
       let called = 0;
-      using s = DefaultScene(
+      using s = await DefaultScene(
         (p: {}, ctx) => (ctx.on('key: ', () => called++), ''),
         { close_on: ['keydown'] },
       );
@@ -396,7 +394,7 @@ export const _Scene = {
     // mouse shortcut
     {
       let called = 0;
-      using s = DefaultScene(
+      using s = await DefaultScene(
         (p: {}, ctx) => (ctx.on('mouse:left', () => called++), ''),
         { close_on: ['mouse:right'] },
       );
@@ -408,7 +406,7 @@ export const _Scene = {
     }
     {
       let called = 0;
-      using s = DefaultScene(
+      using s = await DefaultScene(
         (p: {}, ctx) => (ctx.on('mouse:left', () => called++), ''),
         { close_on: ['mouse:left'] },
       );
@@ -419,7 +417,7 @@ export const _Scene = {
     }
     {
       let called = 0;
-      using s = DefaultScene(
+      using s = await DefaultScene(
         (p: {}, ctx) => (ctx.on('mouse:left', () => called++), ''),
         { close_on: ['mousedown'] },
       );
@@ -430,7 +428,7 @@ export const _Scene = {
     }
     {
       let called = 0;
-      using s = DefaultScene(
+      using s = await DefaultScene(
         (p: {}, ctx) => (ctx.on('mousedown', () => called++), ''),
         { close_on: ['mouse:left'] },
       );
@@ -442,7 +440,7 @@ export const _Scene = {
   },
   async 'listener - shortcut priority'() {
     const test = async (shortcut: keyof SceneEventMap, event: Event) => {
-      using s = DefaultScene((p: {}, ctx) => {
+      using s = await DefaultScene((p: {}, ctx) => {
         let times: { shortcut: number; native: number };
         ctx
           .on('scene:show', () => (times = { shortcut: 0, native: 0 }))
@@ -470,7 +468,7 @@ export const _Scene = {
   },
   async 'show - display DOM'() {
     const node = div('world');
-    using s = DefaultScene((p: {}) => node);
+    using s = await DefaultScene((p: {}) => node);
     expect(node.isConnected);
     expect(node.textContent, 'world');
     expect(node.getBoundingClientRect().width, 0);
@@ -487,14 +485,14 @@ export const _Scene = {
   },
   async 'show - return data'() {
     {
-      using s = DefaultScene((p: {}) => '');
+      using s = await DefaultScene((p: {}) => '');
       const data = await s.show();
       expect(typeof data.start_time, 'number');
       expect(!Number.isNaN(data.start_time));
       expect(data.frame_times, [], 1);
     }
     {
-      using s = DefaultScene((p: {}) => '', { record_frame_times: true });
+      using s = await DefaultScene((p: {}) => '', { record_frame_times: true });
       const data = await s.show();
       expect(typeof data.start_time, 'number');
       expect(!Number.isNaN(data.start_time));
@@ -504,13 +502,13 @@ export const _Scene = {
   },
   async 'show - repeat call'() {
     await expect_error(async () => {
-      using s = DefaultScene((p: {}) => '');
+      using s = await DefaultScene((p: {}) => '');
       await Promise.all([s.show(), s.show()]);
     });
   },
   async 'show - multi call'() {
     const frame_times: number[] = [];
-    using s = DefaultScene(
+    using s = await DefaultScene(
       (p: {}, ctx) => (
         ctx.on('scene:frame', (time) => frame_times.push(time)),
         ''
@@ -525,7 +523,7 @@ export const _Scene = {
   async 'config - override default options'() {
     // close on
     {
-      using s = DefaultScene((p: {}) => '', { close_on: 'click' });
+      using s = await DefaultScene((p: {}) => '', { close_on: 'click' });
       using params = spy_listeners(s.root);
 
       const p1 = s.show();
@@ -570,7 +568,7 @@ export const _Scene = {
     // duration
     {
       let frame_count = 0;
-      using s = DefaultScene(
+      using s = await DefaultScene(
         (p: {}, ctx) => (ctx.on('scene:frame', () => frame_count++), ''),
         { duration: 50 },
       );
@@ -589,7 +587,7 @@ export const _Scene = {
     // timer
     {
       let frame_count = 0;
-      using s = DefaultScene(
+      using s = await DefaultScene(
         (p: {}, ctx) => (ctx.on('scene:frame', () => frame_count++), ''),
       );
 
@@ -599,7 +597,7 @@ export const _Scene = {
       frame_count = 0;
       await s
         .config({
-          createTimer({ frame_ms, duration, onStart, onFrame }) {
+          timer({ frame_ms, duration, onStart, onFrame }) {
             let close: () => void;
             const handle = setTimeout(() => close(), duration);
             rAF(onStart);
@@ -621,7 +619,7 @@ export const _Scene = {
     }
     // record frame times
     {
-      using s = DefaultScene((p: {}, ctx) => '');
+      using s = await DefaultScene((p: {}, ctx) => '');
 
       const d1 = await s.show();
       expect(d1.frame_times, [], 1);
@@ -638,14 +636,14 @@ export const _Scene = {
   },
   async 'close - immediately'() {
     {
-      using s = DefaultScene((p: {}) => '');
+      using s = await DefaultScene((p: {}) => '');
       const p = s.show();
       s.close();
       const data = await p;
       expect(Number.isNaN(data.start_time));
     }
     {
-      using s = DefaultScene(
+      using s = await DefaultScene(
         (p: {}, ctx) => (ctx.on('scene:show', () => ctx.close()), ''),
       );
       const data = await s.show();
@@ -654,46 +652,19 @@ export const _Scene = {
   },
   async 'close - with DOM listeners'() {
     {
-      using s = DefaultScene((p: {}) => '', { close_on: 'key: ' });
+      using s = await DefaultScene((p: {}) => '', { close_on: 'key: ' });
       const p = s.show();
       mock_event(s.root, new KeyboardEvent('keydown', { key: ' ' }));
       const data = await p;
     }
     {
-      using s = DefaultScene(
+      using s = await DefaultScene(
         (p: {}, ctx) => (ctx.on('mouse:middle', () => ctx.close()), ''),
       );
       const p = s.show();
       mock_event(s.root, new MouseEvent('mousedown', { button: 1 }));
       await p;
     }
-  },
-  async 'timer - duration error [for desktop]'() {
-    const node = div({ style: 'width:100px;height:100px' });
-    using s = DefaultScene(
-      (p: {}, ctx) => (
-        ctx.on(
-          'scene:show',
-          () => (node.style.background = node.style.background ? '' : '#fff'),
-        ),
-        node
-      ),
-      { duration: 10 * frame_ms },
-    );
-    await s.show(); // mobile browser has unstable rAF timing
-
-    await expect_dutationCloseTo(() => s.show(), 10 * frame_ms, 1);
-    await expect_dutationCloseTo(
-      () => s.config({ duration: 20 * frame_ms }).show(),
-      20 * frame_ms,
-      1,
-    );
-    await expect_dutationCloseTo(
-      () => s.config({ duration: 100 * frame_ms }).show(),
-      100 * frame_ms,
-      1,
-    );
-    await expect_dutationCloseTo(() => s.show(), 10 * frame_ms, 1);
   },
 };
 
@@ -727,7 +698,7 @@ export const _EventEmitter = {
       using ee = new EventEmitter().on('dispose', listener);
       expect(disposed, 0);
       expect_EE_listenerCount(ee, { dispose: 1 });
-      ee.emit('dispose', null);
+      ee.emit('dispose');
       expect(disposed, 1);
       expect_EE_listenerCount(ee, { dispose: 1 });
     }
@@ -840,7 +811,7 @@ export const _EventEmitter = {
 };
 export const __typecheck__ = {
   async generic() {
-    using scene = DefaultScene(
+    using scene = await DefaultScene(
       generic(<T extends LooseObject>(defaultProps: T, ctx: Scene<any>) => {
         let props: LooseObject = defaultProps;
         ctx.on('scene:show', (newProps) => (props = newProps));

@@ -125,17 +125,17 @@ const store = reactive({
     <script type="importmap">${JSON.stringify({
       imports: map(JSON.parse(files.ImportMap), (v) => v.import),
     })}</script>
+    <style>${files.CSS}</style>
   </head>
   <body style="white-space:pre-wrap;font-family:monospace;">
-    <style>${files.CSS}</style>   
-    <script type="module">${files.JavaScript}</script>
-  </body>
-  <script>
+    <script>
 const root = document.body.appendChild(document.createElement('p'));
 root.style = 'color:red';
 window.onerror = (error) => root.textContent += \`===\n\${error.stack ?? error}\n\n\`;
 window.onunhandledrejection = ({ reason }) => root.textContent += \`===\n\${reason.stack ?? reason}\n\n\`;
-  </script>
+    </script>
+    <script type="module">${files.JavaScript}</script>
+  </body>
 </html>`,
             ],
             { type: 'text/html' },

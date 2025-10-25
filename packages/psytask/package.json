@@ -30,6 +30,8 @@
     "url": "https://github.com/bluebonesx/psytask.git"
   },
   "dependencies": {
-    "@psytask/core": "workspace:*"
+    "@psytask/core": "workspace:*",
+    "vanjs-core": "^1.6.0",
+    "vanjs-ext": "^0.6.3"
   }
 }

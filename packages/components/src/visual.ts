@@ -1,11 +1,13 @@
+import { adapter, defaultProps, getCurrentScene, on, Scene } from 'psytask';
+import { css as css$ } from 'shared/macro' with { type: 'macro' };
+import { css } from 'shared/macro';
+import type { LooseObject } from 'shared/types';
+import { clamp, ERR, modify, mount } from 'shared/utils';
 import van from 'vanjs-core';
-import { list, reactive } from 'vanjs-ext';
-import { clamp, ERR, getter_normalize, modify } from 'shared/utils';
-import { Container } from './base';
+import { calc, list, reactive } from 'vanjs-ext';
 import { useDevicePixelRatio, useScreenPhysicalPix } from './hooks';
-import { adapter, css, defaultProps, type MaybeGetter } from './utils';
 
-const { canvas, div, input, label, h2, h3, pre, span, button, form } = van.tags;
+const { canvas, div, input, label, h2, span, button, form } = van.tags;
 
 /**
  * Image stimulus for displaying images or custom canvas drawings
@@ -40,27 +42,27 @@ const { canvas, div, input, label, h2, h3, pre, span, button, form } = van.tags;
  * });
  * ```
  */
-export const ImageStim = adapter(
+export const ImageStim = adapter.define(
   (props: {
-    image?: MaybeGetter<ImageBitmap | ImageData>;
+    image?: ImageBitmap | ImageData;
     draw?(ctx: CanvasRenderingContext2D): void;
   }) => {
     const el = canvas();
-    const ctx = el.getContext('2d');
-    if (!ctx) return ERR('Failed to get canvas 2d context');
+    const canvasContext = el.getContext('2d');
+    if (!canvasContext) return ERR('Failed to get canvas 2d context');
 
     van.derive(() => {
-      ctx.clearRect(0, 0, el.width, el.height);
+      canvasContext.clearRect(0, 0, el.width, el.height);
 
-      const image = getter_normalize(props.image);
+      const image = props.image;
       if (image) {
         [el.width, el.height] = [image.width, image.height];
         image instanceof ImageData
-          ? ctx.putImageData(image, 0, 0)
-          : ctx.drawImage(image, 0, 0);
+          ? canvasContext.putImageData(image, 0, 0)
+          : canvasContext.drawImage(image, 0, 0);
       }
 
-      props.draw?.(ctx);
+      props.draw?.(canvasContext);
     });
 
     return el;
@@ -112,29 +114,26 @@ const waves = {
  * });
  * ```
  */
-export const Grating = adapter(
-  (
-    props: {
-      /**
-       * Wave type or wave function that convert radians (-Inf, Inf) to
-       * amplitude [-1, 1]
-       */
-      type: keyof typeof waves | Wave;
-      /** Width or [width, height] (in pixels) */
-      size: number | [number, number];
-      /** Spatial frequency (cycles per pixel) */
-      sf: number;
-      /** Orientation (in radians) */
-      ori?: number;
-      /** Phase (in radians) */
-      phase?: number;
-      /** Color or [color, color] (RGB255 values) */
-      color?: RGB255 | [RGB255, RGB255];
-      /** Convert coordinates [-1, 1] to opacity [0, 1] */
-      mask?: Mask;
-    },
-    ctx,
-  ) => {
+export const Grating = adapter.define(
+  (props: {
+    /**
+     * Wave type or wave function that convert radians (-Inf, Inf) to amplitude
+     * [-1, 1]
+     */
+    type: keyof typeof waves | Wave;
+    /** Width or [width, height] (in pixels) */
+    size: number | [number, number];
+    /** Spatial frequency (cycles per pixel) */
+    sf: number;
+    /** Orientation (in radians) */
+    ori?: number;
+    /** Phase (in radians) */
+    phase?: number;
+    /** Color or [color, color] (RGB255 values) */
+    color?: RGB255 | [RGB255, RGB255];
+    /** Convert coordinates [-1, 1] to opacity [0, 1] */
+    mask?: Mask;
+  }) => {
     const image = () => {
       const p = { ori: 0, phase: 0, color: [0, 0, 0] as const, ...props };
       const [w, h] = typeof p.size === 'number' ? [p.size, p.size] : p.size;
@@ -180,10 +179,295 @@ export const Grating = adapter(
 
       return imageData;
     };
-    return ImageStim({ image }, ctx);
+    return ImageStim({ image: calc(image) });
   },
 );
 // TODO: Noise
+
+const NumberField = <T extends LooseObject, K extends string & keyof T>(props: {
+  label: () => string;
+  model: T;
+  key: K;
+}) =>
+  div(
+    label({ for: props.key }, props.label),
+    input({
+      id: props.key,
+      type: 'number',
+      min: '1',
+      step: 'any',
+      required: true,
+      value: () => props.model[props.key],
+      onchange(e) {
+        const val = +(e.target as HTMLInputElement).value;
+        //@ts-ignore
+        if (!Number.isNaN(val)) props.model[props.key] = val;
+        else console.warn(`Invalid ${props.key}:`, e);
+      },
+    }),
+  );
+const Triangles = (color: string, size = 6) =>
+  [1, 0].map((isUp) =>
+    div({
+      style:
+        css$({
+          position: 'absolute',
+          width: '0',
+          height: '0',
+          'border-style': 'solid',
+        }) +
+        css({
+          left: `${-(size - 0.5)}px`,
+          'border-width': isUp
+            ? `0 ${size}px ${size}px ${size}px`
+            : `${size}px ${size}px 0 ${size}px`,
+          'border-color': isUp
+            ? `transparent transparent ${color} transparent`
+            : `${color} transparent transparent transparent`,
+          [isUp ? 'bottom' : 'top']: `${-(size - 0.5)}px`,
+        }),
+    }),
+  );
+
+export const ScreenWidthDetector = adapter.define(
+  (props: {
+    line_distance_pix?: number;
+    i18n?: Record<
+      'title' | 'text' | 'ok' | 'line_distance' | 'screen_width',
+      string
+    >;
+  }) => {
+    const p = defaultProps(props, {
+      line_distance_pix: Math.floor(innerWidth / 2),
+      i18n: {
+        title: 'Screen Width Calibration',
+        text: `Move the red line so that the line distance equals the width of a credit card (8.56 cm).
+Or, you can input the line distance by measuring it yourself.
+Or, you can input your screen width directly if you know it.`,
+        ok: 'OK',
+        line_distance: 'Line Distance',
+        screen_width: 'Screen Width',
+      },
+    });
+    const state = reactive({
+      line_distance_pix: p.line_distance_pix,
+      line_distance_cm: 8.56, // fixed by user
+      screen_width_cm: 0, // derived
+      pix_per_cm: 0,
+    });
+    const dpr = useDevicePixelRatio();
+    const screen_pix = useScreenPhysicalPix(dpr);
+    van.derive(
+      () =>
+        (state.pix_per_cm = state.line_distance_pix / state.line_distance_cm),
+    );
+    // van.derive(
+    //   () => (state.line_distance_cm = state.line_distance_pix / state.pix_per_cm),
+    // );
+    van.derive(
+      () => (state.pix_per_cm = screen_pix.width / state.screen_width_cm),
+    );
+    van.derive(
+      () => (state.screen_width_cm = screen_pix.width / state.pix_per_cm),
+    );
+
+    const left = 32;
+    const height = '10rem';
+    const sharedStyle =
+      css$({ position: 'absolute', width: '1px' }) + css({ height });
+
+    const fixed = div(
+      {
+        style:
+          sharedStyle +
+          css$({ background: '#000' }) +
+          css({ left: left + 'px' }),
+      },
+      ...Triangles('#000'),
+    );
+
+    let sx = 0; // start x, no drag if 0
+    const ctx = getCurrentScene();
+    ctx.on('scene:show', () => {
+      const cleanups = [
+        on(ctx.root, 'pointerup', (e) => (sx = 0)),
+        on(
+          ctx.root,
+          'pointermove',
+          (e) => sx && (state.line_distance_pix = (e.clientX - sx) * dpr.val),
+        ),
+      ];
+      ctx.once('scene:close', () => cleanups.map((fn) => fn()));
+    });
+
+    return {
+      node: form(
+        { class: 'psytask-container', onsubmit: () => ctx.close() },
+        h2(() => p.i18n.title),
+        span(() => p.i18n.text),
+        div(
+          div(
+            { style: css$({ margin: '2rem' }) + css({ height }) },
+            // fixed line
+            fixed,
+            // movable line
+            div(
+              {
+                style: () =>
+                  sharedStyle +
+                  css$({ cursor: 'ew-resize', background: 'red' }) +
+                  css({
+                    left: left + state.line_distance_pix / dpr.val + 'px',
+                  }),
+                onpointerdown: (e) =>
+                  (sx = Math.floor(fixed.getBoundingClientRect().x)),
+              },
+              ...Triangles('red'),
+            ),
+          ),
+          div(
+            () => p.i18n.line_distance + ' (pix): ' + state.line_distance_pix,
+          ),
+          NumberField({
+            label: () => p.i18n.line_distance + ' (cm): ',
+            model: state,
+            key: 'line_distance_cm',
+          }),
+          NumberField({
+            label: () => p.i18n.screen_width + ' (cm): ',
+            model: state,
+            key: 'screen_width_cm',
+          }),
+        ),
+        button(
+          {
+            type: 'submit',
+            style: css$({ width: '100%', 'margin-top': '0.5rem' }),
+          },
+          () => p.i18n.ok,
+        ),
+      ),
+      data: () => state,
+    };
+  },
+);
+export const ViewDistanceDetector = adapter.define(
+  (props: {
+    pix_per_cm: number;
+    blindspotDegree?: number;
+    i18n?: Record<'title' | 'text' | 'ok' | 'view_distance', string>;
+  }) => {
+    const p = defaultProps(props, {
+      blindspotDegree: 13.5,
+      i18n: {
+        title: 'View Distance Calibration',
+        text: `Close right eye, focus left eye on the black square, keep head still.
+Click the black square to move the red circle to the left.
+Click again when the red circle disappears.`,
+        ok: 'OK',
+        view_distance: 'View Distance',
+      },
+    });
+    const state = reactive({
+      move_width_pix: 0,
+      move_widths: [] as { pix: number; cm: number }[],
+      distance_cm: 0,
+    });
+    const dpr = useDevicePixelRatio();
+    van.derive(() => {
+      const { move_widths } = state;
+      const move_width_cm =
+        move_widths.length &&
+        move_widths.reduce((a, b) => a + b.cm, 0) / move_widths.length;
+      state.distance_cm =
+        move_width_cm / 2 / Math.tan((p.blindspotDegree / 2) * (Math.PI / 180));
+    });
+
+    const obj_radius = 12;
+    const dot_radius = 2;
+    const right = 32;
+
+    const isMoving = van.state<0 | 1>(0);
+    const ctx = getCurrentScene();
+    ctx.on('scene:frame', () => isMoving.val && (state.move_width_pix += 1));
+
+    return {
+      node: form(
+        {
+          class: 'psytask-container',
+          onsubmit: () => ctx.close(),
+        },
+        h2(() => p.i18n.title),
+        span(() => p.i18n.text),
+        div(
+          div(
+            {
+              style:
+                css$({ margin: '2rem' }) +
+                css({ height: 2 * obj_radius + 'px' }),
+            },
+            // fixed obj
+            div({
+              style:
+                css$({ position: 'absolute', cursor: 'pointer' }) +
+                css({
+                  border: `#000 solid ${obj_radius}px`,
+                  right: right + 'px',
+                }),
+              onpointerup() {
+                if ((isMoving.val ^= 1)) return; // toggle
+                // reset
+                const pix = state.move_width_pix;
+                state.move_widths.push({ pix, cm: pix / p.pix_per_cm });
+                state.move_width_pix = 0;
+              },
+            }),
+            // movable obj
+            div({
+              style: () =>
+                css$({ position: 'absolute', 'border-radius': '50%' }) +
+                css({
+                  border: `red solid ${obj_radius}px`,
+                  right:
+                    right +
+                    obj_radius * 2 +
+                    state.move_width_pix / dpr.val +
+                    'px',
+                }),
+            }),
+            // dots
+            list(div, state.move_widths, (info) =>
+              span({
+                title: () => info.val.cm + ' cm',
+                style: () =>
+                  css$({ position: 'absolute', 'border-radius': '50%' }) +
+                  css({
+                    border: `red solid ${dot_radius}px`,
+                    right: right + obj_radius * 2 + 'px',
+                    transform: `translate(-${info.val.pix / dpr.val}px, calc(${obj_radius}px - 50%))`,
+                  }),
+                hidden: isMoving,
+              }),
+            ),
+          ),
+          NumberField({
+            label: () => p.i18n.view_distance + ' (cm): ',
+            model: state,
+            key: 'distance_cm',
+          }),
+        ),
+        button(
+          {
+            type: 'submit',
+            style: css$({ width: '100%', 'margin-top': '0.5rem' }),
+          },
+          () => p.i18n.ok,
+        ),
+      ),
+      data: () => state,
+    };
+  },
+);
 
 /**
  * Virtual chinrest for acquiring screen physical width and distance.
@@ -203,20 +487,24 @@ export const Grating = adapter(
  *   await chinrest.show();
  * ```
  */
-export const VirtualChinrest = adapter(
-  (
-    _props: {
+export const VirtualChinrest = modify(
+  adapter.define(
+    (props: {
       /** Internationalization strings */
-      i18n?: {
-        confirmation: string;
-        yes: string;
-        no: string;
-        screen_width: string;
-        line_distance: string;
-        view_distance: string;
-        screen_width_guide: string;
-        view_distance_guide: string;
-      };
+      i18n?: Record<
+        | 'confirmation'
+        | 'yes'
+        | 'no'
+        | 'ok'
+        | 'line_distance'
+        | 'screen_width'
+        | 'screen_width_title'
+        | 'screen_width_text'
+        | 'view_distance'
+        | 'view_distance_title'
+        | 'view_distance_text',
+        string
+      >;
       /** Blindspot degree @default 13.5 */
       blindspotDegree?: number;
       /**
@@ -224,353 +512,118 @@ export const VirtualChinrest = adapter(
        * confirmation scene.
        */
       usePreviousData?: boolean;
-    },
-    ctx,
-  ) => {
-    const state = reactive({
-      // screen width
-      line_distance_pix: Math.floor(innerWidth / 2),
-      line_distance_cm: 8.56, // fixed by user
-      screen_width_cm: 0, // derived
-      pix_per_cm: 0,
-      // view distance
-      move_width_pix: 0,
-      move_widths: [] as { pix: number; cm: number }[],
-      distance_cm: 0,
-    });
-    const props = defaultProps(_props, {
-      i18n: {
-        confirmation: 'Use previous chinrest data?',
-        yes: 'Yes',
-        no: 'No',
-        screen_width: 'Screen Width',
-        line_distance: 'Line Distance',
-        view_distance: 'View Distance',
-        screen_width_guide: `Move the red line so that the line distance equals the width of a credit card (${state.line_distance_cm} cm).
-Or, you can input the line distance by measuring it yourself.
-Or, you can input your screen width directly if you know it.`,
-        view_distance_guide: `Close right eye, focus left eye on the black square, keep head still.
-Click the black square to move the red circle toward right.
-Click again when the red circle disappears.`,
-      },
-      blindspotDegree: 13.5,
-    });
+    }) => {
+      const ctx = getCurrentScene();
+      const SubRoot = () => div({ style: css$({ height: '100%' }) });
 
-    const dpr = useDevicePixelRatio(ctx);
-    const screen_pix = useScreenPhysicalPix(dpr);
-    van.derive(
-      () =>
-        (state.pix_per_cm = state.line_distance_pix / state.line_distance_cm),
-    );
-    // van.derive(
-    //   () => (state.line_distance_cm = state.line_distance_pix / state.pix_per_cm),
-    // );
-    van.derive(
-      () => (state.pix_per_cm = screen_pix.width / state.screen_width_cm),
-    );
-    van.derive(
-      () => (state.screen_width_cm = screen_pix.width / state.pix_per_cm),
-    );
-    van.derive(() => {
-      const { move_widths } = state;
-      const move_width_cm =
-        move_widths.length &&
-        move_widths.reduce((a, b) => a + b.cm, 0) / move_widths.length;
-      state.distance_cm =
-        move_width_cm /
-        2 /
-        Math.tan((props.blindspotDegree / 2) * (Math.PI / 180));
-    });
-
-    const sKey = 'psytask:virtual-chinrest:data';
-    const sValue = van.state('');
-    const display = van.derive<
-      'confirmation' | 'screen_width' | 'view_distance' | ''
-    >(() =>
-      sValue
-        ? props.usePreviousData
-          ? '' // close immediately
-          : props.usePreviousData == null
-            ? 'confirmation'
-            : 'screen_width'
-        : 'screen_width',
-    );
-    van.derive(() => display.val || ctx.close());
-    ctx.on('scene:show', () => {
-      sValue.val = localStorage.getItem(sKey) ?? '';
-      display.val || ctx.close();
-    });
-
-    // dom
-    const Input = (p: {
-      label: () => string;
-      key: Extract<keyof typeof state, `${string}_cm`>;
-    }) =>
-      div(
-        label({ for: p.key }, p.label),
-        input({
-          id: p.key,
-          type: 'number',
-          min: '1',
-          step: 'any',
-          required: true,
-          value: () => state[p.key],
-          onchange(e) {
-            const val = +(e.target as HTMLInputElement).value;
-            if (!Number.isNaN(val)) state[p.key] = val;
-            else console.warn(`Invalid ${p.key}:`, e);
-          },
-        }),
-      );
-    const Panel = (p: {
-      type: 'screen_width' | 'view_distance';
-      content: HTMLElement;
-      onSuccess: () => void;
-    }) =>
-      form(
-        {
-          hidden: () => display.val !== p.type,
-          onsubmit: (e: Event) => e.preventDefault(),
+      const screenWidthDetector = new Scene(ScreenWidthDetector, {
+        ...ctx.options,
+        root: mount(SubRoot(), ctx.root),
+        defaultProps: {},
+      });
+      const viewDistanceDetector = new Scene(ViewDistanceDetector, {
+        ...ctx.options,
+        root: mount(SubRoot(), ctx.root),
+        defaultProps: {
+          pix_per_cm: 0, // overwritten on show
         },
-        h2(() => '👀 ' + props.i18n[p.type]),
-        span(() => props.i18n[`${p.type}_guide`]),
-        p.content,
-        button(
-          {
-            type: 'button',
-            style: css({ width: '100%', 'margin-top': '0.5rem' }),
-            onclick(e) {
-              const form = (e.target as HTMLButtonElement).form!;
-              form.checkValidity() ? p.onSuccess() : form.reportValidity();
-            },
+      });
+
+      ctx.on('dispose', () => {
+        screenWidthDetector.emit('dispose');
+        viewDistanceDetector.emit('dispose');
+      });
+
+      let data: { pix_per_cm: number; distance_cm: number };
+      van.derive(async () => {
+        const { i18n, blindspotDegree, usePreviousData } = props;
+
+        // check previous data
+        const storeData = localStorage.getItem(VirtualChinrest.storageKey);
+        if (storeData) {
+          let confirmed = false;
+          if (usePreviousData == null) {
+            // ({ confirmed } = await confirmation.show({
+            //   title: i18n ? i18n.confirmation : 'Use previous chinrest data?',
+            //   content: pre(storeData),
+            //   i18n,
+            // }));
+            confirmed = confirm(`Use previous chinrest data?\n\n${storeData}`);
+          }
+          if (usePreviousData || confirmed) {
+            ctx.close();
+            data = JSON.parse(storeData);
+            return;
+          }
+        }
+        // run chinrest
+        const { pix_per_cm } = await screenWidthDetector.show({
+          i18n: i18n && {
+            line_distance: i18n.line_distance,
+            screen_width: i18n.screen_width,
+            text: i18n.screen_width_text,
+            title: i18n.screen_width_title,
+            ok: i18n.ok,
           },
-          'OK',
-        ),
-      );
-    const Triangles = (color: string, size = 6) =>
-      [1, 0].map((isUp) =>
-        div({
-          style: css({
-            position: 'absolute',
-            left: `${-(size - 0.5)}px`,
-            width: '0',
-            height: '0',
-            'border-style': 'solid',
-            'border-width': isUp
-              ? `0 ${size}px ${size}px ${size}px`
-              : `${size}px ${size}px 0 ${size}px`,
-            'border-color': isUp
-              ? `transparent transparent ${color} transparent`
-              : `${color} transparent transparent transparent`,
-            [isUp ? 'bottom' : 'top']: `${-(size - 0.5)}px`,
-          }),
-        }),
-      );
-    const screen_width_el = Panel({
-      type: 'screen_width',
-      content: (() => {
-        const left = 32;
-        const height = '10rem';
-        const sharedStyle = css({ position: 'absolute', width: '1px', height });
-
-        const fixed = div(
-          {
-            style: sharedStyle + css({ background: '#000', left: left + 'px' }),
-          },
-          ...Triangles('#000'),
-        );
-
-        let sx = 0; // start x, no drag if 0
-        ctx
-          .on('pointerup', (e) => (sx = 0))
-          .on(
-            'pointermove',
-            (e) => sx && (state.line_distance_pix = (e.clientX - sx) * dpr.val),
-          );
-        return div(
-          div(
-            { style: css({ margin: '2rem', height }) },
-            // fixed line
-            fixed,
-            // movable line
-            div(
-              {
-                style: () =>
-                  sharedStyle +
-                  css({
-                    cursor: 'ew-resize',
-                    background: 'red',
-                    left: left + state.line_distance_pix / dpr.val + 'px',
-                  }),
-                onpointerdown: (e) =>
-                  (sx = Math.floor(fixed.getBoundingClientRect().x)),
-              },
-              ...Triangles('red'),
-            ),
-          ),
-          div(
-            () =>
-              props.i18n.line_distance + ' (pix): ' + state.line_distance_pix,
-          ),
-          Input({
-            label: () => props.i18n.line_distance + ' (cm): ',
-            key: 'line_distance_cm',
-          }),
-          Input({
-            label: () => props.i18n.screen_width + ' (cm): ',
-            key: 'screen_width_cm',
-          }),
-        );
-      })(),
-      onSuccess() {
-        display.val = 'view_distance';
-      },
-    });
-    const view_distance_el = Panel({
-      type: 'view_distance',
-      content: (() => {
-        const obj_radius = 12;
-        const dot_radius = 2;
-        const right = 32;
-
-        const isMoving = van.state<0 | 1>(0);
-
-        ctx.on(
-          'scene:frame',
-          () => isMoving.val && (state.move_width_pix += 1),
-        );
-        return div(
-          div(
-            { style: css({ margin: '2rem', height: 2 * obj_radius + 'px' }) },
-            // fixed obj
-            div({
-              style: css({
-                position: 'absolute',
-                border: `#000 solid ${obj_radius}px`,
-                right: right + 'px',
-                cursor: 'pointer',
-              }),
-              onpointerup() {
-                if ((isMoving.val ^= 1)) return; // toggle
-                // reset
-                const pix = state.move_width_pix;
-                state.move_widths.push({ pix, cm: pix / state.pix_per_cm });
-                state.move_width_pix = 0;
-              },
-            }),
-            // movable obj
-            div({
-              style: () =>
-                css({
-                  position: 'absolute',
-                  border: `red solid ${obj_radius}px`,
-                  'border-radius': '50%',
-                  right:
-                    right +
-                    obj_radius * 2 +
-                    state.move_width_pix / dpr.val +
-                    'px',
-                }),
-            }),
-            // dots
-            list(div, state.move_widths, (info) =>
-              span({
-                title: () => info.val.cm + ' cm',
-                style: () =>
-                  css({
-                    position: 'absolute',
-                    border: `red solid ${dot_radius}px`,
-                    'border-radius': '50%',
-                    right: right + obj_radius * 2 + 'px',
-                    transform: `translate(-${info.val.pix / dpr.val}px, calc(${obj_radius}px - 50%))`,
-                  }),
-                hidden: isMoving,
-              }),
-            ),
-          ),
-          Input({
-            label: () => props.i18n.view_distance + ' (cm): ',
-            key: 'distance_cm',
-          }),
-        );
-      })(),
-      onSuccess() {
-        const { screen_width_cm, distance_cm } = state;
-        localStorage.setItem(
-          sKey,
-          JSON.stringify({ screen_width_cm, distance_cm }, null, 2),
-        );
-        display.val = '';
-      },
-    });
-    const confirmation = div(
-      { hidden: () => display.val !== 'confirmation' },
-      h3(() => props.i18n.confirmation),
-      pre(sValue),
-      div(
-        {
-          style: css({
-            display: 'grid',
-            'grid-template-columns': '1fr 1fr',
-            gap: '1rem',
-          }),
-        },
-        button(
-          {
-            onclick() {
-              modify(state, JSON.parse(sValue.val));
-              display.val = '';
-            },
-          },
-          () => props.i18n.yes,
-        ),
-        button(
-          { onclick: () => (display.val = 'screen_width') },
-          () => props.i18n.no,
-        ),
-      ),
-    );
-
-    return {
-      node: Container(
-        { content: div(confirmation, screen_width_el, view_distance_el) },
-        ctx,
-      ),
-      data() {
-        console.info('VirtualChinrest', { ...state });
-        const { pix_per_cm, distance_cm } = state;
-        const deg2cm = (deg: number) =>
-          2 * distance_cm * Math.tan((deg / 2) * (Math.PI / 180));
-        const deg2pix = (deg: number) => deg2cm(deg) * pix_per_cm;
-        return {
+        });
+        const { distance_cm } = await viewDistanceDetector.show({
           pix_per_cm,
-          distance_cm,
-          deg2cm,
-          /**
-           * Convert degree to physical pixel. You shouldn't use it to set
-           * element style.
-           */
-          deg2pix,
-          /**
-           * Convert degree to CSS pixel.
-           *
-           * Counteract system zoom and page zoom, which makes sure the visual
-           * representation has the same physical size across different
-           * devices.
-           *
-           * @example
-           *
-           * Counteract for dynamic changes in system zoom and page zoom.
-           *
-           * ```ts
-           * van.derive(() => {
-           *   el.style.width = deg2csspix(1) + 'px';
-           * });
-           * ```
-           */
-          deg2csspix: (deg: number) => deg2pix(deg) / dpr.val,
-        };
-      },
-    };
-  },
+          blindspotDegree,
+          i18n: i18n && {
+            view_distance: i18n.view_distance,
+            text: i18n.view_distance_text,
+            title: i18n.view_distance_title,
+            ok: i18n.ok,
+          },
+        });
+        data = { pix_per_cm, distance_cm };
+        localStorage.setItem(
+          VirtualChinrest.storageKey,
+          JSON.stringify(data, null, 2),
+        );
+        ctx.close();
+      });
+
+      const dpr = useDevicePixelRatio();
+      return {
+        node: '',
+        data() {
+          const { pix_per_cm, distance_cm } = data;
+          const deg2cm = (deg: number) =>
+            2 * distance_cm * Math.tan((deg / 2) * (Math.PI / 180));
+          const deg2pix = (deg: number) => deg2cm(deg) * pix_per_cm;
+          return {
+            pix_per_cm,
+            distance_cm,
+            deg2cm,
+            /**
+             * Convert degree to physical pixel. You shouldn't use it to set
+             * element style.
+             */
+            deg2pix,
+            /**
+             * Convert degree to CSS pixel.
+             *
+             * Counteract system zoom and page zoom using
+             * {@link window.devicePixelRatio}, which makes sure the visual
+             * representation has the same physical size across different
+             * devices.
+             *
+             * @example
+             *
+             * Counteract for dynamic changes in system zoom and page zoom.
+             *
+             * ```ts
+             * van.derive(() => {
+             *   el.style.width = deg2csspix(1) + 'px';
+             * });
+             * ```
+             */
+            deg2csspix: (deg: number) => deg2pix(deg) / dpr.val,
+          };
+        },
+      };
+    },
+  ),
+  { storageKey: 'psytask:virtual-chinrest' } as const,
 );

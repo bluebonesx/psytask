@@ -19,15 +19,10 @@ const warnMissingKey = <T extends object>(
 //@ts-ignore
 window['jsPsychModule'] ??= { ParameterType };
 /**
- * Create a scene with jsPsych Plugin
- *
- * This function provides a compatibility layer for using jsPsych plugins within
- * psytask. It handles the integration between jsPsych plugin API and psytask's
- * scene system.
+ * Create a scene with
+ * {@link https://www.jspsych.org/latest/plugins/list-of-plugins/ jsPsych Plugins}
  *
  * @example
- *
- * Use html-keyboard-response plugin
  *
  * ```ts
  * using scene = app.scene(jsPsychStim, {
@@ -39,8 +34,6 @@ window['jsPsychModule'] ??= { ParameterType };
  * });
  * await scene.show({ stimulus: 'new' }); // change stimulus
  * ```
- *
- * @see {@link https://www.jspsych.org/latest/plugins/list-of-plugins/ jsPsych Plugin}
  */
 export const jsPsychStim = ((trial: Partial<TrialType<PluginInfo>>, ctx) => {
   let data: LooseObject;

@@ -3,17 +3,16 @@ import path from 'path';
 import { rollup } from 'rollup';
 import { dts } from 'rollup-plugin-dts';
 import {
-  blue,
   __CONFIG_FILE__,
-  cyan,
   __DEV__,
+  __ROOT__,
+  blue,
+  cyan,
   log,
   projects,
   red,
-  __ROOT__,
-  type Project,
-  yellow,
   withCwd,
+  type Project,
 } from './utils';
 
 type BuildConfig = Partial<{

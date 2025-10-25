@@ -33,8 +33,18 @@ export const expect_error = async (action: Action) => {
     expect(err instanceof Error);
   }
 };
-export const expect_closeTo = (raw: number, expected: number, delta: number) =>
-  expect(Math.abs(raw - expected) <= delta);
+export const expect_closeTo = (
+  raw: number,
+  expected: number,
+  delta: number,
+) => {
+  const diff = raw - expected;
+  try {
+    return expect(Math.abs(diff) <= delta);
+  } catch (error) {
+    ERR(`Expect ${raw} to be close to ${expected} ± ${delta}, but got ${diff}`);
+  }
+};
 export const expect_includes = <T extends object>(
   raw: T,
   expected: Partial<T>,

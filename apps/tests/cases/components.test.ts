@@ -1,8 +1,9 @@
-import { Loader, Container, adapter, css } from '@psytask/components';
+import { Loader, VirtualChinrest } from '@psytask/components';
 import { createApp, generic, type SceneSetup } from 'psytask';
 import { expect } from './utils';
 
-// hooks
+// utils
+export const Adapter = {};
 export const Hooks = {};
 
 // components
@@ -93,4 +94,68 @@ export const _Loader = {
     expect(error instanceof Error);
     expect(error!.message.includes('404'));
   },
+};
+export const _VirtualChinrest = {
+  async usePreviousData() {
+    using app = await createApp();
+    using vc = app.scene(VirtualChinrest, { defaultProps: {} });
+
+    let p: Promise<any>;
+    const confirmationEl = vc.root.querySelector('pre')!;
+    const detectorEl = vc.root.querySelector('form')!;
+
+    // localStorage has data
+    localStorage.setItem(
+      VirtualChinrest.storageKey,
+      JSON.stringify({ screen_width_cm: 40, distance_cm: 57 }),
+    );
+    {
+      // value is true
+      p = vc.show({ usePreviousData: true });
+      expect(confirmationEl.checkVisibility(), false);
+      expect(detectorEl.checkVisibility(), false);
+      await p;
+    }
+    {
+      // value is false
+      p = vc.show({ usePreviousData: false });
+      expect(confirmationEl.checkVisibility(), false);
+      expect(detectorEl.checkVisibility(), true);
+      await p;
+    }
+    {
+      // value is undefined
+      p = vc.show();
+      expect(confirmationEl.checkVisibility(), true);
+      expect(detectorEl.checkVisibility(), false);
+      await p;
+    }
+
+    // localStorage has no data
+    localStorage.removeItem(VirtualChinrest.storageKey);
+    {
+      // value is true
+      p = vc.show({ usePreviousData: true });
+      expect(confirmationEl.checkVisibility(), false);
+      expect(detectorEl.checkVisibility(), true);
+      await p;
+    }
+    {
+      // value is false
+      p = vc.show({ usePreviousData: false });
+      expect(confirmationEl.checkVisibility(), false);
+      expect(detectorEl.checkVisibility(), true);
+      await p;
+    }
+    {
+      // value is undefined
+      p = vc.show();
+      expect(confirmationEl.checkVisibility(), false);
+      expect(detectorEl.checkVisibility(), true);
+      await p;
+    }
+  },
+  async i18n() {},
+  async blindspotDegree() {},
+  async data() {},
 };

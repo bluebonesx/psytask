@@ -1,6 +1,8 @@
-import { Container } from '@psytask/components';
 import { jsPsychStim } from '@psytask/jspsych';
-import { createApp, StairCase } from 'psytask';
+import { createApp, getCurrentScene, on, StairCase } from 'psytask';
+import van from 'vanjs-core';
+
+const { div } = van.tags;
 
 using app = await createApp({ alert_on_leave: false });
 using dc = app
@@ -8,24 +10,32 @@ using dc = app
   .on('add', console.log);
 
 using jspsych = app.scene(jsPsychStim, { defaultProps: {} });
-using simpleText = app.scene(Container, { defaultProps: { content: '' } });
+using simpleText = app.scene(
+  /** @param {{ content: string }} props */
+  (props) => div({ class: 'psytask-container' }, () => props.content),
+  { defaultProps: { content: '' } },
+);
 using reaction = app.scene(
   /** @param {{}} props */
-  (props, ctx) => {
+  (props) => {
     /** @type {{ response_key: string; response_time: number }} */
     let data;
-    ctx
-      .on('scene:show', () => (data = { response_key: '', response_time: 0 }))
-      .on('keydown', (e) => {
+    const ctx = getCurrentScene();
+    ctx.on('scene:show', () => {
+      data = { response_key: '', response_time: 0 };
+
+      const cleanup = on(ctx.root, 'keydown', (e) => {
         // only accept number keys 0-9
         if (!/^\d$/.test(e.key)) return;
         data = { response_key: e.key, response_time: e.timeStamp };
         ctx.close();
       });
+      ctx.once('scene:close', cleanup);
+    });
     return {
-      node: Container(
-        { content: 'Please press the key corresponding to the second number.' },
-        ctx,
+      node: div(
+        { class: 'psytask-container' },
+        'Please press the key corresponding to the second number.',
       ),
       data: () => data,
     };
