@@ -7,7 +7,6 @@ export type Serializer<T extends LooseObject = LooseObject> = {
   body: (row: T, rows: T[]) => string;
   footer: (rows: T[]) => string;
 };
-type SerializerMap = Record<string, Serializer>;
 
 const csv_normalize = (value: any) =>
   value == null
@@ -35,7 +34,7 @@ const serializers = {
     body: (row, rows) => (rows.length ? ',' : '') + JSON.stringify(row),
     footer: () => ']',
   },
-} satisfies SerializerMap;
+} satisfies Record<string, Serializer>;
 
 /** Data collector. Collect, serialize and save data. */
 export class Collector<T extends LooseObject> extends EventEmitter<{
@@ -60,7 +59,8 @@ export class Collector<T extends LooseObject> extends EventEmitter<{
    * using dc = new Collector('data.md'); // now you can save to Markdown file
    * ```
    */
-  static readonly serializers: typeof serializers & SerializerMap = serializers;
+  static readonly serializers: typeof serializers & Record<string, Serializer> =
+    serializers;
   readonly rows: T[] = [];
   #serializer: Serializer<T>;
   #temp = '';
@@ -88,7 +88,7 @@ export class Collector<T extends LooseObject> extends EventEmitter<{
     } else {
       const extnames = Object.keys(serializers);
       this.#serializer = extnames.includes(extname)
-        ? (serializers as SerializerMap)[extname]!
+        ? (serializers as Record<string, Serializer>)[extname]!
         : ERR(
             `Unsupported file extension: "${extname}", please use one of: ${extnames.join(', ')}.
 Or add custom Serializer to Collector.serializers.`,

@@ -13,6 +13,7 @@ import {
   __ROOT__,
   type Project,
   yellow,
+  withCwd,
 } from './utils';
 
 type BuildConfig = Partial<{
@@ -54,6 +55,7 @@ const getAppOptions = async ({
     ...importmap,
   };
   if (await fs.exists('main.css')) styles.push('main.css');
+  const title = path.basename(process.cwd());
   return {
     sharedConfig: { external: Object.keys(importmap) },
     configs: [
@@ -73,7 +75,7 @@ const getAppOptions = async ({
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PsyTask - ${path.basename(process.cwd()).toUpperCase()}</title>
+    <title>PsyTask | ${title[0]!.toUpperCase() + title.slice(1)}</title>
     <script type="importmap">${JSON.stringify({ imports: importmap })}</script> 
     ${styles.reduce(
       (acc, e) => acc + `<link rel="stylesheet" href="${e}" />`,
@@ -149,8 +151,7 @@ export const buildProject = async (proj: Project) => {
   if (proj.state === 1) return;
   proj.state = 1; // built
 
-  const cwd = process.cwd();
-  process.chdir(proj.path);
+  using _ = withCwd(proj.path);
 
   log(blue(`Building ${proj.name}`));
   await fs.rm('dist', { recursive: true, force: true });
@@ -195,8 +196,6 @@ export const buildProject = async (proj: Project) => {
     }),
   );
   isPkg && (await bundleDts(proj.path));
-
-  process.chdir(cwd);
 };
 const buildAll = async () => {
   log(
@@ -204,19 +203,15 @@ const buildAll = async () => {
       cyan(projects.reduce((acc, e) => acc + ' ' + e.name, '')),
   );
 
-  await fs.rm('dist', { recursive: true, force: true });
+  // await fs.rm('dist', { recursive: true, force: true });
+  await Bun.$`bun docs`;
   await fs.mkdir('dist/public', { recursive: true });
 
   for (const proj of projects) {
     await buildProject(proj);
     await fs.cp(
       path.join(proj.path, 'dist'),
-      path.join(
-        __ROOT__,
-        'dist',
-        proj.root === 'packages' ? 'public' : '',
-        proj.name,
-      ),
+      path.join('dist', proj.root === 'packages' ? 'public' : '', proj.name),
       { recursive: true },
     );
   }
@@ -226,6 +221,7 @@ const buildAll = async () => {
 if (import.meta.main) {
   const name = process.argv[2];
   if (!name) {
+    if (__ROOT__ !== process.cwd()) throw Error('Run from root directory');
     await buildAll();
     process.exit(0);
   }

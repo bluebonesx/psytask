@@ -65,7 +65,7 @@ const createRAFTimer: SceneTimerCreator = (opts) => {
   };
 };
 
-type NodeLike = string | Node | (string | Node)[];
+export type NodeLike = string | Node;
 /**
  * Scene setup function, only called once when the scene is created.
  *
@@ -81,9 +81,10 @@ export type SceneSetup<
   ctx: Scene<any>,
 ) =>
   | NodeLike
+  | NodeLike[]
   | {
       /** The node(s) appended to the root element of scene */
-      node: NodeLike;
+      node: NodeLike | NodeLike[];
       /** Data getter to get data from elements */
       data: () => D;
     };
@@ -144,7 +145,6 @@ export type SceneEventMap = HTMLElementEventMap & {
 } & {
   [K in `key:${string}`]: KeyboardEvent;
 };
-type SceneEventType = keyof SceneEventMap;
 
 /** Scene options */
 export type SceneOptions<T extends MaybeGenericSceneSetup> = {
@@ -157,7 +157,7 @@ export type SceneOptions<T extends MaybeGenericSceneSetup> = {
   /** Scene duration in milliseconds */
   duration?: number;
   /** Close on specific {@link SceneEventMap events} */
-  close_on?: SceneEventType | SceneEventType[];
+  close_on?: keyof SceneEventMap | (keyof SceneEventMap)[];
   /** Whether to record frame times */
   record_frame_times?: boolean;
   /** Control display timing */
@@ -297,27 +297,27 @@ export class Scene<
     }
     let hasMouseType = 0,
       hasKeyType = 0;
-    const cleanups = (Object.keys(this.listeners) as SceneEventType[]).map(
-      (type) => {
-        const DOM_type = prefix2type[type.split(':', 1)[0]!] ?? type;
-        return DOM_type === 'keydown'
-          ? !hasKeyType++ &&
-              on(root, DOM_type, (e) =>
-                this.emit(`key:${e.key}`, e).emit(DOM_type, e),
-              )
-          : DOM_type === 'mousedown'
-            ? !hasMouseType++ &&
-              on(root, DOM_type, (e) =>
-                this.emit(
-                  `mouse:${mouseSuffixs[e.button] ?? 'unknown'}`,
-                  e,
-                ).emit(DOM_type, e),
-              )
-            : DOM_type &&
-              //@ts-ignore
-              on(root, DOM_type, (e) => this.emit(type, e));
-      },
-    );
+    const cleanups = (
+      Object.keys(this.listeners) as (keyof SceneEventMap)[]
+    ).map((type) => {
+      const DOM_type = prefix2type[type.split(':', 1)[0]!] ?? type;
+      return DOM_type === 'keydown'
+        ? !hasKeyType++ &&
+            on(root, DOM_type, (e) =>
+              this.emit(`key:${e.key}`, e).emit(DOM_type, e),
+            )
+        : DOM_type === 'mousedown'
+          ? !hasMouseType++ &&
+            on(root, DOM_type, (e) =>
+              this.emit(`mouse:${mouseSuffixs[e.button] ?? 'unknown'}`, e).emit(
+                DOM_type,
+                e,
+              ),
+            )
+          : DOM_type &&
+            //@ts-ignore
+            on(root, DOM_type, (e) => this.emit(type, e));
+    });
     this.once('scene:close', () => cleanups.map((fn) => fn && fn()));
 
     // use timer

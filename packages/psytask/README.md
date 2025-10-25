@@ -1,23 +1,20 @@
-> [!WARNING]
-> Development of v1.2 is underway and will introduce breaking changes. Please pin your version to v1.1.1.
-
 # PsyTask
 
 ![NPM Version](https://img.shields.io/npm/v/psytask)
 ![NPM Downloads](https://img.shields.io/npm/dm/psytask)
 ![jsDelivr hits (npm)](https://img.shields.io/jsdelivr/npm/hm/psytask)
 
-JavaScript Framework for Psychology tasks. Compatible with the [jsPsych](https://github.com/jspsych/jsPsych) plugin.
+JavaScript Framework for Psychology tasks.
+Make psychology task development like making PPT.
+Compatible with the [jsPsych](https://github.com/jspsych/jsPsych) plugins.
 
 Compare to jsPsych, PsyTask has:
 
 - Easier and more flexible development experiment.
-- Higher time precision, try [Benchmark](https://bluebonesx.github.io/psytask/benchmark) on your browser.
+- Higher time precision.
 - Smaller bundle size, Faster loading speed.
 
-**🥳 You can play it online now via [Playground & Examples](https://bluebonesx.github.io/psytask/playground) !**
-
-API docs is [here](https://bluebonesx.github.io/psytask).
+**[API Docs](https://bluebonesx.github.io/psytask)** or **[Play it now ! 🥳](https://bluebonesx.github.io/psytask/play)**
 
 ## Install
 
@@ -34,35 +31,30 @@ npm i psytask # only install
 via CDN:
 
 ```html
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- load  css -->
-    <link
-      rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/psytask@1/dist/main.css"
-    />
-  </head>
-  <body>
-    <script type="module">
-      // load  js
-      import { createApp } from 'https://cdn.jsdelivr.net/npm/psytask@1/dist/index.min.js';
+<!-- add required packages  -->
+<script type="importmap">
+  {
+    "imports": {
+      "psytask": "https://cdn.jsdelivr.net/npm/psytask@1/dist/index.min.js",
+      "@psytask/core": "https://cdn.jsdelivr.net/npm/@psytask/core@1/dist/index.min.js",
+      "@psytask/components": "https://cdn.jsdelivr.net/npm/@psytask/components@1/dist/index.min.js",
+      "vanjs-core": "https://cdn.jsdelivr.net/npm/vanjs-core@1.6",
+      "vanjs-ext": "https://cdn.jsdelivr.net/npm/vanjs-ext@0.6"
+    }
+  }
+</script>
+<!-- load packages -->
+<script type="module">
+  import { createApp } from 'psytask';
 
-      using app = await creaeApp();
-      //...
-    </script>
-  </body>
-</html>
+  using app = await creaeApp();
+</script>
 ```
 
 > [!WARNING]
 > PsyTask uses the modern JavaScript [`using` keyword](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Statements/using) for automatic resource cleanup.
 >
-> When using bundlers (like Vite, Bun, etc.), the `using` keyword will be transpiled automatically, so you don't need to worry about browser compatibility.
->
-> For CDN usage in older browsers that don't support the `using` keyword, you need to manually call the cleanup method:
+> For CDN usage in old browsers that don't support the `using` keyword, you will see `Uncaught SyntaxError: Unexpected identifier 'app'`. You need to change code:
 >
 > ```js
 > // Instead of: using app = await createApp();
@@ -70,11 +62,13 @@ via CDN:
 > // ... your code ...
 > app.emit('dispose'); // Manually clean up when done
 > ```
+>
+> Or, you can use the bundlers (like Vite, Bun, etc.) to transpiled it.
 
 ## Usage
 
-All psychology tasks are combinations of a series of scenes,
-writing a psychology task requires only 2 steps:
+The psycholoy tasks are just like PPTs, they both have s series of scenes.
+So writing a psychology task only requires 2 steps:
 
 1. create scene
 2. show scene
@@ -82,220 +76,195 @@ writing a psychology task requires only 2 steps:
 ### Create Scene
 
 ```js
-import 'psytask/main.css';
+import { Container } from '@psytask/components';
 
-import { createApp, effect, h } from 'psytask';
-
-// create app
-using app = await createApp();
-
-// create built-in scenes
-using fixation = app.text('+', { duration: 500 });
-using blank = app.text('');
-using guide = app.text('Welcome to our task', { close_on: 'key: ' }); // close on space key
+using simpleText = app.scene(
+  // scene setup
+  Container,
+  // scene options
+  {
+    defaultProps: { content: '' }, // props is show params
+    duration: 1e3, // show 1000ms
+    close_on: 'key: ', // close on space key
+  },
+);
 ```
 
 Most of the time, you need to write the scene yourself:
 
 ```js
-// create custom scene
+import van from 'vanjs-core';
+
+const { div } = van.tags;
+
 using scene = app.scene(
-  // 1st. argument: component (setup function)
-  /** @param {{ stimulus: string }} props */
+  /** @param {{ text: string }} props */
   (props, ctx) => {
     /** @type {{ response_key: string; response_time: number }} */
     let data;
+    const node = document.createElement('div');
 
-    // Reset data when scene shows
     ctx
-      .on('scene:show', () => {
+      .on('scene:show', (newProps) => {
+        // Reset data when scene shows
         data = { response_key: '', response_time: 0 };
+        // update DOM
+        node.textContent = newProps.text;
       })
       // Capture keyboard responses
       .on('key:f', (e) => {
-        data.response_key = 'f';
-        data.response_time = e.timeStamp;
-        ctx.close();
+        data = { response_key: e.key, response_time: e.timeStamp };
+        ctx.close(); // close scene when key f was pressed
       })
       .on('key:j', (e) => {
-        data.response_key = 'j';
-        data.response_time = e.timeStamp;
+        data = { response_key: e.key, response_time: e.timeStamp };
         ctx.close();
       });
 
-    // Create stimulus element
-    const el = h('div', { className: 'psytask-center' });
-    effect(() => {
-      el.textContent = props.stimulus; // update element when `props.stimulus` changed
-    });
-
     // Return the element and data getter
-    return { node: el, data: () => data };
+    return {
+      // use other Component
+      node: Container({ content: node }, ctx),
+      // data getter
+      data: () => data,
+    };
   },
-  // 2nd. argument: scene options
   {
-    defaultProps: () => ({ stimulus: '' }),
+    defaultProps: { text: '' }, // same with setup params
+    duration: 1e3,
+    close_on: 'mouse:left',
   },
 );
 ```
 
 ### Show Scene
 
-Based on the above example:
-
 ```js
 // show with parameters
-const data = await scene.show({ stimulus: 'Press F or J' });
+const data = await scene.show({ text: 'Press F or J' });
 // show with new scene options
-const data = await scene.config({ duration: Math.random() * 1000 }).show();
+const data = await scene.config({ duration: Math.random() * 1e3 }).show();
 ```
 
-Usually, we need to show a series of scenes:
+Usually, we need to show a block:
 
 ```js
 import { RandomSampling, StairCase } from 'psytask';
 
-// show a fixed sequence
-for (const stimulus of ['A', 'B', 'C']) {
-  await scene.show({ stimulus });
+// fixed sequence
+for (const text of ['A', 'B', 'C']) {
+  await scene.show({ text });
 }
 
-// show a random sequence
-for (const stimulus of new RandomSampling({
+// random sequence
+for (const text of RandomSampling({
   candidates: ['A', 'B', 'C'],
-  sampleSize: 10,
+  sample: 10,
   replace: true,
 })) {
-  await scene.show({ stimulus });
+  await scene.show({ text });
 }
 
-// adaptive testing with staircase
+// staircase
 const staircase = StairCase({
   start: 10,
   step: 1,
   up: 3,
   down: 1,
-  reversal: 6,
+  reversals: 6,
   min: 1,
   max: 12,
+  trial: 20,
 });
-for (const duration of staircase) {
-  const data = await scene.config({ duration }).show({ stimulus: 'X' });
-  const correct = data.response_key === 'f'; // example response
-  staircase.response(correct); // set this trial response
+for (const value of staircase) {
+  const data = await scene.show({ text: value });
+  const correct = data.response_key === 'f';
+  staircase.response(correct); // set response
 }
 ```
 
 ### Data Collection
 
 ```js
-// create data collector
 using dc = app.collector('data.csv');
 
-// show scenes and collect data
-for (const stimulus of ['A', 'B', 'C']) {
-  const data = await scene.show({ stimulus });
+for (const text of ['A', 'B', 'C']) {
+  const data = await scene.show({ text });
   // add a row
   dc.add({
-    stimulus,
+    text,
     response: data.response_key,
     rt: data.response_time - data.start_time,
-    correct: data.response_key === 'f', // example response
+    correct: data.response_key === 'f',
   });
 }
+
+dc.final(); // get final text
+dc.download(); // download file
 ```
 
 ## Integration
 
 ### [jsPsych](https://www.jspsych.org)
 
-PsyTask is compatible with jsPsych plugins. Here's how to integrate jsPsych with PsyTask:
-
-#### Installation with jsPsych
+Install packages:
 
 ```bash
-npm i psytask jspsych @jspsych/plugin-html-button-response
+npm i psytask @psytask/jspsych @jspsych/plugin-cloze
+npm i -d jspsych # for type hint
 ```
 
-#### CDN with jsPsych
+Or using CDN:
 
 ```html
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-    <!-- load jspsych css if needed, it should be above psytask css -->
-    <link
-      rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/jspsych@8.2.2/css/jspsych.css"
-    />
-
-    <!-- load psytask css -->
-    <link
-      rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/psytask@1/dist/main.css"
-    />
-  </head>
-  <body>
-    <!-- main script -->
-    <script type="module">
-      // load psytask js
-      import { createApp } from 'https://cdn.jsdelivr.net/npm/psytask@1/dist/index.min.js';
-
-      using app = await createApp();
-      //...
-    </script>
-
-    <!-- load jspsych plugin if needed, it should be below psytask js and add `defer` property -->
-    <script
-      defer
-      src="https://cdn.jsdelivr.net/npm/@jspsych/plugin-html-keyboard-response@2.1.0/dist/index.browser.min.js"
-    ></script>
-  </body>
-</html>
+<!-- load jspsych css-->
+<link
+  rel="stylesheet"
+  href="https://cdn.jsdelivr.net/npm/jspsych@8.2.2/css/jspsych.css"
+/>
+<!-- add packages -->
+<script type="importmap">
+  {
+    "imports": {
+      ...
+      "@psytask/jspsych": "https://cdn.jsdelivr.net/npm/@psytask/jspsych@1/dist/index.min.js",
+      "@jspsych/plugin-cloze": "https://cdn.jsdelivr.net/npm/@jspsych/plugin-cloze@2.2.0/+esm"
+    }
+  }
+</script>
 ```
 
-#### Using jsPsych Plugins
+> ![NOTE]
+> For CDNer, you should add `+esm` after jspsych plugin CDN url, because jspsych plugins do not release ESM version.
+
+Then use it:
 
 ```js
-import 'jspsych/css/jspsych.css';
-import 'psytask/main.css';
+import { jsPsychStim } from '@psytask/jspsych';
+import Cloze from '@jspsych/plugin-cloze';
 
-import HtmlButtonResponsePlugin from '@jspsych/plugin-html-button-response';
-import { createApp, jsPsychStim } from 'psytask';
-
-// create app
-using app = await createApp();
-
-// create jsPsych scene
-using jsPsychScene = app.scene(jsPsychStim, {
-  defaultProps: {
-    type: HtmlButtonResponsePlugin,
-    stimulus: 'Hello world',
-    choices: ['f', 'j'],
-  },
+using jspsych = app.scene(jsPsychStim, { defaultProps: {} });
+const data = await jspsych.show({
+  type: Cloze,
+  text: 'aba%%aba',
+  check_answers: true,
 });
-
-// show jsPsych scene
-const data = await jsPsychScene.show();
-console.log(data);
 ```
 
 ### [JATOS](https://www.jatos.org/)
 
-Data collector can automatically send data to JATOS using event listeners. See more: https://www.jatos.org/Submit-and-upload-data-to-the-server.html
+See [offical docs](https://www.jatos.org/Submit-and-upload-data-to-the-server.html)
+
+```html
+<script src="jatos.js"></script>
+```
 
 ```js
-import { createApp } from 'psytask';
-
 // wait for jatos loading
 await new Promise((r) => jatos.onLoad(r));
 
-using app = await createApp();
-using dc = app.collector('experiment_data.csv').on('add', (row) => {
-  // send data to JATOS server when `dc.add` be called.
+using dc = app.collector().on('add', (row) => {
+  // send data to JATOS server
   jatos.appendResultData(row);
 });
 ```

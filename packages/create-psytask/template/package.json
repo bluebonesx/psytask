@@ -1,9 +1,12 @@
 {
-  "name": "base",
+  "name": "template",
   "version": "1.0.0",
   "private": true,
   "type": "module",
   "dependencies": {
-    "psytask": "^1"
+    "psytask": "^1",
+    "@psytask/components": "^1",
+    "@psytask/jspsych": "^1",
+    "vanjs-core": "^1"
   }
 }

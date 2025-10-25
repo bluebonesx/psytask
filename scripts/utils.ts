@@ -13,6 +13,15 @@ export const blue = (msg: string) => `\x1b[34m${msg}\x1b[0m`;
 export const cyan = (msg: string) => `\x1b[36m${msg}\x1b[0m`;
 
 export const log = (msg: string) => process.stdout.write(msg + '\n');
+export const withCwd = <T>(cwd: string) => {
+  const oldCwd = process.cwd();
+  process.chdir(cwd);
+  return {
+    [Symbol.dispose]() {
+      process.chdir(oldCwd);
+    },
+  };
+};
 
 export type Project = {
   root: string;

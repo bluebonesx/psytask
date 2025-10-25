@@ -21,6 +21,8 @@ const modify = async (
   const modified = replacer(content);
   await fs.writeFile(filepath, modified);
 };
+
+// main
 (async () => {
   // input
   const projectName = (

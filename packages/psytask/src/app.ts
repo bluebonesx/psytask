@@ -11,10 +11,11 @@ import { onPageLeave } from './utils';
 
 // import styles
 mount(h('style'), doc.head).textContent =
-  '.psytask-scene{all:unset;position:fixed;inset:0;overflow:hidden;will-change:transform;user-select:none}';
+  '.psytask-app>.scene{all:unset;position:fixed;inset:0;overflow:hidden;will-change:transform;user-select:none}';
 
-type AppDefaultData = { frame_ms: number };
-class App<T extends AppDefaultData = AppDefaultData> extends EventEmitter<{}> {
+export class App<
+  T extends { frame_ms: number } = { frame_ms: number },
+> extends EventEmitter<{}> {
   constructor(
     /** Root element of the app */
     public readonly root: HTMLElement,
@@ -22,6 +23,7 @@ class App<T extends AppDefaultData = AppDefaultData> extends EventEmitter<{}> {
     public data: T & LooseObject,
   ) {
     super();
+    this.on('dispose', () => root.remove());
   }
   /**
    * Create data collector
@@ -105,7 +107,7 @@ class App<T extends AppDefaultData = AppDefaultData> extends EventEmitter<{}> {
       ...options,
       root: mount(
         h('div', {
-          className: 'psytask-scene',
+          className: 'scene',
           oncontextmenu: (e) => e.preventDefault(),
         }),
         this.root,
@@ -129,7 +131,7 @@ class App<T extends AppDefaultData = AppDefaultData> extends EventEmitter<{}> {
  *   (props: {}, ctx) => {
  *     const node = document.createElement('div');
  *     node.textContent = '+';
- *     return { node };
+ *     return node;
  *   },
  *   {
  *     defaultProps: {},
@@ -171,7 +173,7 @@ export const createApp = async ({
 }> = {}) => {
   root === doc.body && ERR('Cannot use document.body as app root');
   if (!root.isConnected) mount(root);
-  root.classList.add('psytask-app'); // only for marking
+  root.classList.add('psytask-app');
 
   const { leave_alert_on_fps, leave_alert_on_task, beforeunload_alert } = i18n;
 
@@ -195,7 +197,7 @@ export const createApp = async ({
       {
         root: mount(
           h('div', {
-            className: 'psytask-scene',
+            className: 'scene',
             style: 'text-align:center;line-height:100dvh;',
           }),
           root,
@@ -220,19 +222,15 @@ export const createApp = async ({
 
   // setup app data
   const data = { frame_ms, leave_count: 0 };
-  const cleanups = [
-    ...(alert_on_leave
-      ? [
-          onPageLeave(() => alert(leave_alert_on_task! + ++data.leave_count)),
-          on(
-            window,
-            'beforeunload',
-            (e) => (e.preventDefault(), (e.returnValue = beforeunload_alert)),
-          ),
-        ]
-      : []),
-    // remove self
-    () => root.remove(),
-  ];
+  const cleanups = alert_on_leave
+    ? [
+        onPageLeave(() => alert(leave_alert_on_task! + ++data.leave_count)),
+        on(
+          window,
+          'beforeunload',
+          (e) => (e.preventDefault(), (e.returnValue = beforeunload_alert)),
+        ),
+      ]
+    : [];
   return new App(root, data).on('dispose', () => cleanups.map((fn) => fn()));
 };

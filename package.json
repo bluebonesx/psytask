@@ -1,6 +1,7 @@
 {
   "type": "module",
   "scripts": {
+    "docs": "typedoc --options typedoc.json",
     "dev": "bun scripts/dev.ts --dev",
     "build": "bun scripts/build.ts",
     "publish": "bun scripts/publish.ts",
@@ -27,7 +28,9 @@
     "rollup": "^4.52.5",
     "rollup-plugin-dts": "^6.2.3",
     "shared": "workspace:*",
-    "typedoc": "^0.28.14"
+    "typedoc": "^0.28.14",
+    "typedoc-plugin-mdn-links": "^5.0.10",
+    "typedoc-theme-fresh": "^0.2.1"
   },
   "prettier": {
     "plugins": [

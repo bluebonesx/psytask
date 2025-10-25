@@ -36,7 +36,7 @@ const DefaultScene = <T extends MaybeGenericSceneSetup>(
     : never
 ) =>
   new Scene(setup, {
-    root: mount(div({ class: 'psytask-scene' })),
+    root: mount(div({ class: 'scene' })),
     frame_ms,
     defaultProps: {},
     duration: frame_ms * 1.3,

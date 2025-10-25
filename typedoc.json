@@ -1,13 +1,22 @@
 {
-  "entryPoints": ["./src/*"],
-  "out": "./docs",
-  "includeVersion": true,
-  "skipErrorChecking": true,
-  "sort": ["source-order"],
-  "validation": {
-    "notExported": false,
-    "invalidLink": true,
-    "notDocumented": false
+  "entryPoints": ["packages/*"],
+  "exclude": ["packages/create-psytask"],
+  "entryPointStrategy": "packages",
+  "categorizeByGroup": false,
+  "packageOptions": {
+    "entryPoints": ["index.ts"],
+    "skipErrorChecking": true
   },
-  "maxTypeConversionDepth": 3
+  "name": "PsyTask | API Docs",
+  "out": "dist",
+  "includeVersion": true,
+  "useTsLinkResolution": true,
+  "maxTypeConversionDepth": 3,
+  "externalSymbolLinkMappings": {
+    "typescript": {
+      "Disposable": "https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Symbol/dispose"
+    }
+  },
+  "plugin": ["typedoc-theme-fresh", "typedoc-plugin-mdn-links"],
+  "theme": "fresh"
 }

@@ -1,7 +1,7 @@
-import { Scene, type SceneSetup } from '@psytask/core';
+import { Scene, type NodeLike, type SceneSetup } from '@psytask/core';
+import { error_normalize, getter_normalize } from 'shared/utils';
 import van from 'vanjs-core';
 import { list, reactive } from 'vanjs-ext';
-import { error_normalize, getter_normalize } from 'shared/utils';
 import { useFetch } from './hooks';
 import { adapter, css, type MaybeGetter } from './utils';
 
@@ -38,7 +38,7 @@ const { li, ul, div } = van.tags;
  * ```
  */
 export const Container = adapter(
-  (props: { content: MaybeGetter<string | Node>; style?: string }) =>
+  (props: { content: MaybeGetter<NodeLike>; style?: string }) =>
     div(
       {
         style:

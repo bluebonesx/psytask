@@ -4,7 +4,6 @@ import { buildProject } from './build';
 
 const pkgs = projects.filter((e) => e.root === 'packages');
 
-if (__DEV__) log(cyan('Checking publish status (dev mode)...'));
 for (const pkg of pkgs) {
   // get package name and version
   const { name, version } = await import(path.join(pkg.path, 'package.json'));
@@ -29,16 +28,9 @@ for (const pkg of pkgs) {
   // publish
   log(green('Publishing ') + `${name} (${publishedVersion} -> ${version})`);
   await buildProject(pkg); // build
-  await Bun.spawn({
-    cwd: pkg.path,
-    cmd: [
-      'bun',
-      'publish',
-      '-p',
-      '--access',
-      'public',
-      __DEV__ ? '--dry-run' : '',
-    ], // publish
-    stdout: 'inherit',
-  }).exited;
+  try {
+    await Bun.$`cd ${pkg.path} && FORCE_COLOR=1 bun publish -p --access public${__DEV__ ? ' --dry-run' : ''}`;
+  } catch (e) {
+    throw Error(`Failed to publish ${name}: ${e}`);
+  }
 }
