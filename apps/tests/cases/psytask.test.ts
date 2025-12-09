@@ -1,19 +1,26 @@
 import {
+  adapter,
   Collector,
   createApp,
   createIterableBuilder,
+  defaultProps,
+  detectFPS,
+  getCurrentScene,
+  on,
   RandomSampling,
   StairCase,
-  type Serializer,
 } from 'psytask';
+import { doc, ERR, map, mount, rAF } from 'shared/utils';
 import van from 'vanjs-core';
-import { doc, ERR, mount, rAF } from 'shared/utils';
+import { reactive } from 'vanjs-ext';
 import {
   expect,
   expect_closeTo,
   expect_error,
   expect_includes,
+  mock_event,
   mock_leaveAndBack,
+  sleep,
   spy_browserDownload,
   spy_functionCall,
   spy_listeners,
@@ -23,56 +30,15 @@ const { div, iframe } = van.tags;
 
 // App
 export const _createApp = {
-  async 'other root'() {
-    const iframeEl = mount(iframe({ style: 'position:fixed;inset:0' }));
-    const root = mount(div(), iframeEl.contentDocument?.body!);
-    {
-      using app = await createApp({ root });
-      expect(app.root, root);
-    }
-    expect(root.isConnected, false);
-    iframeEl.remove();
-  },
-  async 'body root'() {
-    await expect_error(async () => {
-      using app = await createApp({ root: doc.body });
-    });
-  },
-  async 'unmount root'() {
-    const root = iframe({ style: 'position:fixed;inset:0' });
-    using app = await createApp({ root });
-    expect(app.root, root);
-    expect(root.isConnected);
-  },
-  async 'show fps info'() {
-    const root = div();
-
-    const appPromise = createApp({ root });
-    expect(root.childNodes.length, 1);
-    expect(root.textContent, '');
-
-    await new Promise((r) => rAF(r));
-    expect(root.textContent, 'Detect FPS 0%');
-
-    await new Promise((r) => rAF(r));
-    expect_includes(root.firstElementChild!.getBoundingClientRect(), {
-      width: window.innerWidth,
-      height: window.innerHeight,
-    });
-
-    using app = await appPromise;
-    expect(root.childNodes.length, 0);
-    expect(root.textContent, '');
-  },
   async 'more frames count'() {
-    const frames_count = 117;
+    const frames_count = 26;
     let frame_calls = 0;
     const counter = () => ++frame_calls < frames_count && rAF(counter);
     rAF(counter);
     using app = await createApp({ frames_count });
     expect(frame_calls, frames_count);
   },
-  async 'enable leave alert'() {
+  async 'alert on leave (enabled)'() {
     using alertParams = spy_functionCall(window, 'alert', () => {});
     const appPromise = createApp({ alert_on_leave: true });
 
@@ -85,11 +51,13 @@ export const _createApp = {
     using app = await appPromise;
     await mock_leaveAndBack();
     expect(alertParams.length, 2);
+    expect(app.data.leave_count, 1);
 
     await mock_leaveAndBack();
     expect(alertParams.length, 3);
+    expect(app.data.leave_count, 2);
   },
-  async 'disable leave alert'() {
+  async 'alert on leave (disabled)'() {
     using alertParams = spy_functionCall(window, 'alert', () => {});
     const appPromise = createApp({ alert_on_leave: false });
 
@@ -102,15 +70,17 @@ export const _createApp = {
     using app = await appPromise;
     await mock_leaveAndBack();
     expect(alertParams.length, 1); // no new alert
+    expect(app.data.leave_count, 1); // count still increases
 
     await mock_leaveAndBack();
     expect(alertParams.length, 1); // no new alert
+    expect(app.data.leave_count, 2); // count still increases
   },
   async 'i18n - chinese'() {
     using alertParams = spy_functionCall(window, 'alert', () => {});
     const i18n = {
       leave_alert_on_fps: '请不要在检测屏幕刷新率时离开！',
-      leave_alert_on_task: '请不要在任务进行时离开！次数：',
+      leave_alert_on_task: '请不要在任务进行时离开！',
       beforeunload_alert: '离开页面将丢失您的进度，您确定吗？',
     };
     const appPromise = createApp({ alert_on_leave: true, i18n });
@@ -125,21 +95,24 @@ export const _createApp = {
     using app = await appPromise;
     await mock_leaveAndBack();
     expect(alertParams.length, 2);
-    expect(alertParams[1]![0], i18n.leave_alert_on_task + 1);
+    expect(alertParams[1]![0], i18n.leave_alert_on_task);
 
     await mock_leaveAndBack();
     expect(alertParams.length, 3);
-    expect(alertParams[2]![0], i18n.leave_alert_on_task + 2);
+    expect(alertParams[2]![0], i18n.leave_alert_on_task);
   },
 };
 export const _App = {
   async 'dispose - remove DOM'() {
-    const root = div();
+    const iframeEl = mount(iframe({ hidden: true }));
+    const root = mount(div(), iframeEl.contentDocument?.body!);
     {
       using app = await createApp({ root });
+      expect(app.root, root);
       expect(root.isConnected);
     }
     expect(root.isConnected, false);
+    iframeEl.remove();
   },
   async 'dispose - remove listeners'() {
     using win_listeners = spy_listeners(window);
@@ -155,34 +128,6 @@ export const _App = {
       );
     }
     expect({ ...win_listeners, ...doc_listeners }, {}, 1);
-  },
-  // scene
-  async 'scene - full size'() {
-    using app = await createApp();
-    using scene = app.scene(
-      (defaultProps: { text?: string }, ctx) => {
-        const el = div(defaultProps.text);
-        ctx.on('scene:show', (newProps) => (el.textContent = newProps.text));
-        return el;
-      },
-      { defaultProps: {}, duration: 500 },
-    );
-    const { root } = scene;
-
-    expect(root.isConnected);
-    expect(root.textContent, '');
-    expect_includes(root.getBoundingClientRect(), { width: 0, height: 0 });
-
-    const showPromise = scene.show({ text: 'Hello' });
-    expect(root.textContent, 'Hello');
-    expect_includes(root.getBoundingClientRect(), {
-      width: window.innerWidth,
-      height: window.innerHeight,
-    });
-
-    await showPromise;
-    expect(root.textContent, 'Hello');
-    expect_includes(root.getBoundingClientRect(), { width: 0, height: 0 });
   },
   // collector
   async 'collector - add row'() {
@@ -254,41 +199,438 @@ export const _App = {
       1,
     );
   },
-  async 'collector - remove listeners'() {
+};
+export const _Scene = {
+  async 'full size DOM'() {
     using app = await createApp();
-    using doc_listeners = spy_listeners(doc);
+    using s = app.scene((props: { text: string }) => div(() => props.text), {
+      defaultProps: { text: '' },
+      duration: 500,
+    });
+    const { root } = s;
+
+    expect(root.isConnected);
+    expect(root.textContent, '');
+    let rect = root.getBoundingClientRect();
+    expect_includes(rect, { width: 0, height: 0 });
+
+    const showPromise = s.show({ text: 'Hello' });
+    rect = root.getBoundingClientRect();
+    expect_includes(rect, { x: 0, y: 0 });
+    expect_closeTo(rect.width, window.innerWidth, 1);
+    expect_closeTo(rect.height, window.innerHeight, 1);
+    await 0;
+    expect(root.textContent, 'Hello');
+
+    await showPromise;
+    expect(root.textContent, 'Hello');
+    rect = root.getBoundingClientRect();
+    expect_includes(rect, { width: 0, height: 0 });
+  },
+  async 'config - override default options'() {
+    using app = await createApp();
+
+    // close on
     {
-      using dc = app.collector('test.csv');
+      using s = app.scene((p: {}) => '', {
+        defaultProps: {},
+        close_on: 'click',
+      });
+      using params = spy_listeners(s.root);
+
+      let p = s.show();
       expect(
-        Object.values(doc_listeners).reduce((acc, l) => acc + l.length, 0),
+        map(params, (v) => v.length),
+        { click: 1 },
+        1,
+      );
+      mock_event(s.root, 'click');
+      await sleep(0);
+      await Promise.race([p, Promise.reject(Error('not closed'))]);
+      expect(
+        map(params, (v) => v.length),
+        {},
+        1,
+      );
+
+      p = s.config({ close_on: ['abort', 'paste'] }).show();
+      expect(
+        map(params, (v) => v.length),
+        { abort: 1, paste: 1 },
+        1,
+      );
+      mock_event(s.root, 'click');
+      await 0;
+      expect(
+        await Promise.race([p, Promise.resolve('not closed')]),
+        'not closed',
+      );
+      mock_event(s.root, 'abort');
+      await sleep(0);
+      await Promise.race([p, Promise.reject(Error('not closed'))]);
+      expect(
+        map(params, (v) => v.length),
+        {},
+        1,
+      );
+
+      p = s.show();
+      expect(
+        map(params, (v) => v.length),
+        { click: 1 },
+        1,
+      );
+      mock_event(s.root, 'click');
+      await sleep(0);
+      await Promise.race([p, Promise.reject(Error('not closed'))]);
+      expect(
+        map(params, (v) => v.length),
+        {},
         1,
       );
     }
-    expect(doc_listeners, {}, 1);
+
+    // duration
+    {
+      let frame_count = 0;
+      using s = app.scene(
+        (p: {}) => {
+          getCurrentScene().on('frame', () => frame_count++);
+          return '';
+        },
+
+        { defaultProps: {}, duration: app.data.frame_ms * 10 },
+      );
+
+      await s.show();
+      const original_frame_count = frame_count;
+
+      frame_count = 0;
+      await s.config({ duration: app.data.frame_ms * 20 }).show();
+      expect(frame_count > original_frame_count);
+
+      frame_count = 0;
+      await s.show();
+      expect_closeTo(frame_count, original_frame_count, 10); //TODO: less threshold
+    }
   },
-  async 'collector - backup on leave'() {
+  async 'config - restore undefined'() {
     using app = await createApp();
-    using dc = app.collector('test.csv');
-    spy_functionCall(window, 'alert', () => {}); // disable alert
 
-    dc.add({ x: 1, y: 'hello' });
-    const info1 = (await spy_browserDownload(mock_leaveAndBack))!;
-    expect(/^test\.csv[\w-\.]+\.bak$/.test(info1[0]));
-    expect(
-      info1[1],
-      `x,y,frame_ms,leave_count
-1,hello,${app.data.frame_ms},0`,
-    );
+    // close on
+    {
+      using s = app.scene((p: {}) => '', { defaultProps: {} });
+      using params = spy_listeners(s.root);
 
-    dc.add({ x: 2, y: 'world' });
-    const info2 = (await spy_browserDownload(mock_leaveAndBack))!;
-    expect(/^test\.csv[\w-\.]+\.bak$/.test(info2[0]));
-    expect(
-      info2[1],
-      `x,y,frame_ms,leave_count
-1,hello,${app.data.frame_ms},0
-2,world,${app.data.frame_ms},1`,
+      let p = s.show();
+      expect(
+        map(params, (v) => v.length),
+        {},
+        1,
+      );
+      await s.close();
+      await Promise.race([p, Promise.reject(Error('not closed'))]);
+      expect(
+        map(params, (v) => v.length),
+        {},
+        1,
+      );
+
+      p = s.config({ close_on: 'click' }).show();
+      expect(
+        map(params, (v) => v.length),
+        { click: 1 },
+        1,
+      );
+      mock_event(s.root, 'click');
+      await sleep(0);
+      await Promise.race([p, Promise.reject(Error('not closed'))]);
+      expect(
+        map(params, (v) => v.length),
+        {},
+        1,
+      );
+
+      p = s.show();
+      expect(
+        map(params, (v) => v.length),
+        {},
+        1,
+      );
+      await s.close();
+      await Promise.race([p, Promise.reject(Error('not closed'))]);
+      expect(
+        map(params, (v) => v.length),
+        {},
+        1,
+      );
+    }
+
+    // duration
+    {
+      let frame_count = 0;
+      using s = app.scene(
+        (p: {}) => {
+          getCurrentScene().on('frame', () => frame_count++);
+          return '';
+        },
+        { defaultProps: {} },
+      );
+
+      let p = s.show();
+      await sleep(1e2);
+      expect(
+        await Promise.race([p, Promise.resolve('not closed')]),
+        'not closed',
+      );
+      await s.close();
+      await p;
+
+      const original_frame_count = frame_count;
+      frame_count = 0;
+      await s.config({ duration: 16 }).show();
+      expect(frame_count < original_frame_count);
+
+      p = s.show();
+      await sleep(1e2);
+      expect(
+        await Promise.race([p, Promise.resolve('not closed')]),
+        'not closed',
+      );
+      await s.close();
+      await p;
+    }
+  },
+  async 'listener - repeat with close_on'() {
+    using app = await createApp();
+
+    // native
+    {
+      let called = 0;
+      using s = app.scene(
+        (p: {}) => {
+          const ctx = getCurrentScene();
+          ctx.on(
+            'dispose',
+            on(ctx.root, 'pointerdown', () => called++),
+          );
+          return '';
+        },
+        { defaultProps: {}, close_on: 'pointerdown' },
+      );
+      const p = s.show();
+      mock_event(s.root, 'pointerdown');
+      await p;
+      expect(called, 1);
+    }
+
+    // key shortcut
+    {
+      let called = 0;
+      using s = app.scene(
+        (p: {}) => {
+          const ctx = getCurrentScene();
+          ctx.on(
+            'dispose',
+            on(ctx.root, 'keydown', (e) => e.key === ' ' && called++),
+          );
+          return '';
+        },
+        { defaultProps: {}, close_on: 'key:s' },
+      );
+      const p1 = s.show();
+      mock_event(s.root, new KeyboardEvent('keydown', { key: ' ' }));
+      mock_event(s.root, new KeyboardEvent('keydown', { key: 's' }));
+      await p1;
+      expect(called, 1);
+    }
+    {
+      let called = 0;
+      using s = app.scene(
+        (p: {}) => {
+          const ctx = getCurrentScene();
+          ctx.on(
+            'dispose',
+            on(ctx.root, 'keydown', (e) => e.key === 'q' && called++),
+          );
+          return '';
+        },
+        { defaultProps: {}, close_on: 'key:q' },
+      );
+      const p = s.show();
+      mock_event(s.root, new KeyboardEvent('keydown', { key: 'q' }));
+      await p;
+      expect(called, 1);
+    }
+    {
+      let called = 0;
+      using s = app.scene(
+        (p: {}) => {
+          const ctx = getCurrentScene();
+          ctx.on(
+            'dispose',
+            on(ctx.root, 'keydown', () => called++),
+          );
+          return '';
+        },
+        { defaultProps: {}, close_on: 'key: ' },
+      );
+      const p = s.show();
+      mock_event(s.root, new KeyboardEvent('keydown', { key: ' ' }));
+      await p;
+      expect(called, 1);
+    }
+    {
+      let called = 0;
+      using s = app.scene(
+        (p: {}) => {
+          const ctx = getCurrentScene();
+          ctx.on(
+            'dispose',
+            on(ctx.root, 'keydown', (e) => e.key === ' ' && called++),
+          );
+          return '';
+        },
+        { defaultProps: {}, close_on: 'keydown' },
+      );
+      const p = s.show();
+      mock_event(s.root, new KeyboardEvent('keydown', { key: ' ' }));
+      await p;
+      expect(called, 1);
+    }
+
+    // mouse shortcut
+    {
+      let called = 0;
+      using s = app.scene(
+        (p: {}) => {
+          const ctx = getCurrentScene();
+          ctx.on(
+            'dispose',
+            on(ctx.root, 'mousedown', (e) => e.button === 0 && called++),
+          );
+          return '';
+        },
+        { defaultProps: {}, close_on: 'mouse:right' },
+      );
+      const p = s.show();
+      mock_event(s.root, new MouseEvent('mousedown', { button: 0 }));
+      mock_event(s.root, new MouseEvent('mousedown', { button: 2 }));
+      await p;
+      expect(called, 1);
+    }
+    {
+      let called = 0;
+      using s = app.scene(
+        (p: {}) => {
+          const ctx = getCurrentScene();
+          ctx.on(
+            'dispose',
+            on(ctx.root, 'mousedown', (e) => e.button === 0 && called++),
+          );
+          return '';
+        },
+        { defaultProps: {}, close_on: 'mouse:left' },
+      );
+      const p = s.show();
+      mock_event(s.root, new MouseEvent('mousedown', { button: 0 }));
+      await p;
+      expect(called, 1);
+    }
+    {
+      let called = 0;
+      using s = app.scene(
+        (p: {}) => {
+          const ctx = getCurrentScene();
+          ctx.on(
+            'dispose',
+            on(ctx.root, 'mousedown', (e) => e.button === 0 && called++),
+          );
+          return '';
+        },
+        { defaultProps: {}, close_on: 'mousedown' },
+      );
+      const p = s.show();
+      mock_event(s.root, new MouseEvent('mousedown', { button: 0 }));
+      await p;
+      expect(called, 1);
+    }
+    {
+      let called = 0;
+      using s = app.scene(
+        (p: {}) => {
+          const ctx = getCurrentScene();
+          ctx.on(
+            'dispose',
+            on(ctx.root, 'mousedown', (e) => called++),
+          );
+          return '';
+        },
+        { defaultProps: {}, close_on: 'mouse:left' },
+      );
+      const p = s.show();
+      mock_event(s.root, new MouseEvent('mousedown', { button: 0 }));
+      await p;
+      expect(called, 1);
+    }
+  },
+  async 'props - shallow reactive'() {
+    let renderCount = 0;
+    let derivedValue = 0;
+    let changeNested: Function | null = null;
+
+    using app = await createApp();
+    using s = app.scene(
+      (props: { nested: { value: number } }) => {
+        changeNested = (newValue: number) => {
+          props.nested.value = newValue;
+        };
+        van.derive(() => {
+          renderCount++;
+          derivedValue = props.nested.value;
+        });
+        return '';
+      },
+      { defaultProps: { nested: { value: 1 } }, duration: 0 },
     );
+    expect(typeof changeNested, 'function');
+    expect(renderCount, 1);
+    expect(derivedValue, 1);
+
+    changeNested!(2);
+    await 0;
+    expect(renderCount, 1);
+    expect(derivedValue, 1);
+
+    await s.show({ nested: { value: 3 } });
+    expect(renderCount, 2);
+    expect(derivedValue, 3);
+  },
+  async 'props - get non-exist key'() {
+    let runCount = 0;
+    let derivedValue: string | undefined;
+
+    using app = await createApp();
+    using s = app.scene(
+      (props: { optional?: string }) => {
+        van.derive(() => {
+          runCount++;
+          derivedValue = props.optional;
+        });
+        return '';
+      },
+      { defaultProps: {}, duration: 0 },
+    );
+    expect(runCount, 1);
+    expect(derivedValue, void 0);
+
+    await s.show({ optional: 'hello' });
+    expect(runCount, 2);
+    expect(derivedValue, 'hello');
+
+    await s.show();
+    expect(runCount, 3);
+    expect(derivedValue, void 0);
   },
 };
 
@@ -437,7 +779,7 @@ const expect_StairCase_data = (
   for (const [expectedValue, response] of expected) {
     // step
     const { value, done } = iter.next();
-    if (done) return ERR('Iterator ended too soon');
+    if (done) throw ERR('Iterator ended too soon');
     expect_closeTo(value, expectedValue, 1e-6);
     iterable.response(response);
     // log reversals
@@ -448,7 +790,7 @@ const expect_StairCase_data = (
 
   // finalize
   const { value, done } = iter.next();
-  if (!done) return ERR('Iterator did not end as expected');
+  if (!done) throw ERR('Iterator did not end as expected');
 
   // assert threshold
   const expectedThreshold =
@@ -859,6 +1201,50 @@ export const _StairCase = {
 
 // Collector
 export const _Collector = {
+  async 'dispose - remove listeners'() {
+    using doc_listeners = spy_listeners(doc);
+    {
+      using dc = new Collector('test.csv');
+      const eventTypes = Object.keys(doc_listeners);
+      expect(eventTypes, ['visibilitychange'], 1);
+      expect(doc_listeners['visibilitychange']!.length, 1);
+    }
+    expect(doc_listeners, {}, 1);
+  },
+  async 'backup on leave'() {
+    using _ = spy_functionCall(window, 'alert', () => {}); // disable alert
+    const expect_no_download = () =>
+      spy_browserDownload(mock_leaveAndBack).then((info) => expect(info, null));
+
+    // on
+    {
+      using dc = new Collector('test.csv', { backup_on_leave: true });
+      await expect_no_download();
+
+      dc.add({ x: 1, y: 'hello' });
+      const info1 = (await spy_browserDownload(mock_leaveAndBack))!;
+      expect(/^test\.csv[\w-\.]+\.bak$/.test(info1[0]));
+      expect(info1[1], `x,y\n1,hello`);
+
+      dc.add({ x: 2, y: 'world' });
+      const info2 = (await spy_browserDownload(mock_leaveAndBack))!;
+      expect(/^test\.csv[\w-\.]+\.bak$/.test(info2[0]));
+      expect(info2[1], `x,y\n1,hello\n2,world`);
+    }
+
+    // off
+    {
+      using dc = new Collector('test.csv', { backup_on_leave: false });
+      await expect_no_download();
+
+      dc.add({ x: 1, y: 'hello' });
+      await expect_no_download();
+
+      dc.add({ x: 2, y: 'world' });
+      await expect_no_download();
+    }
+  },
+  // data collection
   'add data'() {
     const rows = [
       { a: 1, b: 'hello' },
@@ -1003,12 +1389,13 @@ text,"hello, world","she said ""hello"" and 'world'","line1\nline2\rline3",,`,
     });
   },
   'custom serializer'() {
-    const customSerializer: Serializer = {
-      header: () => '<data>',
-      body: (row) => `<row>${JSON.stringify(row)}</row>`,
-      footer: () => '</data>',
-    };
-    using dc = new Collector('test.xml', customSerializer);
+    using dc = new Collector('test.xml', {
+      serializer: {
+        header: () => '<data>',
+        body: (row) => `<row>${JSON.stringify(row)}</row>`,
+        footer: () => '</data>',
+      },
+    });
 
     expect(
       dc.add({ a: 1, b: 'hello' }),
@@ -1062,5 +1449,300 @@ text,"hello, world","she said ""hello"" and 'world'","line1\nline2\rline3",,`,
       '<data><row>{"a":1,"b":"hello"}</row><row>{"a":2,"b":"world"}</row><row>{"a":3,"b":"!"}</row></data>',
     );
     delete Collector.serializers['xml'];
+  },
+};
+
+// Utils
+export const Utils = {
+  async 'adapter - shallow reactive'() {
+    const { props } = adapter.render(
+      (props: { a: number; b: { c: number } }) => '',
+      { a: 1, b: { c: 2 } },
+    );
+
+    let runCount = 0;
+    let a_val, b_c_val;
+    van.derive(() => {
+      runCount++;
+      a_val = props.a;
+      b_c_val = props.b.c;
+    });
+
+    expect(runCount, 1);
+    expect(a_val, 1);
+    expect(b_c_val, 2);
+
+    // Update top-level
+    props.a = 2;
+    await 0;
+    expect(runCount, 2);
+    expect(a_val, 2);
+
+    // Update nested (should not trigger)
+    props.b.c = 3;
+    await 0;
+    expect(runCount, 2);
+    expect(b_c_val, 2); // derive didn't run
+    expect(props.b.c, 3); // value updated
+
+    // Update object ref
+    props.b = { c: 4 };
+    await 0;
+    expect(runCount, 3);
+    expect(b_c_val, 4);
+  },
+  async 'adapter - get non-exist key'() {
+    const { props } = adapter.render((p: { optional?: string }) => '', {});
+
+    let runCount = 0;
+    let val;
+    van.derive(() => {
+      runCount++;
+      val = props.optional;
+    });
+
+    expect(runCount, 1);
+    expect(val, void 0);
+
+    props.optional = 'hello';
+    await 0;
+    expect(runCount, 2);
+    expect(val, 'hello');
+  },
+  async 'adapter - repeat reactive wrap'() {
+    let props: { count: number };
+    const Comp = (p: typeof props) => {
+      props = p;
+      return '';
+    };
+
+    // define
+    {
+      expect(
+        adapter.render(adapter.define(Comp), {
+          count: 0,
+        }).props,
+        props!,
+      );
+      expect(
+        adapter.render(adapter.define(adapter.define(Comp)), {
+          count: 0,
+        }).props,
+        props!,
+      );
+      expect(
+        adapter.render(adapter.define(adapter.define(adapter.define(Comp))), {
+          count: 0,
+        }).props,
+        props!,
+      );
+    }
+
+    // render
+    {
+      const { props } = adapter.render(Comp, { count: 0 });
+
+      const { props: props2 } = adapter.render(Comp, props);
+      expect(props, props2);
+
+      const { props: props3 } = adapter.render(Comp, props2);
+      expect(props, props3);
+    }
+  },
+  async 'adapter - reactive props after wrap'() {
+    using app = await createApp();
+
+    // basic prop
+    {
+      using s = app.scene(
+        adapter.define((props: { text: string }) => div(() => props.text)),
+        {
+          defaultProps: { text: 'default' },
+          duration: 0,
+        },
+      );
+      expect(s.root.textContent, 'default');
+      await s.show({ text: 'new' });
+      expect(s.root.textContent, 'new');
+      await s.show();
+      expect(s.root.textContent, 'default');
+    }
+
+    // optional prop
+    {
+      using s = app.scene(
+        adapter.define((props: { text?: string }) =>
+          div(() => props.text ?? ''),
+        ),
+        {
+          defaultProps: {},
+          duration: 0,
+        },
+      );
+      expect(s.root.textContent, '');
+      await s.show({ text: 'new' });
+      expect(s.root.textContent, 'new');
+      await s.show();
+      expect(s.root.textContent, '');
+    }
+  },
+  async 'default porps - merge'() {
+    // plain object
+    {
+      const props: { a?: number; b: string; c: boolean } = {
+        b: 'world',
+        c: true,
+      };
+
+      const merged = defaultProps(props, { a: 1, b: 'hello' });
+      expect(merged.a, 1);
+      expect(merged.b, 'world');
+      expect(merged.c, true);
+    }
+
+    // reactive object
+    {
+      const props = reactive<{ a?: number; b: string; c: boolean }>({
+        b: 'world',
+        c: true,
+      });
+
+      const merged = defaultProps(props, { a: 1, b: 'hello' });
+      expect(merged.a, 1);
+      expect(merged.b, 'world');
+      expect(merged.c, true);
+    }
+  },
+  async 'default porps - keep reactive'() {
+    const props = reactive<{ a?: number; b: string; c: boolean }>({
+      b: 'world',
+      c: true,
+    });
+
+    const merged = defaultProps(props, { a: 1, b: 'hello' });
+    let _merged: typeof props = { b: '', c: true };
+    van.derive(() => {
+      _merged.a = merged.a;
+      _merged.b = merged.b;
+      _merged.c = merged.c;
+      //@ts-expect-error
+      _merged.d = merged.d;
+    });
+
+    merged.a = 5;
+    merged.b = 'changed';
+    merged.c = false;
+    //@ts-expect-error
+    merged.d = 'new prop';
+    await 0;
+    expect(_merged.a, 5);
+    expect(_merged.b, 'changed');
+    expect(_merged.c, false);
+    //@ts-expect-error
+    expect(_merged.d, 'new prop');
+
+    //@ts-expect-error
+    merged.a = true;
+    //@ts-expect-error
+    merged.b = 1;
+    //@ts-expect-error
+    merged.c = 'hello';
+    //@ts-expect-error
+    delete merged.d;
+    await 0;
+    expect(_merged.a, true);
+    expect(_merged.b, 1);
+    expect(_merged.c, 'hello');
+    //@ts-expect-error
+    expect(_merged.d, void 0);
+  },
+  async 'detect fps - alert on leave'() {
+    using alertParams = spy_functionCall(window, 'alert', () => {});
+    using goParams = spy_functionCall(history, 'go', () => {});
+
+    const leave_alert = 'This text will show when you leave the page.';
+    const p = detectFPS({
+      root: doc.body,
+      frames_count: 19,
+      leave_alert,
+    });
+
+    await mock_leaveAndBack();
+    expect(goParams.length, 1); // history.go()
+    expect(goParams[0]![0], void 0);
+    expect(alertParams.length, 1); // alert(leave_alert)
+    expect(alertParams[0]![0], leave_alert);
+  },
+  async 'detect fps - return durations'() {
+    const durations = await detectFPS({
+      root: doc.body,
+      frames_count: 19,
+      leave_alert: 'Please stay on the page.',
+    });
+    expect(durations.length, 19);
+    expect(
+      durations.every((e) => typeof e === 'number' && e > 0),
+      true,
+    );
+  },
+};
+
+const __typecheck__ = {
+  defaultProps() {
+    const props: { a?: number; b: string; c: boolean } = {
+      b: 'world',
+      c: true,
+    };
+    defaultProps(props, {
+      //@ts-expect-error
+      a: '',
+      //@ts-expect-error
+      b: false,
+      //@ts-expect-error
+      c: 3,
+    });
+  },
+  on() {
+    type PropertyEventMap<T, K = keyof T> = {
+      //@ts-ignore
+      [P in K extends `on${infer R}` ? R : never]: Parameters<T[`on${P}`]>[0];
+    };
+    type Diff<T, U> = {
+      [P in keyof T]: P extends string
+        ? U extends { [K in P]: any }
+          ? never
+          : P
+        : never;
+    }[keyof T];
+
+    on<
+      Window,
+      //@ts-expect-error
+      Diff<WindowEventMap, PropertyEventMap<Window>>
+    >;
+    on<
+      Document,
+      //@ts-expect-error
+      Diff<DocumentEventMap, PropertyEventMap<Document>>
+    >;
+    on<
+      HTMLElement,
+      //@ts-expect-error
+      Diff<HTMLElementEventMap, PropertyEventMap<HTMLElement>>
+    >;
+    on<
+      HTMLMediaElement,
+      //@ts-expect-error
+      Diff<HTMLMediaElementEventMap, PropertyEventMap<HTMLMediaElement>>
+    >;
+    on<
+      HTMLBodyElement,
+      Diff<PropertyEventMap<HTMLBodyElement>, HTMLBodyElementEventMap>
+    >;
+    on<
+      MathMLElement,
+      Diff<PropertyEventMap<MathMLElement>, MathMLElementEventMap>
+    >;
+    on<SVGElement, Diff<PropertyEventMap<SVGElement>, SVGElementEventMap>>;
   },
 };

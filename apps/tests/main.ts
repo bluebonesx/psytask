@@ -1,35 +1,31 @@
+import { error_normalize, isObject, mount } from 'shared/utils';
 import van from 'vanjs-core';
 import { calc, noreactive, reactive } from 'vanjs-ext';
-import { isObject, mount } from 'shared/utils';
-import { spy_functionCall } from './cases/utils';
-const { button, details, div, section, span, summary } = van.tags;
+const { button, details, div, pre, section, summary } = van.tags;
 
 type ViewRaw = { [key: string]: Function | ViewRaw };
 type CaseView = {
   render(): HTMLElement;
-  state: 'pending' | 'passed' | 'error';
+  state: 'pending' | 'passed' | 'failed' | 'running';
+  duration: string;
   job(e?: PointerEvent): void;
   raw: Function;
   error?: any;
 };
 type CaseSetView = {
   render(): HTMLElement;
-  state: 'pending' | 'passed' | 'error';
+  state: 'pending' | 'passed' | 'failed' | 'running';
   job(e?: PointerEvent): void;
   tree: ViewTree;
   size: number;
 };
 type ViewTree = { [key: string]: CaseView | CaseSetView };
 
-import * as psytask from './cases/psytask.test';
-import * as core from './cases/core.test';
-import * as components from './cases/components.test';
-import * as jspsych from './cases/jspsych.test';
 const mods = {
-  psytask,
-  core,
-  components,
-  jspsych,
+  core: await import('./cases/core.test'),
+  psytask: await import('./cases/psytask.test'),
+  components: await import('./cases/components.test'),
+  jspsych: await import('./cases/jspsych.test'),
 } satisfies ViewRaw;
 const raw2tree = (raw: ViewRaw): ViewTree =>
   Object.entries(raw).reduce((acc, [name, val]) => {
@@ -38,26 +34,38 @@ const raw2tree = (raw: ViewRaw): ViewTree =>
         render: () =>
           div(
             { 'data-test': () => view.state },
-            section(button({ onclick: view.job }, '▶'), name),
-            () =>
-              view.error
-                ? span(
-                    { style: 'color:red' },
-                    ' ' + (view.error.stack ?? view.error),
-                  )
-                : '',
+            section(
+              button({ onclick: view.job }, '▶'),
+              () => `${name} | ${view.duration ?? ''}`,
+            ),
+            () => {
+              const { error } = view;
+              if (!error) return '';
+              const err = error_normalize(error);
+              const base = `${err.name}: ${err.message}`;
+              return pre(
+                { style: 'color:red;overflow:auto', contentEditable: true },
+                err.stack
+                  ? err.stack.startsWith(base)
+                    ? err.stack
+                    : `${base}\n${err.stack}`
+                  : base,
+              );
+            },
           ),
         state: 'pending',
         job(e) {
           e?.preventDefault();
           runJob(async () => {
             try {
-              view.state = 'pending';
+              view.state = 'running';
+              const st = performance.now();
               await val();
+              view.duration = (performance.now() - st).toFixed(2);
               view.state = 'passed';
               view.error = null;
             } catch (err) {
-              view.state = 'error';
+              view.state = 'failed';
               view.error = isObject(err) ? noreactive(err) : err;
               throw err;
             }
@@ -65,6 +73,7 @@ const raw2tree = (raw: ViewRaw): ViewTree =>
         },
         raw: val,
         error: null,
+        duration: '',
       });
       return { ...acc, [name]: view };
     }
@@ -87,7 +96,7 @@ const raw2tree = (raw: ViewRaw): ViewTree =>
         const states = cases.map((e) => e.state);
         let hasPassed = !!states.length;
         for (const s of states) {
-          if (s === 'error') return s;
+          if (s === 'failed' || s == 'running') return s;
           if (s === 'pending') hasPassed = false;
         }
         return hasPassed ? 'passed' : 'pending';
@@ -124,19 +133,5 @@ mount(
       //@ts-ignore
       (window['store'] = raw2tree({ ALL: mods })),
     ).map((v) => v.render()),
-  ),
-);
-
-// override fetch to use test server
-const _fetch = fetch;
-spy_functionCall(globalThis, 'fetch', (input, init) =>
-  _fetch(
-    input instanceof Request
-      ? input
-      : new URL(
-          input,
-          'https://httpcan.org' /** @link httpbin.org mockhttp.org */,
-        ),
-    init,
   ),
 );

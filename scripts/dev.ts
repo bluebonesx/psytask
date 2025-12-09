@@ -1,30 +1,40 @@
 import fs from 'fs/promises';
-import ignore from 'ignore';
 import { networkInterfaces } from 'os';
 import path from 'path';
 import { buildProject } from './build';
 import { cyan, green, log, projects, yellow, type Project } from './utils';
 
-const ig = ignore().add((await Bun.file('.gitignore').text()).split('\n')); // use .gitignore
 const listened = new Set<string>();
-const build = async (proj: Project) => {
-  for (const dep of proj.deps ?? []) await buildProject(dep); // wait for dependencies build
-  await buildProject(proj);
+const build = async (proj: Project, clear?: boolean) => {
+  try {
+    for (const dep of proj.deps ?? []) await buildProject(dep); // wait for dependencies build
+    await buildProject(proj, clear);
+  } catch (error) {
+    console.error(`Build failed for ${proj.name}:`, error);
+  }
 };
 const listen = async (proj: (typeof projects)[number]) => {
   log(green(`Listening ${proj.name}`));
-  await build(proj); // init build
+  await build(proj, true); // init build
 
-  const subdirpaths = (await fs.readdir(proj.path, { withFileTypes: true }))
-    .filter((e) => e.isDirectory() && !ig.ignores(e.name))
-    .map((e) => path.join(proj.path, e.name));
-  for (const dirpath of [...subdirpaths, proj.path])
+  const watchedItems = new Set(proj.userConfig?.watchItems);
+  if (proj.root === 'packages') {
+    watchedItems.add('index.ts');
+    watchedItems.add('src');
+  } else {
+    watchedItems.add('main.ts');
+    watchedItems.add('main.css');
+  }
+
+  for (const item of watchedItems)
     (async () => {
-      for await (const { eventType, filename } of fs.watch(dirpath)) {
-        if (filename && !ig.ignores(filename)) {
-          log(yellow(`File changed: ${path.join(proj.name, filename ?? '')}`));
+      const itempath = path.join(proj.path, item);
+      if (!(await fs.exists(itempath))) return;
+      for await (const { eventType, filename } of fs.watch(itempath)) {
+        if (filename) {
+          log(yellow(`File changed: ${path.join(item, filename)}`));
           proj.state = 0; // not built
-          build(proj); // rebuild
+          await build(proj); // rebuild
         }
       }
     })();
@@ -54,7 +64,7 @@ const createRouteHandler = async (root: string) => {
 // start server
 const appHandler = await createRouteHandler('apps');
 const pkgHandler = await createRouteHandler('packages');
-const basename = '/psytask';
+const prefix = '/psytask';
 const server = Bun.serve({
   port: 3000,
   hostname: '0.0.0.0',
@@ -73,8 +83,8 @@ const server = Bun.serve({
         (proj) =>
           `<div><a href="${
             proj.root === 'apps'
-              ? `${basename}/${proj.name}/`
-              : `${basename}/public/${proj.name}/index.js`
+              ? `${prefix}/${proj.name}/`
+              : `${prefix}/public/${proj.name}/index.js`
           }">${proj.root + '/' + proj.name}</a></div>`,
       )
       .join('')}
@@ -82,10 +92,10 @@ const server = Bun.serve({
 </html>`,
         { headers: { 'Content-Type': 'text/html' } },
       ),
-    [`${basename}/:item/`]: (req) =>
+    [`${prefix}/:item/`]: (req) =>
       appHandler({ item: req.params.item, file: 'index.html' }),
-    [`${basename}/:item/:file`]: (req) => appHandler(req.params),
-    [`${basename}/public/:item/:file`]: (req) => pkgHandler(req.params),
+    [`${prefix}/:item/:file`]: (req) => appHandler(req.params),
+    [`${prefix}/public/:item/:file`]: (req) => pkgHandler(req.params),
   },
   fetch: (req) => new Response('Not Found', { status: 404 }),
 });

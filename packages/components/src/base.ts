@@ -1,21 +1,11 @@
-import { adapter, getCurrentScene } from 'psytask';
-import { css } from 'shared/macro' with { type: 'macro' };
-import { doc, error_normalize, mount } from 'shared/utils';
+import { getCurrentScene } from 'psytask';
+import { error_normalize } from 'shared/utils';
 import van from 'vanjs-core';
 import { list, reactive } from 'vanjs-ext';
 import { useFetch } from './hooks';
 
-const { li, ul, style } = van.tags;
+const { li, ul } = van.tags;
 
-// import styles
-mount(style(), doc.head).textContent = `.psytask-container{${css({
-  display: 'flex',
-  'flex-direction': 'column',
-  'align-items': 'center',
-  'justify-content': 'center',
-  'white-space': 'pre-wrap',
-  height: '100%',
-})}}`;
 /**
  * Load multiple urls as blobs
  *
@@ -47,58 +37,62 @@ mount(style(), doc.head).textContent = `.psytask-container{${css({
  * const imageUrl = URL.createObjectURL(result.blobs[0]);
  * ```
  */
-export const Loader = adapter.define(
-  <const T extends string[]>(props: { urls: Readonly<T> }) => {
-    let result: { blobs: null; error: Error } | { blobs: Blob[]; error: null } =
-      {
-        blobs: [],
-        error: null,
-      };
-    const views = reactive<string[]>([]);
-    const ctx = getCurrentScene();
+export const Loader = <const T extends string[]>(props: {
+  urls: Readonly<T>;
+}) => {
+  let result: { blobs: null; error: Error } | { blobs: Blob[]; error: null } = {
+    blobs: [],
+    error: null,
+  };
+  const views = reactive<string[]>([]);
+  const ctx = getCurrentScene();
 
-    van.derive(async () => {
-      const urls = props.urls;
-      views.splice(0, views.length, ...urls);
-      if (urls.length === 0)
-        return ((result = { blobs: [], error: null }), ctx.close());
+  ctx.on('show', async () => {
+    const urls = props.urls;
+    views.splice(0, views.length, ...urls);
+    if (urls.length === 0)
+      return ((result = { blobs: [], error: null }), ctx.close());
 
-      const ac = new AbortController();
-      const promises = urls.map(
-        //@ts-ignore
-        (url, i) =>
-          new Promise<Blob>((resolve, reject) => {
-            const res = useFetch({ url, signal: ac.signal });
-            van.derive(() => {
-              const { status, loading } = res;
-              if (loading)
-                return (views[i] =
-                  `${url} ⏳` +
-                  (status === 'loading'
-                    ? `: ${((res.loaded / res.total) * 1e2).toFixed(2)}%`
-                    : '...'));
-              if (status === 'success')
-                return ((views[i] = url + ' - ✅'), resolve(res.data));
-              ac.abort();
-              const { error } = res;
-              views[i] = url + ' - ❌: ' + error;
-              error.message += ' (while loading ' + url + ')';
-              reject(error);
-            });
-          }),
-      );
-      result = await Promise.all(promises).then(
-        (data) => ({ blobs: data, error: null }),
-        (err) => ({ blobs: null, error: error_normalize(err) }),
-      );
-      ctx.close();
-    });
-    return {
-      node: list(ul, views, (s) => li(() => s.val)),
-      data: () =>
-        result as
-          | { blobs: null; error: Error }
-          | { blobs: { [K in keyof T]: Blob }; error: null },
-    };
-  },
-);
+    const ac = new AbortController();
+    const promises = urls.map(
+      //@ts-ignore
+      (url, i) =>
+        new Promise<Blob>((resolve, reject) => {
+          const res = useFetch({ url, signal: ac.signal });
+          van.derive(() => {
+            const { status, loading } = res;
+            if (loading)
+              return (views[i] =
+                `${url} ⏳` +
+                (status === 'loading'
+                  ? `: ${((res.loaded / res.total) * 1e2).toFixed(2)}%`
+                  : '...'));
+            if (status === 'success')
+              return ((views[i] = url + ' - ✅'), resolve(res.data));
+
+            ac.abort(); // abort all requests
+            const { error } = res;
+            views[i] = url + ' - ❌: ' + error;
+            error.message += ' (while loading ' + url + ')';
+            reject(error);
+          });
+        }),
+    );
+    result = await Promise.all(promises).then(
+      (data) => ({ blobs: data, error: null }),
+      (err) => ({ blobs: null, error: error_normalize(err) }),
+    );
+    ctx.close();
+  });
+  return {
+    node: list(
+      () => ul({ class: 'psytask-center' }),
+      views,
+      (s) => li(() => s.val),
+    ),
+    data: () =>
+      result as
+        | { blobs: null; error: Error }
+        | { blobs: { [K in keyof T]: Blob }; error: null },
+  };
+};

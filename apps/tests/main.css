@@ -50,8 +50,11 @@
   & [data-test='passed'] {
     border-color: #4caf50;
   }
-  & [data-test='error'] {
+  & [data-test='failed'] {
     border-color: #f44336;
+  }
+  & [data-test='running'] {
+    border-color: #ffeb3b;
   }
   & [data-test='pending'] {
     border-color: gray;

@@ -1,9 +1,9 @@
 import { useFetch } from '@psytask/components';
+import { useHash } from 'shared/hook';
+import { glob } from 'shared/macro' with { type: 'macro' };
+import { ERR, map, mount } from 'shared/utils';
 import van from 'vanjs-core';
 import { reactive } from 'vanjs-ext';
-import { useHash } from 'shared/hook';
-import { ERR, map, mount } from 'shared/utils'; //@ts-ignore
-import { glob } from 'shared/macros' with { type: 'macro' };
 
 const { a, button, div, h1, iframe, option, select } = van.tags;
 
@@ -22,13 +22,15 @@ See `,
   ) && ERR('not support');
 
 // static data
-const examples = glob('*.js', { cwd: 'examples' }).map((f) =>
-  f.replace('.js', ''),
-);
+const examples = glob('./examples/*.js').map(
+  (f) => f.split('/').pop()!.split('.').shift()!,
+); //TODO: use macro
+const importmapText = document.querySelector(
+  'script[type="importmap"]',
+)?.textContent;
+if (!importmapText) throw ERR('Import map not found in HTML');
 const importMap = map(
-  JSON.parse(
-    document.querySelector('script[type="importmap"]')?.textContent ?? '{',
-  ).imports as Record<string, string>,
+  JSON.parse(importmapText).imports as Record<string, string>,
   (value) => {
     const data = { import: value, types: value.replace('.min.js', '.d.ts') };
     if (value.startsWith('../')) {
@@ -174,7 +176,13 @@ const [{ loadMonaco }, { shikiToMonaco }, { createHighlighter }] =
       'https://cdn.jsdelivr.net/npm/monaco-editor-esm-cdn@0.1.1/load-monaco.min.js',
       'https://esm.sh/@shikijs/monaco@3.13.0?exports=shikiToMonaco',
       'https://esm.sh/shiki@3.13.0?exports=createHighlighter',
-    ].map((url) => import(url)),
+    ].map(
+      (url) =>
+        import(
+          /* @vite-ignore */
+          url
+        ),
+    ),
   ).catch((e: unknown) => {
     store.indication = 'Resource load failed: ' + e;
     throw e;

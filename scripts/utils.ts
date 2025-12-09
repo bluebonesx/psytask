@@ -1,10 +1,10 @@
-import { glob } from 'fs/promises';
-import path from 'path';
+import type { MaybePromise } from 'bun';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { workspaces } from '../package.json';
 
-export const __CONFIG_FILE__ = 'build.config.ts';
 export const __ROOT__ = path.resolve(import.meta.dir, '..');
-export const __DEV__ = process.argv[2] === '--dev';
+export const __DEV__ = process.argv[process.argv.length - 1] === '--dev';
 
 export const red = (msg: string) => `\x1b[31m${msg}\x1b[0m`;
 export const green = (msg: string) => `\x1b[32m${msg}\x1b[0m`;
@@ -23,27 +23,40 @@ export const withCwd = <T>(cwd: string) => {
   };
 };
 
+type UserConfig = {
+  importmap?: Record<string, string>;
+  styles?: string[];
+  watchItems?: string[];
+  before?: () => MaybePromise<void>;
+  after?: () => MaybePromise<void>;
+};
 export type Project = {
   root: string;
   name: string;
   path: string;
   pkgJson: Record<string, any>;
+  userConfig?: UserConfig;
   /** 1: built; 0: not built; 10: not visited; 11: visiting; <0: visited order */
   state: number;
   deps?: Project[];
 };
 export const projects: Project[] = [];
 // load projects
-for await (const item of glob(workspaces.packages)) {
+for await (const item of fs.glob(workspaces.packages)) {
   if (item === 'shared') continue;
   const [root, name] = item.split('/') as [string, string];
   const pkgJson = await import(path.join(__ROOT__, item, 'package.json'));
+  const projPath = path.join(__ROOT__, item);
+  const configPath = path.join(projPath, 'build.config.ts');
   projects.push({
     state: 10,
     root,
     name,
-    path: path.join(__ROOT__, item),
+    path: projPath,
     pkgJson,
+    userConfig: (await fs.exists(configPath))
+      ? await import(configPath)
+      : void 0,
   });
 }
 // resolve dependencies
@@ -70,9 +83,11 @@ for (const proj of projects) {
   for (const proj of projects) proj.deps?.sort((a, b) => b.state - a.state);
   projects.sort((a, b) => b.state - a.state);
 }
+
 // console.log(
 //   projects.reduce(
 //     (acc, p) => ({ ...acc, [p.name]: p.deps?.map((dep) => dep.name) }),
 //     {},
 //   ),
 // );
+// console.log(projects.map((p) => p.path).join('\n'));

@@ -16,10 +16,11 @@
     "README.md"
   ],
   "dependencies": {
-    "auto-bind": "^4.0.0"
+    "auto-bind": "^4.0.0",
+    "vanjs-core": "catalog:",
+    "@psytask/core": "workspace:*"
   },
   "devDependencies": {
-    "jspsych": "catalog:",
-    "@psytask/core": "workspace:*"
+    "jspsych": "catalog:"
   }
 }

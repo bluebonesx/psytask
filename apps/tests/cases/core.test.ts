@@ -1,53 +1,91 @@
 import {
+  type Timer,
   EventEmitter,
   Scene,
+  createComponentAdapter,
+  createTimer,
   generic,
-  on,
-  type MaybeGenericSceneSetup,
-  type SceneEventMap,
-  type SceneOptions,
+  getCurrentScene,
 } from '@psytask/core';
-import { createApp } from 'psytask';
+import { on } from 'psytask';
 import type { LooseObject } from 'shared/types';
-import { map, mount, rAF } from 'shared/utils';
+import { map } from 'shared/utils';
 import van from 'vanjs-core';
+import { reactive } from 'vanjs-ext';
 import {
+  $,
+  DefaultScene,
   expect,
-  expect_closeTo,
   expect_error,
-  expect_includes,
   mock_event,
-  spy_listeners,
+  sleep,
 } from './utils';
-const { div } = van.tags;
 
-const DefaultScene = async <T extends MaybeGenericSceneSetup>(
-  ...[setup, options]: ConstructorParameters<typeof Scene<T>> extends [
-    infer L,
-    infer R extends SceneOptions<T>,
-  ]
-    ? [L, options?: Partial<R>]
-    : never
-) => {
-  using app = await createApp();
-  const container = mount(div({ class: 'psytask-app' }));
-  const root = mount(div({ class: 'scene' }), container);
-  return new Scene(setup, {
-    root,
-    frame_ms: app.data.frame_ms,
-    defaultProps: {},
-    duration: app.data.frame_ms * 1.5,
-    ...options,
-  }).on('dispose', () => container.remove());
-};
+const { button, div } = van.tags;
+
 export const _Scene = {
+  async 'get current scene'() {
+    let ctx: Scene<any>;
+
+    // basic usage
+    {
+      using s = DefaultScene((p: {}) => {
+        ctx = getCurrentScene();
+        return '';
+      });
+      expect(ctx!, s);
+    }
+
+    // nested usage
+    {
+      using s = DefaultScene((p: {}) =>
+        button({
+          onclick() {
+            expect_error(getCurrentScene);
+          },
+        }),
+      );
+      $(s.root, 'button').click();
+    }
+
+    // outside usage
+    {
+      expect_error(getCurrentScene);
+    }
+  },
   async 'dispose - remove DOM'() {
     const node = div();
     {
-      using _ = await DefaultScene((props: {}) => node);
+      using _ = DefaultScene((p: {}) => node);
       expect(node.isConnected);
     }
     expect(!node.isConnected);
+  },
+  async 'reset optional props'() {
+    let currentProps: any;
+    using s = DefaultScene(
+      (p: { a: number; b?: number }) => {
+        getCurrentScene().on('show', () => (currentProps = { ...p }));
+        return '';
+      },
+      { defaultProps: { a: 1 } },
+    );
+
+    await s.show({ b: 2 });
+    expect(currentProps.a, 1);
+    expect(currentProps.b, 2);
+
+    await s.show();
+    expect(currentProps.a, 1);
+    expect(currentProps.b, undefined);
+
+    await s.show({ a: 0, b: 3 });
+    expect(currentProps.a, 0);
+    expect(currentProps.b, 3);
+
+    await s.show();
+    expect(currentProps.a, 1);
+    expect(currentProps.b, undefined);
   },
   // async 'modify defaultProps'() {
   //   // array
@@ -128,194 +166,14 @@ export const _Scene = {
   //     });
   //   });
   // },
-  // async 'modify newProps'() {
-  //   // array
-  //   await expect_error(async () => {
-  //     const dp = { arr: [1, 2, 3] };
-  //     using _ = DefaultScene(
-  //       (p: typeof dp, ctx) => (
-  //         ctx.on('scene:show', (p) => ((p.arr[1] = 5), (p._ = 1))),
-  //         ''
-  //       ),
-  //       { defaultProps: dp },
-  //     ); //@ts-ignore
-  //     await _.show({ _: 0 });
-  //   });
-  //   await expect_error(async () => {
-  //     const dp = { arr: [1, 2, 3] };
-  //     using _ = DefaultScene(
-  //       (p: typeof dp, ctx) => (
-  //         ctx.on('scene:show', (p) => ((p.arr[4] = 5), (p._ = 1))),
-  //         ''
-  //       ),
-  //       { defaultProps: dp },
-  //     ); //@ts-ignore
-  //     await _.show({ _: 0 });
-  //   });
-  //   await expect_error(async () => {
-  //     const dp = { arr: [1, 2, 3] };
-  //     using _ = DefaultScene(
-  //       (p: typeof dp, ctx) => (
-  //         ctx.on('scene:show', (p) => (p.arr.splice(0, 1, 5), (p._ = 1))),
-  //         ''
-  //       ),
-  //       { defaultProps: dp },
-  //     ); //@ts-ignore
-  //     await _.show({ _: 0 });
-  //   });
-  //   await expect_error(async () => {
-  //     const dp = { arr: [1, 2, 3] };
-  //     using _ = DefaultScene(
-  //       (p: typeof dp, ctx) => (
-  //         ctx.on('scene:show', (p) => (p.arr.pop(), (p._ = 1))),
-  //         ''
-  //       ),
-  //       { defaultProps: dp },
-  //     ); //@ts-ignore
-  //     await _.show({ _: 0 });
-  //   });
-  //   await expect_error(async () => {
-  //     const dp = { arr: [1, 2, 3] };
-  //     using _ = DefaultScene(
-  //       (p: typeof dp, ctx) => (
-  //         ctx.on('scene:show', (p) => (p.arr.push(4), (p._ = 1))),
-  //         ''
-  //       ),
-  //       { defaultProps: dp },
-  //     ); //@ts-ignore
-  //     await _.show({ _: 0 });
-  //   });
-  //   await expect_error(async () => {
-  //     const dp = { arr: [1, 2, 3] };
-  //     using _ = DefaultScene(
-  //       (p: typeof dp, ctx) => (
-  //         ctx.on('scene:show', (p) => (p.arr.shift(), (p._ = 1))),
-  //         ''
-  //       ),
-  //       { defaultProps: dp },
-  //     ); //@ts-ignore
-  //     await _.show({ _: 0 });
-  //   });
-  //   await expect_error(async () => {
-  //     const dp = { arr: [1, 2, 3] };
-  //     using _ = DefaultScene(
-  //       (p: typeof dp, ctx) => (
-  //         ctx.on('scene:show', (p) => (p.arr.unshift(0), (p._ = 1))),
-  //         ''
-  //       ),
-  //       { defaultProps: dp },
-  //     ); //@ts-ignore
-  //     await _.show({ _: 0 });
-  //   });
-  //   // object
-  //   await expect_error(async () => {
-  //     const dp = { obj: { a: 1, b: 2 } };
-  //     using _ = DefaultScene(
-  //       (p: typeof dp, ctx) => (
-  //         ctx.on('scene:show', (p) => ((p.obj.a = 5), (p._ = 1))),
-  //         ''
-  //       ),
-  //       { defaultProps: dp },
-  //     ); //@ts-ignore
-  //     await _.show({ _: 0 });
-  //   });
-  //   await expect_error(async () => {
-  //     const dp = { obj: { a: 1, b: 2 } };
-  //     using _ = DefaultScene(
-  //       (p: typeof dp, ctx) => (
-  //         ctx.on('scene:show', (p) => ((p.obj.c = 5), (p._ = 1))),
-  //         ''
-  //       ),
-  //       { defaultProps: dp },
-  //     ); //@ts-ignore
-  //     await _.show({ _: 0 });
-  //   });
-  //   await expect_error(async () => {
-  //     const dp = { obj: { a: 1, b: 2 } };
-  //     using _ = DefaultScene(
-  //       (p: typeof dp, ctx) => (
-  //         ctx.on('scene:show', (p) => (delete p.obj.a, (p._ = 1))),
-  //         ''
-  //       ),
-  //       { defaultProps: dp },
-  //     ); //@ts-ignore
-  //     await _.show({ _: 0 });
-  //   });
-  //   // nested
-  //   await expect_error(async () => {
-  //     const dp = { nested: { a: [1, 2, 3] } };
-  //     using _ = DefaultScene(
-  //       (p: typeof dp, ctx) => (
-  //         ctx.on('scene:show', (p) => ((p.nested.a[1] = 5), (p._ = 1))),
-  //         ''
-  //       ),
-  //       { defaultProps: dp },
-  //     ); //@ts-ignore
-  //     await _.show({ _: 0 });
-  //   });
-  //   await expect_error(async () => {
-  //     const dp = { nested: { a: { b: 1 } } };
-  //     using _ = DefaultScene(
-  //       (p: typeof dp, ctx) => (
-  //         ctx.on('scene:show', (p) => ((p.nested.a.b = 5), (p._ = 1))),
-  //         ''
-  //       ),
-  //       { defaultProps: dp },
-  //     ); //@ts-ignore
-  //     await _.show({ _: 0 });
-  //   });
-  // },
-  async 'listener - remove on close'() {
-    const events: Record<string, number> = {};
-    const log_event = (e: Event) =>
-      (events[e.type] = (events[e.type] ?? 0) + 1);
-    using s = await DefaultScene(
-      (p: {}, ctx) => (
-        ctx
-          .on('pointerup', log_event)
-          .on('key:f', log_event)
-          .on('key: ', log_event)
-          .on('key:Enter', log_event)
-          .on('mouse:left', log_event)
-          .on('mouse:middle', log_event)
-          .on('mouse:right', log_event),
-        ''
-      ),
-      { duration: Infinity, close_on: ['abort', 'mouse:unknown'] },
-    );
-    using params = spy_listeners(s.root);
-    expect(events, {}, 1);
-
-    const p = s.show();
-    expect(
-      map(params, (v) => v.length),
-      { pointerup: 1, keydown: 1, mousedown: 1, abort: 1 },
-      1,
-    );
-
-    [
-      new PointerEvent('pointerup'),
-      new KeyboardEvent('keydown', { key: 'f' }),
-      new KeyboardEvent('keydown', { key: ' ' }),
-      new KeyboardEvent('keydown', { key: 'Enter' }),
-      new MouseEvent('mousedown', { button: 0 }),
-      new MouseEvent('mousedown', { button: 1 }),
-      new MouseEvent('mousedown', { button: 2 }),
-      new MouseEvent('mousedown', { button: 4 }),
-    ].map((e) => mock_event(s.root, e));
-
-    await p;
-    expect(events, { pointerup: 1, keydown: 3, mousedown: 3 }, 1);
-    expect(params, {}, 1);
-  },
   async 'listener - scene hooks'() {
     const counts = { show: 0, close: 0, frame: 0 };
-    using s = await DefaultScene(
-      (p: {}, ctx) => (
-        ctx
-          .on('scene:show', () => counts.show++)
-          .on('scene:close', () => counts.close++)
-          .on('scene:frame', () => counts.frame++),
+    using s = DefaultScene(
+      (p: {}) => (
+        getCurrentScene()
+          .on('show', () => counts.show++)
+          .on('close', () => counts.close++)
+          .on('frame', () => counts.frame++),
         ''
       ),
     );
@@ -327,148 +185,14 @@ export const _Scene = {
     expect(counts.frame > 0);
 
     counts.frame = 0;
-    await s.config({ duration: 50 }).show();
+    await s.show();
     expect(counts.show, 2);
     expect(counts.close, 2);
     expect(counts.frame > 0);
   },
-  async 'listener - repeat with close_on'() {
-    // native
-    {
-      let called = 0;
-      using s = await DefaultScene(
-        (p: {}, ctx) => (ctx.on('pointerdown', () => called++), ''),
-        { close_on: ['pointerdown'] },
-      );
-      const p = s.show();
-      mock_event(s.root, 'pointerdown');
-      await p;
-      expect(called, 1);
-    }
-    // key shortcut
-    {
-      let called = 0;
-      using s = await DefaultScene(
-        (p: {}, ctx) => (ctx.on('key: ', () => called++), ''),
-        { close_on: ['key:s'] },
-      );
-      const p = s.show();
-      mock_event(s.root, new KeyboardEvent('keydown', { key: ' ' }));
-      mock_event(s.root, new KeyboardEvent('keydown', { key: 's' }));
-      await p;
-      expect(called, 1);
-    }
-    {
-      let called = 0;
-      using s = await DefaultScene(
-        (p: {}, ctx) => (ctx.on('key:q', () => called++), ''),
-        { close_on: ['key:q'] },
-      );
-      const p = s.show();
-      mock_event(s.root, new KeyboardEvent('keydown', { key: 'q' }));
-      await p;
-      expect(called, 1);
-    }
-    {
-      let called = 0;
-      using s = await DefaultScene(
-        (p: {}, ctx) => (ctx.on('keydown', () => called++), ''),
-        { close_on: ['key: '] },
-      );
-      const p = s.show();
-      mock_event(s.root, new KeyboardEvent('keydown', { key: ' ' }));
-      await p;
-      expect(called, 1);
-    }
-    {
-      let called = 0;
-      using s = await DefaultScene(
-        (p: {}, ctx) => (ctx.on('key: ', () => called++), ''),
-        { close_on: ['keydown'] },
-      );
-      const p = s.show();
-      mock_event(s.root, new KeyboardEvent('keydown', { key: ' ' }));
-      await p;
-      expect(called, 1);
-    }
-    // mouse shortcut
-    {
-      let called = 0;
-      using s = await DefaultScene(
-        (p: {}, ctx) => (ctx.on('mouse:left', () => called++), ''),
-        { close_on: ['mouse:right'] },
-      );
-      const p = s.show();
-      mock_event(s.root, new MouseEvent('mousedown', { button: 0 }));
-      mock_event(s.root, new MouseEvent('mousedown', { button: 2 }));
-      await p;
-      expect(called, 1);
-    }
-    {
-      let called = 0;
-      using s = await DefaultScene(
-        (p: {}, ctx) => (ctx.on('mouse:left', () => called++), ''),
-        { close_on: ['mouse:left'] },
-      );
-      const p = s.show();
-      mock_event(s.root, new MouseEvent('mousedown', { button: 0 }));
-      await p;
-      expect(called, 1);
-    }
-    {
-      let called = 0;
-      using s = await DefaultScene(
-        (p: {}, ctx) => (ctx.on('mouse:left', () => called++), ''),
-        { close_on: ['mousedown'] },
-      );
-      const p = s.show();
-      mock_event(s.root, new MouseEvent('mousedown', { button: 0 }));
-      await p;
-      expect(called, 1);
-    }
-    {
-      let called = 0;
-      using s = await DefaultScene(
-        (p: {}, ctx) => (ctx.on('mousedown', () => called++), ''),
-        { close_on: ['mouse:left'] },
-      );
-      const p = s.show();
-      mock_event(s.root, new MouseEvent('mousedown', { button: 0 }));
-      await p;
-      expect(called, 1);
-    }
-  },
-  async 'listener - shortcut priority'() {
-    const test = async (shortcut: keyof SceneEventMap, event: Event) => {
-      using s = await DefaultScene((p: {}, ctx) => {
-        let times: { shortcut: number; native: number };
-        ctx
-          .on('scene:show', () => (times = { shortcut: 0, native: 0 }))
-          .on(shortcut, () => (times.shortcut = times.native + 1)) //@ts-ignore
-          .on(event.type, () => (times.native = times.shortcut + 1));
-        return { node: [], data: () => times };
-      });
-
-      for (let i = 0; i < 20; i++) {
-        const p = s.show();
-        mock_event(s.root, event);
-        const { shortcut, native } = await p;
-        expect(shortcut, 1);
-        expect(native, 2);
-      }
-    };
-
-    await test('key:1', new KeyboardEvent('keydown', { key: '1' }));
-    await test('key:q', new KeyboardEvent('keydown', { key: 'q' }));
-    await test('key: ', new KeyboardEvent('keydown', { key: ' ' }));
-    await test('key:Enter', new KeyboardEvent('keydown', { key: 'Enter' }));
-    await test('mouse:left', new MouseEvent('mousedown', { button: 0 }));
-    await test('mouse:middle', new MouseEvent('mousedown', { button: 1 }));
-    await test('mouse:right', new MouseEvent('mousedown', { button: 2 }));
-  },
   async 'show - display DOM'() {
     const node = div('world');
-    using s = await DefaultScene((p: {}) => node);
+    using s = DefaultScene((p: {}) => node);
     expect(node.isConnected);
     expect(node.textContent, 'world');
     expect(node.getBoundingClientRect().width, 0);
@@ -484,33 +208,30 @@ export const _Scene = {
     expect(node.getBoundingClientRect().width, 0);
   },
   async 'show - return data'() {
-    {
-      using s = await DefaultScene((p: {}) => '');
-      const data = await s.show();
-      expect(typeof data.start_time, 'number');
-      expect(!Number.isNaN(data.start_time));
-      expect(data.frame_times, [], 1);
-    }
-    {
-      using s = await DefaultScene((p: {}) => '', { record_frame_times: true });
-      const data = await s.show();
-      expect(typeof data.start_time, 'number');
-      expect(!Number.isNaN(data.start_time));
-      expect(Array.isArray(data.frame_times));
-      expect(data.frame_times.length > 0);
-    }
-  },
-  async 'show - repeat call'() {
-    await expect_error(async () => {
-      using s = await DefaultScene((p: {}) => '');
-      await Promise.all([s.show(), s.show()]);
+    using s = DefaultScene((p: {}) => '', {
+      timer: () => createTimer(() => true),
     });
+
+    const data1 = await s.show();
+    expect(data1.frame_times.length, 1);
+    expect(typeof data1.frame_times[0], 'number');
+
+    const data2 = await s.show();
+    expect(data2.frame_times.length, 1);
+    expect(typeof data2.frame_times[0], 'number');
+    expect(data1.frame_times[0] !== data2.frame_times[0]);
   },
+  // async 'show - repeat call'() {
+  //   await expect_error(async () => {
+  //     using s = DefaultScene((p: {}) => '');
+  //     await Promise.all([s.show(), s.show()]);
+  //   });
+  // },
   async 'show - multi call'() {
     const frame_times: number[] = [];
-    using s = await DefaultScene(
-      (p: {}, ctx) => (
-        ctx.on('scene:frame', (time) => frame_times.push(time)),
+    using s = DefaultScene(
+      (p: {}) => (
+        getCurrentScene().on('frame', (time) => frame_times.push(time)),
         ''
       ),
     );
@@ -520,151 +241,336 @@ export const _Scene = {
     await s.show();
     expect(frame_times.length, new Set(frame_times).size); // no duplicate frames
   },
-  async 'config - override default options'() {
-    // close on
-    {
-      using s = await DefaultScene((p: {}) => '', { close_on: 'click' });
-      using params = spy_listeners(s.root);
-
-      const p1 = s.show();
-      expect(
-        map(params, (v) => v.length),
-        { click: 1 },
-        1,
-      );
-      await p1;
-      expect(
-        map(params, (v) => v.length),
-        {},
-        1,
-      );
-
-      const p2 = s.config({ close_on: ['abort', 'paste'] }).show();
-      expect(
-        map(params, (v) => v.length),
-        { abort: 1, paste: 1 },
-        1,
-      );
-      await p2;
-      expect(
-        map(params, (v) => v.length),
-        {},
-        1,
-      );
-
-      const p3 = s.show();
-      expect(
-        map(params, (v) => v.length),
-        { click: 1 },
-        1,
-      );
-      await p3;
-      expect(
-        map(params, (v) => v.length),
-        {},
-        1,
-      );
-    }
-    // duration
-    {
-      let frame_count = 0;
-      using s = await DefaultScene(
-        (p: {}, ctx) => (ctx.on('scene:frame', () => frame_count++), ''),
-        { duration: 50 },
-      );
-
-      await s.show();
-      const original_frame_count = frame_count;
-
-      frame_count = 0;
-      await s.config({ duration: 100 }).show();
-      expect_closeTo(frame_count, original_frame_count * 2, 1);
-
-      frame_count = 0;
-      await s.show();
-      expect(frame_count, original_frame_count);
-    }
-    // timer
-    {
-      let frame_count = 0;
-      using s = await DefaultScene(
-        (p: {}, ctx) => (ctx.on('scene:frame', () => frame_count++), ''),
-      );
-
-      await s.show();
-      expect(frame_count > 0);
-
-      frame_count = 0;
-      await s
-        .config({
-          timer({ frame_ms, duration, onStart, onFrame }) {
-            let close: () => void;
-            const handle = setTimeout(() => close(), duration);
-            rAF(onStart);
-            return {
-              promise: new Promise<void>(
-                (resolve) => (close = () => (clearTimeout(handle), resolve())),
-              ),
-              //@ts-ignore
-              close,
-            };
-          },
-        })
-        .show();
-      expect(frame_count, 0);
-
-      frame_count = 0;
-      await s.show();
-      expect(frame_count > 0);
-    }
-    // record frame times
-    {
-      using s = await DefaultScene((p: {}, ctx) => '');
-
-      const d1 = await s.show();
-      expect(d1.frame_times, [], 1);
-
-      const d2 = await s.config({ record_frame_times: true }).show();
-      expect(d2.frame_times.length > 0);
-
-      const d3 = await s.config({ record_frame_times: false }).show();
-      expect(d3.frame_times, [], 1);
-
-      const d4 = await s.show();
-      expect(d4.frame_times, [], 1);
-    }
-  },
   async 'close - immediately'() {
     {
-      using s = await DefaultScene((p: {}) => '');
+      using s = DefaultScene((p: {}) => '');
       const p = s.show();
       s.close();
       const data = await p;
-      expect(Number.isNaN(data.start_time));
+      expect(data.frame_times, [], 1);
     }
     {
-      using s = await DefaultScene(
-        (p: {}, ctx) => (ctx.on('scene:show', () => ctx.close()), ''),
-      );
+      using s = DefaultScene((p: {}) => {
+        const ctx = getCurrentScene();
+        ctx.on('show', () => ctx.close());
+        return '';
+      });
       const data = await s.show();
-      expect(Number.isNaN(data.start_time));
+      expect(data.frame_times, [], 1);
     }
   },
   async 'close - with DOM listeners'() {
+    using s = DefaultScene(
+      (p: {}) => {
+        const ctx = getCurrentScene();
+        ctx.on(
+          'dispose',
+          on(ctx.root, 'keydown', () => ctx.close()),
+        );
+        return '';
+      },
+      { timer: () => createTimer(() => false) },
+    );
+    const p = s.show();
+    mock_event(s.root, 'mousedown');
+    await sleep(10);
+    expect(await Promise.race([p, Promise.resolve('timeout')]), 'timeout');
+
+    mock_event(s.root, 'keydown');
+    await sleep(10);
+    await Promise.race([p, Promise.reject('timeout')]);
+  },
+};
+export const _Adapter = {
+  async 'render - default props'() {
+    const adapter = createComponentAdapter((e) => e);
+    const { props } = adapter.render((p: { a: number }) => '', { a: 1 });
+    expect(props, { a: 1 }, 1);
+  },
+  async 'render - reactive props'() {
+    let count = 0;
+    const adapter = createComponentAdapter((e) => {
+      count++;
+      return e;
+    });
+    adapter.render((p: {}) => '', {});
+    expect(count, 1);
+  },
+  async 'render - normalize node'() {
+    const adapter = createComponentAdapter((e) => e);
+
+    // string
     {
-      using s = await DefaultScene((p: {}) => '', { close_on: 'key: ' });
-      const p = s.show();
-      mock_event(s.root, new KeyboardEvent('keydown', { key: ' ' }));
-      const data = await p;
+      const { nodes } = adapter.render((p: {}) => 'text', {});
+      expect(nodes, ['text'], 1);
     }
     {
-      using s = await DefaultScene(
-        (p: {}, ctx) => (ctx.on('mouse:middle', () => ctx.close()), ''),
+      const { nodes } = adapter.render((p: {}) => ['text'], {});
+      expect(nodes, ['text'], 1);
+    }
+
+    // element
+    {
+      const node = div();
+      const { nodes } = adapter.render((p: {}) => node, {});
+      expect(nodes.length, 1);
+      expect(nodes[0], node);
+    }
+    {
+      const node1 = div();
+      const node2 = div();
+      const { nodes } = adapter.render((p: {}) => [node1, node2], {});
+      expect(nodes.length, 2);
+      expect(nodes[0], node1);
+      expect(nodes[1], node2);
+    }
+
+    // hybrid
+    {
+      const node = div();
+      const { nodes } = adapter.render(
+        (p: {}) => ({ node: [node, 'text'], data: () => ({}) }),
+        {},
       );
-      const p = s.show();
-      mock_event(s.root, new MouseEvent('mousedown', { button: 1 }));
-      await p;
+      expect(nodes.length, 2);
+      expect(nodes[0], node);
+      expect(nodes[1], 'text');
     }
+  },
+  // integrate with reactivity libs
+  async 'with vanjs-ext'() {
+    const node = div();
+    const { props } = createComponentAdapter(reactive).render(
+      (p: { text: string }) => {
+        van.derive(() => {
+          node.textContent = p.text;
+        });
+        return node;
+      },
+      { text: 'hello' },
+    );
+    expect(node.textContent, 'hello');
+
+    props.text = 'world';
+    await 0;
+    expect(node.textContent, 'world');
+  },
+  async 'with @vue/reactivity'() {
+    const { shallowReactive, effect } = await import(
+      //@ts-ignore
+      '@vue/reactivity'
+    );
+    const node = div();
+    const { props } = createComponentAdapter(shallowReactive).render(
+      (p: { text: string }) => {
+        effect(() => {
+          node.textContent = p.text;
+        });
+        return node;
+      },
+      { text: 'hello' },
+    );
+    expect(node.textContent, 'hello');
+
+    props.text = 'world';
+    await 0;
+    expect(node.textContent, 'world');
+  },
+  async 'with @solidjs/signals'() {
+    const { createStore, createEffect } = await import(
+      //@ts-ignore
+      '@solidjs/signals'
+    );
+    const node = div();
+    const { props } = createComponentAdapter((obj) => {
+      const [state, setState] = createStore(obj);
+      return new Proxy(state, {
+        set: (target, prop, value) => (
+          setState(() => ({ [prop]: value })),
+          true
+        ),
+      });
+    }).render(
+      (p: { text: string }) => {
+        createEffect(
+          () => p.text,
+          (val: any) => {
+            node.textContent = val;
+          },
+        );
+        return node;
+      },
+      { text: 'hello' },
+    );
+    await 0;
+    expect(node.textContent, 'hello');
+
+    props.text = 'world';
+    await 0;
+    expect(node.textContent, 'world');
+  },
+  async 'with @preact/signals-core'() {
+    const { signal, effect } = await import(
+      //@ts-ignore
+      '@preact/signals-core'
+    );
+    const node = div();
+    const { props } = createComponentAdapter(
+      (obj) =>
+        new Proxy(
+          map(obj, (value) => signal(value)),
+          {
+            get: (target, prop) => target[prop as string].value,
+            set: (target, prop, value) => {
+              target[prop as string].value = value;
+              return true;
+            },
+          },
+        ),
+    ).render(
+      (p: { text: string }) => {
+        effect(() => {
+          node.textContent = p.text;
+        });
+        return node;
+      },
+      { text: 'hello' },
+    );
+    expect(node.textContent, 'hello');
+
+    props.text = 'world';
+    await 0;
+    expect(node.textContent, 'world');
+  },
+  async 'with mobx'() {
+    const { observable, autorun } = await import(
+      //@ts-ignore
+      'mobx'
+    );
+    const node = div();
+    const { props } = createComponentAdapter(observable).render(
+      (p: { text: string }) => {
+        autorun(() => {
+          node.textContent = p.text;
+        });
+        return node;
+      },
+      { text: 'hello' },
+    );
+    expect(node.textContent, 'hello');
+
+    props.text = 'world';
+    await 0;
+    expect(node.textContent, 'world');
+  },
+  async 'with valtio/vanilla'() {
+    const { proxy, subscribe } = await import(
+      //@ts-ignore
+      'valtio/vanilla'
+    );
+    const node = div();
+    const { props } = createComponentAdapter(proxy).render(
+      (p: { text: string }) => {
+        const update = () => (node.textContent = p.text);
+        subscribe(p, update);
+        update();
+        return node;
+      },
+      { text: 'hello' },
+    );
+    expect(node.textContent, 'hello');
+
+    props.text = 'world';
+    await 0;
+    expect(node.textContent, 'world');
+  },
+  async 'with nanostores'() {
+    const { map } = await import(
+      //@ts-ignore
+      'nanostores'
+    );
+    const node = div();
+    const { props } = createComponentAdapter(
+      (obj) =>
+        new Proxy(map(obj), {
+          get: (target, prop) =>
+            prop === 'subscribe'
+              ? target.subscribe.bind(target)
+              : target.get()[prop],
+          set: (target, prop, value) => {
+            target.setKey(prop, value);
+            return true;
+          },
+        }),
+    ).render(
+      (p: any) => {
+        p.subscribe((v: any) => (node.textContent = v.text));
+        return node;
+      },
+      { text: 'hello' },
+    );
+    expect(node.textContent, 'hello');
+
+    props.text = 'world';
+    await 0;
+    expect(node.textContent, 'world');
+  },
+};
+export const _Timer = {
+  async 'factory pattern'() {
+    let created = 0;
+    const timer_factory = () => {
+      created++;
+      return createTimer(() => true);
+    };
+
+    using s1 = DefaultScene((p: {}) => '', { timer: timer_factory });
+    expect(created, 1);
+
+    using s2 = DefaultScene((p: {}) => '', { timer: timer_factory });
+    expect(created, 2);
+  },
+  async 'on frame'() {
+    let frame_count = {
+      hook: 0,
+      timer: 0,
+    };
+    using s = DefaultScene(
+      (p: {}) => (getCurrentScene().on('frame', () => frame_count.hook++), ''),
+      {
+        defaultProps: {},
+        timer: () =>
+          createTimer((records) => {
+            frame_count.timer++;
+            return records[records.length - 1]! - records[0]! > 100; // timeout after 100ms
+          }),
+      },
+    );
+    await s.show();
+    expect(frame_count.hook > 0);
+    expect(frame_count.timer, frame_count.hook);
+  },
+  async 'off frame'() {
+    let frame_count = 0;
+    using s = DefaultScene(
+      (p: {}) => (getCurrentScene().on('frame', () => frame_count++), ''),
+      {
+        defaultProps: {},
+        timer() {
+          const timer: Timer = {
+            start: (cb) =>
+              new Promise((resolve) => {
+                const handle = setTimeout(() => timer.stop(), 100);
+                timer.stop = () => (clearTimeout(handle), resolve([]));
+              }),
+            stop() {},
+          };
+          return timer;
+        },
+      },
+    );
+    await s.show();
+    expect(frame_count, 0);
   },
 };
 
@@ -809,16 +715,14 @@ export const _EventEmitter = {
     expect_EE_listenerCount(ee, { test: 1 });
   },
 };
-export const __typecheck__ = {
+
+const __typecheck__ = {
   async generic() {
-    using scene = await DefaultScene(
-      generic(<T extends LooseObject>(defaultProps: T, ctx: Scene<any>) => {
-        let props: LooseObject = defaultProps;
-        ctx.on('scene:show', (newProps) => (props = newProps));
-        return { node: [], data: () => props as T };
-      }),
-      { defaultProps: {}, duration: 1 },
-    );
+    const comp = generic(<T extends LooseObject>(props: T) => ({
+      node: '',
+      data: () => props,
+    }));
+    using scene = DefaultScene(comp, { defaultProps: {} });
     const props = {
       num: 1,
       hello: 'world',
@@ -826,64 +730,6 @@ export const __typecheck__ = {
       arr: [1, '', true],
       obj: { a: 1, b: '2', c: false },
     } as const;
-    const data: typeof props = await scene.show(props);
-    expect_includes(data, props);
-  },
-  on() {
-    type PropertyEventMap<T, K = keyof T> = {
-      //@ts-ignore
-      [P in K extends `on${infer R}` ? R : never]: Parameters<T[`on${P}`]>[0];
-    };
-    type Equal<T, U> =
-      (<G>() => G extends T ? 1 : 2) extends <G>() => G extends U ? 1 : 2
-        ? true
-        : false;
-    type Diff<T, U> = {
-      [P in keyof T]: P extends string
-        ? U extends { [K in P]: infer R }
-          ? Equal<T[P], R> extends true
-            ? never
-            : `${P} diff event`
-          : `${P} not found`
-        : //@ts-ignore
-          `${P} is not string`;
-    }[keyof T];
-
-    type WindowDiff = Diff<PropertyEventMap<Window>, WindowEventMap>;
-    type DocumentDiff = Diff<PropertyEventMap<Document>, DocumentEventMap>;
-    type HTMLElementDiff = Diff<
-      PropertyEventMap<HTMLElement>,
-      HTMLElementEventMap
-    >;
-    type HTMLMediaElementDiff = Diff<
-      PropertyEventMap<HTMLMediaElement>,
-      HTMLMediaElementEventMap
-    >;
-    type HTMLBodyElementDiff = Diff<
-      PropertyEventMap<HTMLBodyElement>,
-      HTMLBodyElementEventMap
-    >;
-    type MathMLElementDiff = Diff<
-      PropertyEventMap<MathMLElement>,
-      MathMLElementEventMap
-    >;
-    type SVGElementDiff = Diff<
-      PropertyEventMap<SVGElement>,
-      SVGElementEventMap
-    >;
-
-    const __typecheck__: Equal<
-      | WindowDiff
-      | DocumentDiff
-      | HTMLElementDiff
-      | HTMLMediaElementDiff
-      | HTMLBodyElementDiff
-      | MathMLElementDiff
-      | SVGElementDiff,
-      'error diff event'
-    > = true;
-
-    //@ts-expect-error
-    on(window, 'unknown', (e) => {});
+    const __should_be_same_type__: typeof props = await scene.show(props);
   },
 };

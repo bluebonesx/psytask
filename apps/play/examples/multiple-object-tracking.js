@@ -1,4 +1,8 @@
-import { VirtualChinrest } from '@psytask/components';
+import {
+  useDevicePixelRatio,
+  useWindowPhysicalPix,
+  VirtualChinrest,
+} from '@psytask/components';
 import { jsPsychStim } from '@psytask/jspsych';
 import { createApp, css, getCurrentScene, on, StairCase } from 'psytask';
 import van from 'vanjs-core';
@@ -8,18 +12,16 @@ const { b, div, span } = van.tags;
 using app = await createApp({ alert_on_leave: false });
 using dc = app.collector('multiple-object-tracking.csv').on('add', console.log);
 
-using jspsych = app.scene(jsPsychStim, { defaultProps: {} });
 using simpleText = app.scene(
   /** @param {{ content: string }} props */
-  (props) => div({ class: 'psytask-container' }, () => props.content),
+  (props) => div({ class: 'psytask-center' }, () => props.content),
   { defaultProps: { content: '' } },
 );
-using chinrest = app.scene(VirtualChinrest, { defaultProps: {} });
 
-// get task parameters
-/** @type {{ object_size: number; object_num: number; target_num: number }} */
-const opts = (
-  await jspsych.show({
+// show load progress
+simpleText.show({ content: 'Loading...' });
+using survey = app.scene(jsPsychStim, {
+  defaultProps: {
     type: await import(
       //@ts-ignore
       `https://cdn.jsdelivr.net/npm/@jspsych/plugin-survey/+esm`
@@ -46,80 +48,79 @@ const opts = (
           step: 1,
         },
         {
-          name: 'target_num',
-          title: 'Number of targets',
+          name: 'deg_per_sec',
+          title: 'Deg per second',
           type: 'text',
-          defaultValue: 1,
+          defaultValue: 10,
           isRequired: true,
           inputType: 'number',
           min: 1,
           step: 1,
-          validators: [
-            {
-              type: 'expression',
-              expression: '{target_num} <= {object_num}',
-              text: 'Must be <= number of objects',
-            },
-          ],
         },
       ],
     },
-  })
-).response;
+  },
+});
+using chinrest = app.scene(VirtualChinrest, { defaultProps: {} });
+simpleText.close();
+
+// get task parameters
 const { deg2csspix } = await chinrest.show();
+/** @type {{ object_size: number; object_num: number; deg_per_sec: number }} */
+const opts = (await survey.show()).response;
 
 // create objects scene with deg2csspix available
 using objects = app.scene(
   /**
    * @param {{
-   *   speed: number;
+   *   deg_pre_sec: number;
    *   indexes: boolean;
-   *   response: boolean;
-   *   click: boolean;
+   *   space: boolean;
+   *   object: boolean;
    * }} props
    */
   (props) => {
-    const data = {
-      response_indexes: /** @type {Set<number>} */ new Set(),
-      response_time: 0,
-    };
     const size = van.derive(() => deg2csspix(opts.object_size));
+    const dpr = useDevicePixelRatio();
+    const win_wh = useWindowPhysicalPix(dpr);
     const boundary_wh = van.derive(
       () =>
         /** @type {const} */ ([
-          window.innerWidth - size.val,
-          window.innerHeight - size.val,
+          win_wh.width - size.val,
+          win_wh.height - size.val,
         ]),
     );
-    const frame_pix = van.derive(
-      () => deg2csspix(props.speed) * app.data.frame_ms * 1e-3,
+    const csspix_pre_frame = van.derive(
+      () => deg2csspix(props.deg_pre_sec) * app.data.frame_ms * 1e-3,
     );
 
+    const data = {
+      response_indexes: /** @type {Set<number>} */ (new Set()),
+      response_time: 0,
+    };
     const objSharedStyle = css({
       position: 'absolute',
       'border-radius': '50%',
       'text-align': 'center',
+      'font-size': '2rem',
     });
-    const Obj = /** @param {number} index */ (index) =>
-      span(
-        {
-          'data-index': index,
-          'data-selected': false,
-          style() {
-            const sizePx = size.val + 'px';
-            return (
-              objSharedStyle +
-              css({ width: sizePx, height: sizePx, 'line-height': sizePx })
-            );
-          },
-        },
-        b({ hidden: () => !props.indexes }, index),
-      );
-
-    const handles = Array.from({ length: opts.object_num }, (_, i) => {
+    const objects = Array.from({ length: opts.object_num }, (_, i) => {
       const rad = Math.floor(Math.random() * 2 * Math.PI);
       return {
-        obj: Obj(i),
+        obj: span(
+          {
+            'data-index': i,
+            'data-selected': false,
+            style() {
+              const sizePx = size.val + 'px';
+              return (
+                objSharedStyle +
+                css({ width: sizePx, height: sizePx, 'line-height': sizePx })
+              );
+            },
+          },
+          b({ hidden: () => !props.indexes }, i),
+        ),
         vel: /** @type {[number, number]} */ ([Math.cos(rad), Math.sin(rad)]),
         pos: /** @type {[number, number]} */ (
           boundary_wh.val.map((v) => Math.floor(Math.random() * v))
@@ -128,47 +129,47 @@ using objects = app.scene(
     });
 
     const ctx = getCurrentScene();
-    ctx
-      .on('scene:show', () => {
-        data.response_indexes.clear();
-        data.response_time = NaN;
-        handles.map(({ obj }) => (obj.style.backgroundColor = '#000'));
-
-        const cleanups = [
-          on(ctx.root, 'pointerup', (e) => {
-            if (!props.click) return;
-            const el = e.target;
-            if (!el || !(el instanceof HTMLSpanElement)) return;
-            if (el.dataset.selected === 'true') {
-              el.dataset.selected = 'false';
-              el.style.backgroundColor = '#000';
-              data.response_indexes.delete(
-                +(/** @type {string} */ (el.dataset.index)),
-              );
-            } else {
-              el.dataset.selected = 'true';
-              el.style.backgroundColor = '#afa';
-              data.response_indexes.add(
-                +(/** @type {string} */ (el.dataset.index)),
-              );
-            }
-          }),
-          on(ctx.root, 'keydown', (e) => {
-            if (
-              !props.response ||
-              e.key !== ' ' ||
-              (props.click && data.response_indexes.size === 0)
-            )
-              return;
+    const cleanups = [
+      on(window, 'resize', () => {
+        win_wh.width = innerWidth * dpr.val;
+        win_wh.height = innerHeight * dpr.val;
+      }),
+      on(ctx.root, 'pointerup', (e) => {
+        const el = e.target;
+        if (!el || !(el instanceof HTMLSpanElement)) {
+          if (props.space) {
+            // click space to finish
             data.response_time = e.timeStamp;
             ctx.close();
-          }),
-        ];
-        ctx.once('scene:close', () => cleanups.map((f) => f()));
+          }
+        } else if (props.object) {
+          // click object to select/deselect
+          if (el.dataset.selected === 'true') {
+            el.dataset.selected = 'false';
+            el.style.background = '#000';
+            data.response_indexes.delete(
+              +(/** @type {string} */ (el.dataset.index)),
+            );
+          } else {
+            el.dataset.selected = 'true';
+            el.style.background = '#8f8';
+            data.response_indexes.add(
+              +(/** @type {string} */ (el.dataset.index)),
+            );
+          }
+        }
+      }),
+    ];
+
+    ctx
+      .on('show', () => {
+        data.response_indexes.clear();
+        data.response_time = NaN;
+        objects.map(({ obj }) => (obj.style.background = '#000'));
       })
-      .on('scene:frame', () => {
-        for (const handle of handles) {
-          if (frame_pix.val) {
+      .on('frame', () => {
+        for (const handle of objects) {
+          if (csspix_pre_frame.val) {
             const [w, h] = boundary_wh.val;
 
             if (handle.pos[0] > w) {
@@ -178,7 +179,7 @@ using objects = app.scene(
               handle.pos[0] = 0;
               handle.vel[0] *= -1;
             } else {
-              handle.pos[0] += handle.vel[0] * frame_pix.val;
+              handle.pos[0] += handle.vel[0] * csspix_pre_frame.val;
             }
 
             if (handle.pos[1] > h) {
@@ -188,28 +189,29 @@ using objects = app.scene(
               handle.pos[1] = 0;
               handle.vel[1] *= -1;
             } else {
-              handle.pos[1] += handle.vel[1] * frame_pix.val;
+              handle.pos[1] += handle.vel[1] * csspix_pre_frame.val;
             }
           }
           // update position
           handle.obj.style.transform = `translate(${handle.pos[0]}px, ${handle.pos[1]}px)`;
         }
-      });
+      })
+      .on('dispose', () => cleanups.map((f) => f()));
 
     return {
       node: div(
         { style: css({ position: 'relative', color: '#fff' }) },
-        ...handles.map((e) => e.obj),
+        ...objects.map((e) => e.obj),
       ),
       data: () => data,
     };
   },
   {
     defaultProps: {
-      speed: 0,
+      deg_pre_sec: 0,
       indexes: false,
-      response: true,
-      click: false,
+      space: false,
+      object: false,
     },
   },
 );
@@ -220,50 +222,54 @@ await simpleText.config({ close_on: 'pointerup' }).show({
 
 Trial sequence:
 1. You will be told which numbered objects to track, click to continue
-2. Several objects will appear with numbers (0, 1, 2, ...), press space to start
+2. Several objects will appear with numbers (0, 1, 2, ...), click to start
 3. All objects will start moving (numbers become hidden)
-4. After movement stops, click on the objects you were tracking
+4. After movement stops, you can response
 
 Response:
 - Click on objects to select them (they will turn light green)
 - Click again to deselect
 - Try to select all and only the target objects
-- Press space when finished
+- Click space when finished
 
 Click to start.`,
 });
 
 // trial loop
 const staircase = StairCase({
-  start: 6,
+  start: 1,
   step: -1,
   down: 3,
   up: 1,
   reversals: 2,
   trials: 10,
+  min: 1,
+  max: opts.object_num,
 });
 const object_indexes = Array.from({ length: opts.object_num }, (_, i) => i);
-for (const speed of staircase) {
+for (const target_num of staircase) {
   /** Randomly choose target_indexes using Fisher-Yates shuffle algorithm */
   const pool = [...object_indexes];
-  for (let i = 0; i < opts.target_num; i++) {
+  for (let i = 0; i < target_num; i++) {
     const j = i + Math.floor(Math.random() * (pool.length - i));
     [pool[i], pool[j]] = /** @type {[number, number]} */ ([pool[j], pool[i]]);
   }
-  const target_indexes = pool.slice(0, opts.target_num).sort();
+  const target_indexes = pool.slice(0, target_num).sort();
 
   await simpleText.config({ close_on: 'pointerup' }).show({
-    content: `Current speed: ${speed} deg/s
-You should track these objects:\n${target_indexes.join(', ')}
+    content: `You should track these objects:\n${target_indexes.join(', ')}
 
 Click to continue.`,
   });
-  await objects.show({ indexes: true });
-  await objects.config({ duration: 5e3 }).show({ speed, response: false });
+  await objects.show({ indexes: true, space: true });
+  await objects.config({ duration: 5e3 }).show({
+    deg_pre_sec: opts.deg_per_sec,
+  });
 
   // get responses
-  const { response_indexes, response_time, start_time } = await objects.show({
-    click: true,
+  const { response_indexes, response_time, frame_times } = await objects.show({
+    space: true,
+    object: true,
   });
   const correct =
     target_indexes.length > 0 &&
@@ -271,15 +277,12 @@ Click to continue.`,
     target_indexes.every((v) => response_indexes.has(v));
   staircase.response(correct);
   dc.add({
-    speed,
+    ...opts,
     target_indexes: target_indexes.join(','),
-    response_indexes: Array.from(response_indexes).join(','),
+    response_indexes: [...response_indexes].join(','),
     correct,
-    rt: response_time - start_time,
+    rt: response_time - /** @type {number} */ (frame_times[0]),
   });
-
-  // feedback
-  await objects.show({ indexes: true });
 }
 
 document.body.textContent = dc.final();

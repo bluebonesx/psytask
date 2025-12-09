@@ -1,9 +1,48 @@
-import { ERR, isObject, modify } from 'shared/utils';
+import {
+  createComponentAdapter,
+  createTimer,
+  type MaybeGenericComponent,
+  Scene,
+  type SceneOptions,
+} from '@psytask/core';
+import { ERR, isObject, modify, mount, rAF } from 'shared/utils';
+import van from 'vanjs-core';
 
 type Action = () => unknown;
 
+const { div } = van.tags;
 const symbol: typeof Symbol.dispose =
   Symbol.dispose ?? Symbol.for('Symbol.dispose');
+
+// helpers;
+export const $ = ((root: HTMLElement, selector: string) =>
+  root.querySelector(selector) ?? ERR(`Cannot find element: ${selector}`)) as {
+  <K extends keyof HTMLElementTagNameMap>(
+    root: HTMLElement,
+    selector: K,
+  ): HTMLElementTagNameMap[K];
+  <T extends HTMLElement>(root: HTMLElement, selector: string): T;
+};
+export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+export const nextFrame = () => new Promise((r) => rAF(r));
+export const DefaultScene = <T extends MaybeGenericComponent>(
+  ...[comp, options]: ConstructorParameters<typeof Scene<T>> extends [
+    infer L,
+    infer R extends SceneOptions<T>,
+  ]
+    ? [comp: L, options?: Partial<R>]
+    : never
+) => {
+  const container = mount(div());
+  const root = mount(div({ class: 'psytask-scene' }), container);
+  return new Scene(comp, {
+    root,
+    defaultProps: {},
+    adapter: createComponentAdapter((e) => e),
+    timer: () => createTimer(() => true),
+    ...options,
+  }).on('dispose', () => container.remove());
+};
 
 // assertions
 export const expect = <D extends 0 | 1 = 0>(
@@ -106,10 +145,10 @@ export const spy_functionCall = <
   key: K,
   mock?: (this: T, ...e: P[0]) => P[1],
 ) => {
+  const original = obj[key];
   const paramsArray = modify([] as P[0][], {
     [symbol]: () => (obj[key] = original),
   });
-  const original = obj[key];
   //@ts-ignore
   obj[key] = function (...e: P[0]) {
     paramsArray.push(e);
@@ -122,7 +161,7 @@ export const spy_browserDownload = async (action: Action) => {
   using createParams = spy_functionCall(
     URL,
     'createObjectURL',
-    () => 'javascript:console.log("mock download url")',
+    () => 'javascript:console.log("mock blob url")',
   );
   using mountParams = spy_functionCall(document.body, 'appendChild', (e) => e);
   await action();
@@ -151,7 +190,7 @@ export const mock_event = <
   target: T,
   type: K | Event,
 ) => target.dispatchEvent(typeof type === 'string' ? new Event(type) : type);
-export const mock_leaveAndBack = async (delay = 1e3) => {
+export const mock_leaveAndBack = async (delay = 1e2) => {
   Object.defineProperty(document, 'hidden', {
     configurable: true,
     get: () => true,
@@ -162,5 +201,46 @@ export const mock_leaveAndBack = async (delay = 1e3) => {
 
   //@ts-ignore
   delete document.hidden;
-  await new Promise((r) => setTimeout(r, delay));
+  await sleep(delay);
 };
+export const mock_changeDPR = () => {
+  let listener: EventListener | null = null;
+  const _matchMedia = matchMedia;
+  const matchMediaParams = spy_functionCall(window, 'matchMedia', (query) =>
+    modify(_matchMedia(query), {
+      addEventListener: (type: string, fn: EventListener) => {
+        if (type === 'change') listener = fn;
+      },
+      removeEventListener: (type: string, fn: EventListener) => {
+        if (type === 'change' && listener === fn) listener = null;
+      },
+    }),
+  );
+  const original = Object.getOwnPropertyDescriptor(window, 'devicePixelRatio')!;
+
+  return {
+    change(zoom: number) {
+      Object.defineProperty(window, 'devicePixelRatio', {
+        value: zoom,
+        configurable: true,
+      });
+      listener!(new MediaQueryListEvent('change'));
+    },
+    [symbol]() {
+      matchMediaParams[symbol]();
+      Object.defineProperty(window, 'devicePixelRatio', original);
+      listener?.(new MediaQueryListEvent('change'));
+    },
+  };
+};
+export const mock_httpbin = () =>
+  spy_functionCall(window, 'fetch', async (input, init) => {
+    const url = '' + input;
+    if (url.startsWith('/bytes/'))
+      return new Response(new Blob(['x'.repeat(+url.slice(7))]), {
+        headers: { 'Content-Length': url.slice(7) },
+      });
+    if (url.startsWith('/status/'))
+      return new Response('', { status: +url.slice(8) });
+    return new Response(JSON.stringify({ input, init }), { status: 400 });
+  });

@@ -1,37 +1,44 @@
 import {
   createTimer,
   EventEmitter,
-  getCurrentScene,
   Scene,
   type MaybeGenericComponent,
   type SceneOptions,
 } from '@psytask/core';
-import { css } from 'shared/macro' with { type: 'macro' };
 import type { LooseObject } from 'shared/types';
-import { array_normalize, doc, modify, mount } from 'shared/utils';
-import van from 'vanjs-core';
+import { $Object, array_normalize, doc, modify, mount } from 'shared/utils';
 import { Collector } from './collector';
-import { adapter, on, onPageLeave } from './utils';
-
-const { div, style } = van.tags;
+import { adapter, css, detectFPS, div, on, onPageLeave, style } from './utils';
 
 // import styles
-mount(style(), doc.head).textContent = `.psytask-scene{${css({
-  all: 'unset',
-  position: 'fixed',
-  inset: 0,
-  overflow: 'hidden',
-})}}`;
+mount(
+  style(
+    `.psytask-scene{${css({
+      all: 'unset',
+      position: 'fixed',
+      inset: 0,
+      overflow: 'hidden',
+    })}}.psytask-center{${css({
+      display: 'flex',
+      'flex-direction': 'column',
+      'align-items': 'center',
+      'justify-content': 'center',
+      'white-space': 'pre-wrap',
+      height: '100%',
+    })}}`,
+  ),
+  doc.head,
+);
 
 // extend scene
-type ExtendedSceneEventMap = HTMLElementEventMap & {
+export type CloseEventMap = HTMLElementEventMap & {
   [K in `mouse:${'left' | 'middle' | 'right' | 'unknown'}`]: MouseEvent;
 } & {
   [K in `key:${string}`]: KeyboardEvent;
 };
 type ExtendedSceneOptions = {
   duration?: number;
-  close_on?: keyof ExtendedSceneEventMap | (keyof ExtendedSceneEventMap)[];
+  close_on?: keyof CloseEventMap | (keyof CloseEventMap)[];
 };
 const mouseSuffixs = ['left', 'middle', 'right'] as const;
 const prefix2type: Record<string, keyof HTMLElementEventMap> = {
@@ -41,12 +48,12 @@ const prefix2type: Record<string, keyof HTMLElementEventMap> = {
 
 export class App<
   T extends { frame_ms: number } = { frame_ms: number },
-> extends EventEmitter<{}> {
+> extends EventEmitter {
   constructor(
     /** Root element of the app */
     public readonly root: HTMLElement,
     /** Data will be collected automatically */
-    public data: T & LooseObject,
+    public readonly data: T & LooseObject,
   ) {
     super();
     this.on('dispose', () => root.remove());
@@ -94,16 +101,16 @@ export class App<
    * Create text scene
    *
    * ```ts
-   * const setup = (props: { text: string }, ctx: Scene<any>) => {
+   * const Component = (props: { text: string }, ctx: Scene<any>) => {
    *   const el = document.createElement('div');
-   *   ctx.on('scene:show', (props) => {
+   *   ctx.on('show', (props) => {
    *     el.textContent = props.text; // update element
    *   });
    *   return { node: el, data: () => ({ text: el.textContent }) }; // return element and data getter
    * };
    *
-   * // create scene by setup function
-   * using scene = app.scene(setup, {
+   * // create scene
+   * using scene = app.scene(Component, {
    *   defaultProps: { text: 'default text' }, // default props is required
    *   close_on: 'key: ', // close when space is pressed
    *   duration: 100, // auto close after 100ms
@@ -127,6 +134,10 @@ export class App<
         ]
       : never
   ) {
+    const timer_condition: Parameters<typeof createTimer>[0] = (records) =>
+      opts.duration != null &&
+      records[records.length - 1]! - records[0]! >
+        opts.duration! - this.data.frame_ms * 1.5;
     const options = {
       root: mount(
         div({
@@ -135,27 +146,30 @@ export class App<
         }),
         this.root,
       ),
-      timer: createTimer(
-        opts.duration == null
-          ? () => false
-          : (records) =>
-              records[records.length - 1]! - records[0]! >
-              opts.duration! - this.data.frame_ms * 1.5,
-      ),
+      timer: () => createTimer(timer_condition),
       adapter,
       ...opts,
     };
     const scene = new Scene<T>(component, options);
     const close = () => scene.close();
 
-    return modify(scene, {
-      /** Change options one-time */
-      config(patchOptions: Partial<ExtendedSceneOptions>) {
-        modify(opts, patchOptions);
-        return scene.on('scene:close', () => modify(opts, options));
+    return modify(
+      scene.on('close', () =>
+        $Object.keys(opts).map(
+          //@ts-ignore
+          (key) => (opts[key] = options[key]),
+        ),
+      ),
+      {
+        /** Change options one-time */
+        config(patchOptions: Partial<ExtendedSceneOptions>) {
+          modify(opts, patchOptions);
+          return scene;
+        },
       },
-    }).on('scene:show', () => {
-      if (typeof opts.close_on === 'undefined') return;
+    ).on('show', () => {
+      // use close_on listeners
+      if (opts.close_on == null) return;
       const close_ons = array_normalize(opts.close_on);
       const close_on_set = new Set(close_ons);
 
@@ -188,7 +202,7 @@ export class App<
                 close,
               );
       });
-      scene.once('scene:close', () => cleanups.map((fn) => fn && fn()));
+      scene.once('close', () => cleanups.map((fn) => fn && fn()));
     });
   }
 }
@@ -219,16 +233,31 @@ export class App<
  * @see {@link App} {@link App.scene}
  */
 export const createApp = async ({
-  root = div(),
+  root = mount(div()),
   alert_on_leave = true,
   i18n = {
     leave_alert_on_fps: "Please DON'T leave the page during the FPS detection!",
-    leave_alert_on_task:
-      "Please DON'T leave the page during the task! Attempts: ",
+    leave_alert_on_task: "Please DON'T leave the page during the task!",
     beforeunload_alert: 'Your progress will be lost. Are you sure?',
   },
-  frame_ms,
-  frames_count = 60,
+  frames_count = 10,
+  frame_calcer = (durations) => {
+    const sorted = [...durations].sort((a, b) => a - b);
+    const Q1_idx = sorted.length / 4;
+    const Q1 = sorted[Math.floor(Q1_idx)]!;
+    const Q3 = sorted[Math.floor(Q1_idx * 3)]!;
+    const valid_durations = durations.filter((d) => Q1 <= d && d <= Q3);
+    const frame_ms =
+      valid_durations.reduce((a, b) => a + b) / valid_durations.length;
+
+    console.info('Detect fps', frame_ms, {
+      durations,
+      Q1,
+      Q3,
+      valid_durations,
+    });
+    return frame_ms;
+  },
 }: Partial<{
   /** @default document.createElement('div') */
   root: HTMLElement;
@@ -242,59 +271,37 @@ export const createApp = async ({
     /** Alert before close or reload the page, not compatible with IOS */
     beforeunload_alert: string;
   };
-  /** Frame duration in milliseconds */
-  frame_ms: number;
-  /** @default 60 */
+  /** @default 10 */
   frames_count: number;
+  frame_calcer: (durations: number[]) => number;
 }> = {}) => {
-  if (!root.isConnected) mount(root);
-  root.classList.add('psytask-app');
+  const data = {
+    // detect fps
+    frame_ms: frame_calcer(
+      await detectFPS({
+        root,
+        leave_alert: i18n.leave_alert_on_fps,
+        frames_count,
+      }),
+    ),
+    leave_count: 0,
+  };
 
-  const { leave_alert_on_fps, leave_alert_on_task, beforeunload_alert } = i18n;
-  const app = new App(root, { frame_ms: 16.67, leave_count: 0 });
-
-  // detect fps if not provided
-  if (!frame_ms) {
-    const { frame_times } = await app
-      .scene(
-        (p: {}) => {
-          let count = 0;
-          const ctx = getCurrentScene();
-          ctx
-            .on('scene:frame', () => {
-              const progress = Math.floor((count++ / frames_count) * 100);
-              ctx.root.textContent = `Detect FPS ${progress}%`;
-              progress === 100 && ctx.emit('dispose').close();
-            })
-            .on(
-              'scene:close',
-              onPageLeave(() => (alert(leave_alert_on_fps), history.go())),
-            );
-          return [];
-        },
-        { defaultProps: {} },
-      )
-      .show();
-    const frame_ms_arr = frame_times
-      .map((t, i, arr) => (i > 0 ? t - arr[i - 1]! : 0))
-      .slice(1); // first is 0
-    console.info(
-      'detected fps',
-      // frame_ms_arr,
-      (frame_ms = frame_ms_arr.reduce((a, b) => a + b) / frame_ms_arr.length),
-    );
-  }
-
-  // setup app data
-  const cleanups = alert_on_leave
-    ? [
-        onPageLeave(() => alert(leave_alert_on_task! + ++app.data.leave_count)),
-        on(
-          window,
-          'beforeunload',
-          (e) => (e.preventDefault(), (e.returnValue = beforeunload_alert)),
-        ),
-      ]
-    : [];
-  return app.on('dispose', () => cleanups.map((fn) => fn()));
+  // event listeners
+  const cleanups = [
+    onPageLeave(
+      () => (
+        ++data.leave_count,
+        alert_on_leave && alert(i18n.leave_alert_on_task)
+      ),
+    ),
+    on(
+      window,
+      'beforeunload',
+      (e) =>
+        alert_on_leave &&
+        (e.preventDefault(), (e.returnValue = i18n.beforeunload_alert)),
+    ),
+  ];
+  return new App(root, data).on('dispose', () => cleanups.map((f) => f()));
 };

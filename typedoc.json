@@ -16,9 +16,10 @@
     "typescript": {
       "devicePixelRatio": "https://developer.mozilla.org/docs/Web/API/Window/devicePixelRatio",
       "innerWidth": "https://developer.mozilla.org/docs/Web/API/Window/innerWidth",
-      "Disposable": "https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Symbol/dispose"
+      "Disposable": "https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Symbol/dispose",
+      "localStorage": "https://developer.mozilla.org/docs/Web/API/Window/localStorage"
     }
   },
-  "plugin": ["typedoc-theme-fresh", "typedoc-plugin-mdn-links"],
-  "theme": "fresh"
+  "plugin": ["typedoc-plugin-mdn-links", "typedoc-github-theme"]
+  // "theme": "fresh"
 }

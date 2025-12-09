@@ -5,7 +5,7 @@ import {
   VirtualChinrest,
 } from '@psytask/components';
 import { jsPsychStim } from '@psytask/jspsych';
-import { createApp, generic, getCurrentScene, StairCase, css } from 'psytask';
+import { createApp, css, generic, getCurrentScene, StairCase } from 'psytask';
 import van from 'vanjs-core';
 import { calc, noreactive } from 'vanjs-ext';
 
@@ -14,27 +14,16 @@ const { button, div } = van.tags;
 using app = await createApp({ alert_on_leave: false });
 using dc = app.collector('useful-field-of-view.csv').on('add', console.log);
 
-using jspsych = app.scene(jsPsychStim, { defaultProps: {} });
 using simpleText = app.scene(
   /** @param {{ content: string }} props */
-  (props) => div({ class: 'psytask-container' }, () => props.content),
+  (props) => div({ class: 'psytask-center' }, () => props.content),
   { defaultProps: { content: '' } },
 );
-using chinrest = app.scene(VirtualChinrest, { defaultProps: {} });
 
-// load remote resources
-const urls = /** @type {const} */ ([
-  'https://picsum.photos/10?0',
-  'https://picsum.photos/10?1',
-]);
-using loader = app.scene(generic(Loader), { defaultProps: { urls } });
-const { blobs: imageBlobs, error } = await loader.show();
-if (error) throw error;
-
-// get task parameters
-/** @type {{ image_size: number; mask_duration: number }} */
-const opts = (
-  await jspsych.show({
+// show load progress
+simpleText.show({ content: 'Loading...' });
+using survey = app.scene(jsPsychStim, {
+  defaultProps: {
     type: await import(
       //@ts-ignore
       `https://cdn.jsdelivr.net/npm/@jspsych/plugin-survey/+esm`
@@ -61,9 +50,24 @@ const opts = (
         },
       ],
     },
-  })
-).response;
+  },
+});
+using chinrest = app.scene(VirtualChinrest, { defaultProps: {} });
+simpleText.close();
+
+// load remote resources
+const urls = /** @type {const} */ ([
+  'https://picsum.photos/10?0',
+  'https://picsum.photos/10?1',
+]);
+using loader = app.scene(generic(Loader), { defaultProps: { urls } });
+const { blobs: imageBlobs, error } = await loader.show();
+if (error) throw error;
+
+// get task parameters
 const { deg2pix, deg2csspix } = await chinrest.show();
+/** @type {{ image_size: number; mask_duration: number }} */
+const opts = (await survey.show()).response;
 
 // create stimuli scene
 const imageBitmaps = /** @type {[ImageBitmap, ImageBitmap]} */ (
@@ -108,7 +112,9 @@ using stim = app.scene(
       };
 
     const peripheralImage = displace(
-      ImageStim({ image: calc(() => imageBitmaps[props.image_indexes[1]]) }),
+      ImageStim({
+        image: calc(() => noreactive(imageBitmaps[props.image_indexes[1]])),
+      }),
       [0, 0],
     );
 
@@ -182,6 +188,7 @@ using stim = app.scene(
 
     return div(
       { style: css({ position: 'relative', inset: '50%' }) },
+      // centeral fixation box
       displace(
         div({
           style: () =>
@@ -192,12 +199,16 @@ using stim = app.scene(
         }),
         [0, 0],
         opts.image_size * 1.5,
-      ), // centeral fixation box
+      ),
+      // centeral image
       displace(
-        ImageStim({ image: calc(() => imageBitmaps[props.image_indexes[0]]) }),
+        ImageStim({
+          image: calc(() => noreactive(imageBitmaps[props.image_indexes[0]])),
+        }),
         [0, 0],
-      ), // centeral image
-      peripheralImage, // peripheral image
+      ),
+      // peripheral image
+      peripheralImage,
       ...option_triangle_els,
       ...fixed_triangle_els,
     );
@@ -221,7 +232,7 @@ using mask = app.scene(
       return noreactive(imageData);
     };
     const el = ImageStim({ image: calc(image) });
-    el.classList.add('psytask-container');
+    el.classList.add('psytask-center');
     return el;
   },
   { defaultProps: {} },
@@ -248,14 +259,14 @@ using identification = app.scene(
     };
     return {
       node: div(
-        { class: 'psytask-container' },
+        { class: 'psytask-center' },
         'Central Identification:\nWhich image was displayed in the center?',
         div(
           {
             style: css({
               display: 'flex',
-              'justify-content': 'space-around',
-              'margin-top': '0.5rem',
+              'margin-top': '1rem',
+              gap: '4rem',
             }),
           },
           Image(0),
@@ -307,7 +318,7 @@ using localization = app.scene(
 
     return {
       node: div(
-        { class: 'psytask-container' },
+        { class: 'psytask-center' },
         'Peripheral Localization:\nIn which direction did the peripheral image appear?',
         container,
       ),
@@ -335,7 +346,7 @@ Click to start.`,
 // main loop
 const staircase = StairCase({
   start: 500,
-  step: 20,
+  step: app.data.frame_ms,
   down: 3,
   up: 1,
   reversals: 2,
@@ -381,19 +392,25 @@ for (const stim_duration of staircase) {
 
   dc.add({
     stim_duration,
-    stim_real_duration: mask_data.start_time - stim_data.start_time,
+    stim_real_duration:
+      /** @type {number} */ (mask_data.frame_times[0]) -
+      /** @type {number} */ (stim_data.frame_times[0]),
     central_image_index,
     peripheral_image_index,
     peripheral_angle_index,
     identification: {
       response_image_index: identification_data.response_image_index,
       correct: identification_correct,
-      rt: identification_data.response_time - identification_data.start_time,
+      rt:
+        identification_data.response_time -
+        /** @type {number} */ (identification_data.frame_times[0]),
     },
     localization: {
       response_angle_index: localization_data.response_angle_index,
       correct: localization_correct,
-      rt: localization_data.response_time - localization_data.start_time,
+      rt:
+        localization_data.response_time -
+        /** @type {number} */ (localization_data.frame_times[0]),
     },
     correct,
   });

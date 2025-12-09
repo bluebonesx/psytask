@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
 jobs:
   cleanup_runs:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       actions: write
       contents: read
@@ -18,7 +18,7 @@ jobs:
           retain_days: 0
           keep_minimum_runs: 20
   cleanup_deployments:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions: write-all
     steps:
       - name: Delete Deployment Environment

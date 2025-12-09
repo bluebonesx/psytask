@@ -18,26 +18,20 @@ export const useDevicePixelRatio = () => {
   getCurrentScene().on('dispose', () => cleanup());
   return dpr;
 };
-/** {@link screen.width} */
-export const useScreenPhysicalPix = (dpr: State<number>) =>
-  reactive({
-    width: calc(() => screen.width * dpr.val),
-    height: calc(() => screen.height * dpr.val),
-  });
-/** {@link innerWidth} */
+/** {@link window.innerWidth} */
 export const useWindowPhysicalPix = (dpr: State<number>) => {
-  const size = reactive({
+  const store = reactive({
     width: calc(() => innerWidth * dpr.val),
     height: calc(() => innerHeight * dpr.val),
   });
   getCurrentScene().on(
     'dispose',
     on(window, 'resize', () => {
-      size.width = innerWidth * dpr.val;
-      size.height = innerHeight * dpr.val;
+      store.width = innerWidth * dpr.val;
+      store.height = innerHeight * dpr.val;
     }),
   );
-  return size;
+  return store;
 };
 
 type MaybeGetter<T> = T | (() => T);

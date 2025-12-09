@@ -1,6 +1,26 @@
 import { clamp, ERR } from 'shared/utils';
 
-/** Create iterable builder. it is usually used to generate trials for tasks. */
+/**
+ * Generate trials for tasks.
+ *
+ * @example
+ *
+ * Custom iterable builder
+ *
+ * ```ts
+ * const MyIterable = createIterableBuilder(function* (count: number) {
+ *   for (let i = 0; i < count; i++) {
+ *     const response: string = yield i + 1; // yield number; receive string
+ *   }
+ * });
+ *
+ * const myIterable = MyIterable(3);
+ * for (const trial of myIterable) {
+ *   // set current trial response to calculate next value
+ *   myIterable.response(`Response to ${trial}`);
+ * }
+ * ```
+ */
 export const createIterableBuilder =
   <
     T extends unknown[],

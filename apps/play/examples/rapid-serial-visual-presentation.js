@@ -9,44 +9,16 @@ using dc = app
   .collector('rapid-serial-visual-presentation.csv')
   .on('add', console.log);
 
-using jspsych = app.scene(jsPsychStim, { defaultProps: {} });
 using simpleText = app.scene(
   /** @param {{ content: string }} props */
-  (props) => div({ class: 'psytask-container' }, () => props.content),
+  (props) => div({ class: 'psytask-center' }, () => props.content),
   { defaultProps: { content: '' } },
 );
-using reaction = app.scene(
-  /** @param {{}} props */
-  (props) => {
-    /** @type {{ response_key: string; response_time: number }} */
-    let data;
-    const ctx = getCurrentScene();
-    ctx.on('scene:show', () => {
-      data = { response_key: '', response_time: 0 };
 
-      const cleanup = on(ctx.root, 'keydown', (e) => {
-        // only accept number keys 0-9
-        if (!/^\d$/.test(e.key)) return;
-        data = { response_key: e.key, response_time: e.timeStamp };
-        ctx.close();
-      });
-      ctx.once('scene:close', cleanup);
-    });
-    return {
-      node: div(
-        { class: 'psytask-container' },
-        'Please press the key corresponding to the second number.',
-      ),
-      data: () => data,
-    };
-  },
-  { defaultProps: {} },
-);
-
-// get task parameters
-/** @type {{ series_length: number }} */
-const opts = (
-  await jspsych.show({
+// show load progress
+simpleText.show({ content: 'Loading...' });
+using survey = app.scene(jsPsychStim, {
+  defaultProps: {
     type: await import(
       //@ts-ignore
       `https://cdn.jsdelivr.net/npm/@jspsych/plugin-survey/+esm`
@@ -65,8 +37,40 @@ const opts = (
         },
       ],
     },
-  })
-).response;
+  },
+});
+using reaction = app.scene(
+  /** @param {{}} props */
+  (props) => {
+    /** @type {{ response_key: string; response_time: number }} */
+    let data;
+    const ctx = getCurrentScene();
+    ctx.on('show', () => {
+      data = { response_key: '', response_time: 0 };
+
+      const cleanup = on(ctx.root, 'keydown', (e) => {
+        // only accept number keys 0-9
+        if (!/^\d$/.test(e.key)) return;
+        data = { response_key: e.key, response_time: e.timeStamp };
+        ctx.close();
+      });
+      ctx.once('close', cleanup);
+    });
+    return {
+      node: div(
+        { class: 'psytask-center' },
+        'Please press the key corresponding to the second number.',
+      ),
+      data: () => data,
+    };
+  },
+  { defaultProps: {} },
+);
+simpleText.close();
+
+// get task parameters
+/** @type {{ series_length: number }} */
+const opts = (await survey.show()).response;
 
 // instructions
 await simpleText.config({ close_on: 'pointerup' }).show({
@@ -119,7 +123,7 @@ for (const lag of staircase) {
   for (const symbol of series) {
     await simpleText.config({ duration: 1e2 }).show({ content: symbol });
   }
-  const { start_time, response_key, response_time } = await reaction.show();
+  const { frame_times, response_key, response_time } = await reaction.show();
   const correct = target === response_key;
   await simpleText
     .config({ duration: 500 })
@@ -131,7 +135,7 @@ for (const lag of staircase) {
     target,
     response: response_key,
     correct,
-    rt: response_time - start_time,
+    rt: response_time - /** @type {number} */ (frame_times[0]),
   });
 }
 

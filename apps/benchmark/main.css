@@ -1,16 +1,41 @@
 #app {
-  & div {
-    justify-content: center;
+  margin: 2rem;
+
+  > div > * {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
   }
-  & > fieldset {
-    margin-bottom: 1rem;
-    border-bottom: none;
-    & > legend {
-      font-weight: bold;
-      font-size: 1.2em;
-    }
-    & > div {
-      display: flex;
-    }
+  > div,
+  h2 {
+    padding: 1rem 0;
   }
+  pre {
+    text-wrap: wrap;
+  }
+  input,
+  select,
+  button {
+    padding: 0.3rem;
+  }
+  canvas {
+    width: 100%;
+    height: 100%;
+  }
+}
+#root {
+  color: #fff;
+  background: #000;
+
+  font-family: monospace;
+  font-size: 2rem;
+  line-height: 1;
+
+  margin: 0;
+  padding: 0;
+  border: none;
+
+  height: 100dvh;
+  width: 100dvw;
+  overflow: hidden;
 }

@@ -1,8 +1,7 @@
 import { EventEmitter } from '@psytask/core';
 import type { LooseObject } from 'shared/types';
-import { ERR, mount } from 'shared/utils';
-import van from 'vanjs-core';
-import { onPageLeave } from './utils';
+import { $Object, ERR, mount } from 'shared/utils';
+import { a, onPageLeave } from './utils';
 
 export type Serializer<T extends LooseObject = LooseObject> = {
   header: (row: T, rows: T[]) => string;
@@ -19,15 +18,16 @@ const serializers = {
   /** @see {@link https://www.rfc-editor.org/rfc/rfc4180 RFC-4180} */
   csv: {
     header: (row) =>
-      Object.keys(row).reduce(
-        (acc, key, i) => acc + (i ? ',' : '') + csv_normalize(key),
-        '',
-      ),
+      $Object
+        .keys(row)
+        .reduce((acc, key, i) => acc + (i ? ',' : '') + csv_normalize(key), ''),
     body: (row) =>
-      Object.values(row).reduce<string>(
-        (acc, value, i) => acc + (i ? ',' : '\n') + csv_normalize(value),
-        '',
-      ),
+      $Object
+        .values(row)
+        .reduce<string>(
+          (acc, value, i) => acc + (i ? ',' : '\n') + csv_normalize(value),
+          '',
+        ),
     footer: () => '',
   },
   /** @see {@link https://www.json.org JSON} */
@@ -70,9 +70,6 @@ export class Collector<T extends LooseObject> extends EventEmitter<{
    *
    * Built-in supports for CSV and JSON formats. You can extend this by
    * {@link Collector.serializers} or provide `serializer` parameter.
-   *
-   * @param serializer - An {@link Serializer}. If not provided, a default
-   *   serializer based on the file extension will be used.
    */
   constructor(
     /** @default `data-${Date.now()}.csv` */
@@ -80,6 +77,10 @@ export class Collector<T extends LooseObject> extends EventEmitter<{
     options?: {
       /** @default true */
       backup_on_leave?: boolean;
+      /**
+       * If not provided, a default {@link Serializer} based on the file
+       * extension will be used.
+       */
       serializer?: Serializer<T>;
     },
   ) {
@@ -93,7 +94,7 @@ export class Collector<T extends LooseObject> extends EventEmitter<{
     if (options?.serializer) {
       this.#serializer = options.serializer;
     } else {
-      const extnames = Object.keys(serializers);
+      const extnames = $Object.keys(serializers);
       this.#serializer = extnames.includes(extname)
         ? (serializers as Record<string, Serializer>)[extname]!
         : ERR(
@@ -102,7 +103,7 @@ Or add custom Serializer to Collector.serializers.`,
           );
     }
 
-    // setup backup on leave
+    // use backup on leave
     if (options?.backup_on_leave ?? true) {
       this.on(
         'dispose',
@@ -153,9 +154,7 @@ Or add custom Serializer to Collector.serializers.`,
     const output = this.final();
     if (!output) return;
     const url = URL.createObjectURL(new Blob([output], { type: 'text/plain' }));
-    const el = mount(
-      van.tags.a({ download: this.filename + suffix, href: url }),
-    );
+    const el = mount(a({ download: this.filename + suffix, href: url }));
     el.click();
     URL.revokeObjectURL(url);
     el.remove();

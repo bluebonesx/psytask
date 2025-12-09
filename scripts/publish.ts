@@ -1,6 +1,6 @@
 import path from 'path';
-import { cyan, __DEV__, green, log, projects, yellow } from './utils';
 import { buildProject } from './build';
+import { __DEV__, green, log, projects, yellow } from './utils';
 
 const pkgs = projects.filter((e) => e.root === 'packages');
 

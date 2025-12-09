@@ -3,9 +3,9 @@ import { array_normalize, ERR, rAF } from 'shared/utils';
 import { EventEmitter } from './event-emitter';
 
 // timer system
-type TimerRecords = number[]; //TODO: use `Float64Array` to optimize memory
+export type TimerRecords = number[]; //TODO: use `Float64Array` to optimize memory
 export type Timer = {
-  start(onFrame: (time: number) => void): Promise<TimerRecords>;
+  start(onFrame?: (records: TimerRecords) => void): Promise<TimerRecords>;
   stop(): void;
 };
 /**
@@ -37,39 +37,33 @@ export type Timer = {
  *     if e + \delta < 0 then -e <= -e - \delta -> false
  * ```
  */
-export const createTimer = (
-  shouldStop: (records: TimerRecords) => boolean,
-): Timer => {
-  let stop = () => {};
-  return {
+export const createTimer = (shouldStop: (records: TimerRecords) => boolean) => {
+  const timer: Timer = {
     start: (cb) =>
       new Promise((resolve) => {
-        stop = () => (cancelAnimationFrame(handle), resolve(records));
-        const records: TimerRecords = [];
+        timer.stop = () => (cancelAnimationFrame(handle), resolve(records));
+        const records: number[] = [];
         const frame = (time: number) => {
           records.push(time);
-          cb(time);
-          shouldStop(records) ? stop() : (handle = rAF(frame));
+          cb?.(records);
+          shouldStop(records) ? timer.stop() : (handle = rAF(frame));
         };
         let handle = rAF(frame);
       }),
-    stop,
+    stop() {},
   };
+  return timer;
 };
 
 // component system
 export type NodeLike = string | Node;
-type BuiltinData = {
-  start_time: number;
-  frame_times: TimerRecords;
-};
+type BuiltinData = { frame_times: TimerRecords };
 type ForbiddenData = { [K in keyof BuiltinData]?: never };
 
 /**
- * Component, only called once when the scene is created.
+ * Only called once when the scene is created.
  *
  * @param props - The reactive props to control the scene display
- * @param ctx - The scene instance, can be used to manage lifecycle
  * @see {@link Scene}
  */
 export type Component<
@@ -84,21 +78,22 @@ export type Component<
       /** Data getter to get data from elements */
       data: () => D;
     };
+
 type SceneShow<
   P extends LooseObject = any,
   D extends LooseObject = LooseObject & ForbiddenData,
 > = (patchProps?: Partial<P>) => Promise<Merge<D, BuiltinData>>;
+/** Same with {@link SceneShow} */
 type GenericComponent<
   P extends LooseObject = any,
   D extends LooseObject = LooseObject & ForbiddenData,
 > = SceneShow<P, D>;
-
 /**
- * Provide type infer for generic setup function, do nothing in runtime.
+ * Provide type infer for generic component, do nothing in runtime.
  *
  * @example
  *
- * Support generic scene setup function
+ * Support generic component
  *
  * ```ts
  * using scene = new Scene(
@@ -115,31 +110,43 @@ export const generic: {
   ): GenericComponent<P, D>;
 } = (f) => f as any;
 /** @ignore */
-export type MaybeGenericComponent = Component | GenericComponent;
-export type ComponentAdaptor = {
-  /** Define a component with reactive props */
+export type MaybeGenericComponent<
+  P extends LooseObject = any,
+  D extends LooseObject & ForbiddenData = {},
+> = Component<P, D> | GenericComponent<P, D>;
+
+export type ComponentAdapter = {
+  /** Wrap a component with reactive props */
   define: <T extends MaybeGenericComponent>(component: T) => T;
-  /** Render a component with default props */
+  /** Render a component with default props and provided scene */
   render: <T extends MaybeGenericComponent>(
     component: T,
     defaultProps: Parameters<T>[0],
+    /** If not provided, it will use current scene */
+    ctx?: Scene<any>,
   ) => {
     props: Parameters<T>[0];
-    nodes: NodeLike[];
-    data?: () => LooseObject;
-  };
+  } & (ReturnType<T> extends infer R
+    ? R extends { node: infer N; data: infer D }
+      ? { nodes: N extends NodeLike ? [N] : N; data: D }
+      : { nodes: R extends NodeLike ? [R] : R; data: undefined }
+    : never);
 };
 export const createComponentAdapter = (
   reactive: <T extends LooseObject>(obj: T) => T,
-): ComponentAdaptor => ({
+): ComponentAdapter => ({
   define:
     (component) =>
     //@ts-ignore
     (props) =>
       component(reactive(props)),
-  render: (component, defaultProps) => {
-    const props = reactive({ ...defaultProps });
+  //@ts-ignore
+  render: (component, defaultProps, ctx) => {
+    const props = reactive(defaultProps);
+
+    ctx && sceneStack.push(ctx);
     const instanceOrNode = (component as Component)(props);
+    ctx && sceneStack.pop();
 
     let data: (() => LooseObject) | undefined;
     const nodes = array_normalize(
@@ -155,21 +162,44 @@ export const createComponentAdapter = (
 /**
  * Lifecycle hooks.
  *
- * | name        | trigger timing                        |
- * | ----------- | ------------------------------------- |
- * | scene:show  | the scene is shown                    |
- * | scene:frame | on each frame when the scene is shown |
- * | scene:close | the scene is closed                   |
+ * | name  | trigger timing                        |
+ * | ----- | ------------------------------------- |
+ * | show  | the scene is shown                    |
+ * | frame | on each frame when the scene is shown |
+ * | close | the scene is closed                   |
  */
 export interface SceneEventMap {
-  'scene:show': void;
-  'scene:frame': number;
-  'scene:close': void;
+  show: void;
+  frame: number;
+  close: void;
 }
 
-let currentScene: Scene<any> | null = null;
+const sceneStack: Scene<any>[] = [];
+/**
+ * @example
+ *
+ * Must be called on the top scope of component
+ *
+ * ```ts
+ * const Component = (props: {}) => {
+ *   const ctx = getCurrentScene();
+ *   return '';
+ * };
+ * ```
+ *
+ * DO NOT call on other place
+ *
+ * ```ts
+ * const Component = (props: {}) => {
+ *   const fn = () => {
+ *     const ctx = getCurrentScene(); // WRONG!
+ *   };
+ *   return '';
+ * };
+ * ```
+ */
 export const getCurrentScene = () =>
-  currentScene != null ? currentScene : ERR('No active scene');
+  sceneStack[sceneStack.length - 1] ?? ERR('Not found current scene');
 
 /** Scene options */
 export type SceneOptions<T extends MaybeGenericComponent> = {
@@ -178,37 +208,46 @@ export type SceneOptions<T extends MaybeGenericComponent> = {
   /** Default props */
   defaultProps: Parameters<T>[0];
   /** Control show timing */
-  timer: Timer;
-  /** Component adaptor */
-  adapter: ComponentAdaptor;
+  timer: () => Timer;
+  /** Component adapter */
+  adapter: ComponentAdapter;
 };
 export class Scene<
   T extends MaybeGenericComponent,
 > extends EventEmitter<SceneEventMap> {
   readonly root: HTMLDivElement;
-  #props: Parameters<T>[0];
-  #data?: () => LooseObject;
+  readonly #timer: Timer;
+  readonly #props: Parameters<T>[0];
+  readonly data: T extends MaybeGenericComponent<any, infer D>
+    ? () => D
+    : undefined;
   /**
    * Show DOM and update props one-time
    *
    * @example
    *
-   * Basic usage
+   * Integrate with `@vue/reactivity`
    *
    * ```ts
+   * import { reactive, effect } from '@vue/reactivity';
+   *
    * using scene = new Scene(
-   *   (props: { text: string }, ctx) => {
+   *   (props: { text: string }) => {
    *     const node = document.createElement('div');
-   *     ctx.on('scene:show', (newProps) => {
-   *       node.textContent = newProps.text;
+   *     effect(() => {
+   *       node.textContent = props.text; // auto update when props.text changes
    *     });
    *     return node;
    *   },
    *   {
-   *     //...
+   *     root: document.createElement('div'),
    *     defaultProps: { text: 'default' },
+   *     adapter: createComponentAdapter(reactive),
+   *     timer: () => createTimer((records) => records.length > 100), // show 100 frames
    *   },
    * );
+   * document.body.appendChild(scene.root);
+   *
    * await scene.show({ text: 'new' }); // show `new`
    * await scene.show(); // show `default`
    * ```
@@ -220,45 +259,57 @@ export class Scene<
     this.#show;
 
   /**
-   * @param component - The {@link Component scene setup function}
-   * @param options - Default {@link SceneOptions scene options}
+   * @param component - {@link Component}
+   * @param options - {@link SceneOptions}
    */
   constructor(
     component: T,
     public readonly options: SceneOptions<T>,
   ) {
     super();
-    const { root, adapter: adaptor, defaultProps } = options;
+    const { root, adapter, defaultProps, timer } = options;
     (this.root = root).tabIndex = -1; // support keyboard events
     root.style.transform = 'scale(0)';
 
-    currentScene = this.on('dispose', () => root.remove());
-    const { props, nodes, data } = adaptor.render(component, defaultProps);
-    currentScene = null;
+    const { props, nodes, data } = adapter.render(
+      component as Component,
+      { ...defaultProps },
+      this.on('dispose', () => root.remove()),
+    );
+    this.#timer = timer(); // create timer instance
 
     this.#props = props;
-    this.#data = data;
+    //@ts-ignore
+    this.data = data;
     root.append(...nodes);
   }
-  /** Add a microtask to close the scene. It is useful when close in 'scene:show' */
+  /** Add a microtask to close the scene. It is useful when close in 'show' */
   async close() {
     await 0;
-    this.options.timer.stop();
+    this.#timer.stop();
   }
   async #show(patchProps?: Partial<LooseObject>) {
-    const { root, timer, defaultProps } = this.options;
+    const { root, defaultProps } = this.options;
 
-    Object.assign(this.#props, defaultProps, patchProps); // WARN: may modify defaultProps
-    this.emit('scene:show');
+    // modify props
+    const newProps = { ...defaultProps, ...patchProps };
+    for (const key of Object.keys({ ...this.#props, ...newProps }))
+      this.#props[key] = newProps[key];
+
+    // show
+    this.emit('show');
     root.style.transform = 'scale(1)';
     root.focus();
 
-    const records = await timer.start((time) => this.emit('scene:frame', time));
+    // wait timer
+    const records = await this.#timer.start((records) =>
+      this.emit('frame', records[records.length - 1]!),
+    );
 
+    // close
     root.style.transform = 'scale(0)';
     return {
-      ...this.emit('scene:close').#data?.(),
-      start_time: records[0]!,
+      ...this.emit('close').data?.(),
       frame_times: records,
     } satisfies BuiltinData;
   }

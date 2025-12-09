@@ -1,5 +1,5 @@
 import { jsPsychStim } from '@psytask/jspsych';
-import { createApp, getCurrentScene, on } from 'psytask';
+import { createApp, css, getCurrentScene, on } from 'psytask';
 import van from 'vanjs-core';
 
 const { div } = van.tags;
@@ -7,43 +7,26 @@ const { div } = van.tags;
 using app = await createApp({ alert_on_leave: false });
 using dc = app.collector('n-back.csv').on('add', console.log);
 
-using jspsych = app.scene(jsPsychStim, { defaultProps: {} });
 using simpleText = app.scene(
   /** @param {{ content: string }} props */
-  (props) => div({ class: 'psytask-container' }, () => props.content),
+  (props) =>
+    div(
+      { class: 'psytask-center', style: css({ margin: '0 4rem' }) },
+      () => props.content,
+    ),
   { defaultProps: { content: '' } },
 );
-using stimulus = app.scene(
-  /** @param {{ letter: string }} props */
-  (props) => {
-    /** @type {{ has_response: boolean; response_time: number }} */
-    let data;
-    const ctx = getCurrentScene();
-    ctx.on('scene:show', () => {
-      data = { has_response: false, response_time: NaN };
 
-      const cleanup = on(ctx.root, 'pointerup', (e) => {
-        data = { has_response: true, response_time: e.timeStamp };
-      });
-      ctx.once('scene:close', cleanup);
-    });
-
-    return {
-      node: div({ class: 'psytask-container' }, () => props.letter),
-      data: () => data,
-    };
-  },
-  { defaultProps: { letter: '' }, duration: 300 },
-);
-
-// get task parameters
-/** @type {{ back_num: number; trial_num: number }} */
-const opts = (
-  await jspsych.show({
-    type: await import(
-      //@ts-ignore
-      `https://cdn.jsdelivr.net/npm/@jspsych/plugin-survey/+esm`
-    ).then((mod) => mod.default),
+// show load progress
+simpleText.show({ content: 'Loading...' });
+using survey = app.scene(jsPsychStim, {
+  defaultProps: {
+    type: (
+      await import(
+        //@ts-ignore
+        `https://cdn.jsdelivr.net/npm/@jspsych/plugin-survey/+esm`
+      )
+    ).default,
     survey_json: {
       elements: [
         {
@@ -68,8 +51,35 @@ const opts = (
         },
       ],
     },
-  })
-).response;
+  },
+});
+using stimulus = app.scene(
+  /** @param {{ letter: string }} props */
+  (props) => {
+    /** @type {{ has_response: boolean; response_time: number }} */
+    let data;
+    const ctx = getCurrentScene();
+    ctx.on('show', () => {
+      data = { has_response: false, response_time: NaN };
+
+      const cleanup = on(ctx.root, 'pointerup', (e) => {
+        data = { has_response: true, response_time: e.timeStamp };
+      });
+      ctx.once('close', cleanup);
+    });
+
+    return {
+      node: div({ class: 'psytask-center' }, () => props.letter),
+      data: () => data,
+    };
+  },
+  { defaultProps: { letter: '' }, duration: 300 },
+);
+simpleText.close();
+
+// get task parameters
+/** @type {{ back_num: number; trial_num: number }} */
+const opts = (await survey.show()).response;
 const letters = Array.from({ length: opts.trial_num }, () =>
   String.fromCharCode(65 + Math.floor(Math.random() * 4)),
 );
@@ -84,7 +94,7 @@ Trial sequence:
 
 Your task: Click page when the current letter is the same as the letter that appeared ${opts.back_num} positions back.
 
-Response key:
+Response:
 - Click page when you detect a match (current letter = letter from ${opts.back_num} positions ago)
 - Do not click anything when there is no match
 
@@ -103,7 +113,7 @@ await simpleText.config({ duration: 1e3 }).show({ content: '+' });
 // show stimuli and collect responses
 for (let i = 0; i < letters.length; i++) {
   const curr = letters[i];
-  const { start_time, has_response, response_time } = await stimulus.show({
+  const { frame_times, has_response, response_time } = await stimulus.show({
     letter: curr,
   });
   const prev = i >= opts.back_num ? letters[i - opts.back_num] : null;
@@ -114,7 +124,7 @@ for (let i = 0; i < letters.length; i++) {
     is_back,
     has_response,
     correct: is_back ? has_response : !has_response,
-    rt: response_time - start_time, // if no response, rt = NaN
+    rt: response_time - /** @type {number} */ (frame_times[0]), // if no response, rt = NaN
   });
 }
 

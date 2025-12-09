@@ -76,57 +76,57 @@ So writing a psychology task only requires 2 steps:
 ### Create Scene
 
 ```js
-import { Container } from '@psytask/components';
+import { Grating } from '@psytask/components';
 
 using simpleText = app.scene(
-  // scene setup
-  Container,
+  // component
+  Grating,
   // scene options
   {
-    defaultProps: { content: '' }, // props is show params
-    duration: 1e3, // show 1000ms
+    defaultProps: { type: Math.sin, size: 100, sf: 0.02 }, // show params
+    duration: 1e3, // show 1000 ms
     close_on: 'key: ', // close on space key
   },
 );
 ```
 
-Most of the time, you need to write the scene yourself, see [setup scene](#setup-scene):
+Most of the time, you need to write the scene yourself, see [Component](#component):
 
 ```js
+import { on, getCurrentScene } from 'psytask';
+import { ImageStim } from '@psytask/components';
+
 using scene = app.scene(
   /** @param {{ text: string }} props */
-  (props, ctx) => {
+  (props) => {
     /** @type {{ response_key: string; response_time: number }} */
     let data;
+    const ctx = getCurrentScene();
     const node = document.createElement('div');
 
+    // use other Component
+    node.appendChild(ImageStim({ image: new ImageData(1) }));
+
+    // add DOM event listener
+    const cleanup = on(ctx.root, 'keydown', (e) => {
+      if (e.key !== 'f' || e.key !== 'j') return;
+      data = { response_key: e.key, response_time: e.timeStamp };
+      ctx.close(); // close on 'f' or 'j'
+    });
+
     ctx
-      .on('scene:show', (newProps) => {
-        // Reset data when the scene shows
+      // reset data on show
+      .on('show', () => {
         data = { response_key: '', response_time: 0 };
-        // update DOM
-        node.textContent = newProps.text;
       })
-      // Capture keyboard responses
-      .on('key:f', (e) => {
-        data = { response_key: e.key, response_time: e.timeStamp };
-        ctx.close(); // close scene when key f was pressed
-      })
-      .on('key:j', (e) => {
-        data = { response_key: e.key, response_time: e.timeStamp };
-        ctx.close();
-      });
+      // remove DOM event listenr on dispose
+      .on('dispose', cleanup);
 
     // Return the element and data getter
-    return {
-      // use other Component
-      node: Container({ content: node }, ctx),
-      // data getter
-      data: () => data,
-    };
+    return { node, data: () => data };
   },
   {
-    defaultProps: { text: '' }, // same with setup params
+    defaultProps: { text: '' },
     duration: 1e3,
     close_on: 'mouse:left',
   },
@@ -138,14 +138,14 @@ using scene = app.scene(
 
 ### Show Scene
 
+Overide default props or options:
+
 ```js
-// show with parameters
-const data = await scene.show({ text: 'Press F or J' });
-// show with new scene options
-const data = await scene.config({ duration: Math.random() * 1e3 }).show();
+const data = await scene.show({ text: 'Press F or J' }); // with new props
+const data = await scene.config({ duration: 1e3 }).show(); // with new options
 ```
 
-Usually, we need to show a block:
+a series of trials:
 
 ```js
 import { RandomSampling, StairCase } from 'psytask';
@@ -189,13 +189,16 @@ using dc = app.collector('data.csv');
 
 for (const text of ['A', 'B', 'C']) {
   const data = await scene.show({ text });
-  // add a row
+
+  // `frame_times` will be recorded automatically
+  const start_time = /** @type {number} */ (data.frame_times[0]);
+
   dc.add({
     text,
     response: data.response_key,
-    rt: data.response_time - data.start_time,
+    rt: data.response_time - start_time,
     correct: data.response_key === 'f',
-  });
+  }); // add a row
 }
 
 dc.final(); // get final text
@@ -204,13 +207,11 @@ dc.download(); // download file
 
 ## Integration
 
-### [jsPsych](https://www.jspsych.org)
-
-Add packages:
+### [jsPsych](https://www.jspsych.org/plugins/list-of-plugins/)
 
 ```bash
 npm i @psytask/jspsych @jspsych/plugin-cloze
-npm i -d jspsych # for type hint
+npm i -d jspsych # optional: for type hint
 ```
 
 Or using CDN:
@@ -234,9 +235,7 @@ Or using CDN:
 ```
 
 > [!IMPORTANT]
-> For CDNer, you should add the `+esm` after the jspsych plugin CDN URL, because jspsych plugins do not release ESM versions.
-
-Then use it:
+> For CDNer, you should add the `+esm` after the jspsych plugin CDN URL, because jspsych plugins do not release ESM versions. Or you can use [esm.sh](https://esm.sh).
 
 ```js
 import { jsPsychStim } from '@psytask/jspsych';
@@ -250,9 +249,7 @@ const data = await jspsych.show({
 });
 ```
 
-### [JATOS](https://www.jatos.org/)
-
-See [official docs](https://www.jatos.org/Submit-and-upload-data-to-the-server.html)
+### [JATOS](https://www.jatos.org/Submit-and-upload-data-to-the-server.html)
 
 ```html
 <script src="jatos.js"></script>
@@ -270,109 +267,41 @@ using dc = app.collector().on('add', (row) => {
 
 ## Learn more
 
-So, how it works.
+Stay tuned...
 
-### Setup Scene
+### Component
 
-To create a scene, we need a setup function
-that inputs **Props** and **Context**,
-and outputs a object includes **Node** and **Data Getter**:
+To create a scene, we need a component
+that inputs **Props** and outputs a object includes **Node** and **Data Getter**:
 
 ```js
-const setup = (props, ctx) => ({
-  node: '',
-  data: () => ({}),
-});
-using scene = app.scene(setup);
+const Component = (props) => {
+  const ctx = getCurrentScene();
+  return { node: '', data: () => ({}) };
+};
+using scene = app.scene(Component);
+```
+
+Or, just outputs **Node**:
+
+```js
+const Component = (props) => 'text node';
+const Component = (props) => document.createElement('div');
+const Component = (props) => ['text node', document.createElement('div')];
 ```
 
 - **Props** means show params that control the display of the scene.
-- **Context** is the current scene itself,
-  which is usually used to add [event](https://bluebonesx.github.io/psytask/types/_psytask_core.SceneEventMap.html) listeners.
-- **Node** is the string or element which be mounted to the scene root element.
-- **Data Getter** is used to get generated data for each show.
-
-If you don't want to generate any data, just return **Node**:
-
-```js
-const setup = (props, ctx) => '';
-```
+- **Node** is the string or element or array, which be mounted to the scene root element.
+- **Data Getter** is used to get generated data.
 
 > [!CAUTION]
 > You shouldn't modify props, as it may change the default props.
 >
-> If you don't know whether you modify the default props, try to recursively [freeze](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/freeze) all its properties:
->
-> ```js
-> const recurFreeze =
->   /**
->    * @template {object} T
->    * @param {T} obj
->    * @returns {T}
->    */
->   (obj) => {
->     for (const v of Object.values(obj))
->       v != null && typeof v === 'object' && recurFreeze(v);
->     return Object.freeze(obj);
->   };
-> const createProps =
->   /**
->    * @template {object} T
->    * @param {T} obj
->    * @returns {T}
->    */
->   (obj) => Object.create(recurFreeze(obj));
->
-> using scene = app.scene(
->   /**
->    * @param {{
->    *   a: string;
->    *   b: number[];
->    *   c: { d: string[] };
->    * }} props
->    */
->   (props) => '',
->   {
->     defaultProps: createProps({
->       a: '',
->       b: [],
->       c: { d: [] },
->     }),
->   },
-> );
-> ```
-
-### Update DOM
-
-When you create a scene, the setup function will be called with the default **Props**, then the **Node** will be mounted. So if you want to update **Node** in each show, you should listen `scene:show` event:
-
-```js
-const setup = (props, ctx) => {
-  const node = document.createElement('div');
-  ctx.on('scene:show', (newProps) => {
-    node.textContent = newProps.text;
-  });
-  return node;
-};
-```
-
-Or, you can use [VanJS](https://vanjs.org) power via `adapter`, which provides [reactivity](#reactivity) update:
-
-```js
-import { adapter } from '@psytask/components';
-import van from 'vanjs-core';
-
-const { div } = van.tags;
-const setup = adapter((props, ctx) => div(() => props.text));
-```
+> If you don't know whether you modify the default props, try to recursively [freeze](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/freeze) all its properties.
 
 ### Show
 
 ```mermaid
 graph TD
-scene:show --> b[show & focus root<br>add listeners to root] --> d[wait timer] --> scene:frame --> d --> e[hide root] --> scene:close
+a[modify props] --> show --> b[display & focus DOM] --> d[wait timer] --> frame --> d --> e[hide root] --> close
 ```
-
-### Reactivity
-
-Stay tuned...

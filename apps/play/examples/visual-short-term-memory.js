@@ -1,6 +1,6 @@
 import { VirtualChinrest } from '@psytask/components';
 import { jsPsychStim } from '@psytask/jspsych';
-import { createApp, getCurrentScene, on, StairCase, css } from 'psytask';
+import { createApp, css, getCurrentScene, on, StairCase } from 'psytask';
 import van from 'vanjs-core';
 import { list, reactive, replace } from 'vanjs-ext';
 
@@ -9,12 +9,44 @@ const { div } = van.tags;
 using app = await createApp({ alert_on_leave: false });
 using dc = app.collector('visual-short-term-memory.csv').on('add', console.log);
 
-using jspsych = app.scene(jsPsychStim, { defaultProps: {} });
 using simpleText = app.scene(
   /** @param {{ content: string }} props */
-  (props) => div({ class: 'psytask-container' }, () => props.content),
+  (props) => div({ class: 'psytask-center' }, () => props.content),
   { defaultProps: { content: '' } },
 );
+
+// show load progress
+simpleText.show({ content: 'Loading...' });
+using survey = app.scene(jsPsychStim, {
+  defaultProps: {
+    type: await import(
+      //@ts-ignore
+      `https://cdn.jsdelivr.net/npm/@jspsych/plugin-survey/+esm`
+    ).then((mod) => mod.default),
+    survey_json: {
+      elements: [
+        {
+          name: 'size_deg',
+          title: 'Box size (deg)',
+          type: 'text',
+          defaultValue: 1,
+          isRequired: true,
+          inputType: 'number',
+          min: 0,
+        },
+        {
+          name: 'interval_ms',
+          title: 'Interval (ms)',
+          type: 'text',
+          defaultValue: 500,
+          isRequired: true,
+          inputType: 'number',
+          min: 0,
+        },
+      ],
+    },
+  },
+});
 using chinrest = app.scene(VirtualChinrest, { defaultProps: {} });
 /** @typedef {{ pos: [number, number]; color: string; size: number }} BoxParams */
 using boxes = app.scene(
@@ -23,9 +55,9 @@ using boxes = app.scene(
     /** @type {{ response: boolean; response_time: number }} */
     let data;
     const ctx = getCurrentScene();
-    ctx.on('scene:show', () => {
+    ctx.on('show', () => {
       ctx.once(
-        'scene:close',
+        'close',
         on(ctx.root, 'keydown', (e) => {
           if (props.target_index == null) return;
           if (e.key === 'f') {
@@ -94,40 +126,12 @@ using boxes = app.scene(
   },
   { defaultProps: { params: [], target_index: void 0 } },
 );
+simpleText.close();
 
 // get task parameters
-/** @type {{ size_deg: number; interval_ms: number }} */
-const opts = (
-  await jspsych.show({
-    type: await import(
-      //@ts-ignore
-      `https://cdn.jsdelivr.net/npm/@jspsych/plugin-survey/+esm`
-    ).then((mod) => mod.default),
-    survey_json: {
-      elements: [
-        {
-          name: 'size_deg',
-          title: 'Box size (deg)',
-          type: 'text',
-          defaultValue: 1,
-          isRequired: true,
-          inputType: 'number',
-          min: 0,
-        },
-        {
-          name: 'interval_ms',
-          title: 'Interval (ms)',
-          type: 'text',
-          defaultValue: 500,
-          isRequired: true,
-          inputType: 'number',
-          min: 0,
-        },
-      ],
-    },
-  })
-).response;
 const { deg2csspix } = await chinrest.show();
+/** @type {{ size_deg: number; interval_ms: number }} */
+const opts = (await survey.show()).response;
 
 // instruction
 await simpleText.config({ close_on: 'pointerup' }).show({
@@ -187,7 +191,7 @@ for (const box_num of staircase) {
   await simpleText.config({ duration: 1e3 }).show();
   await boxes.config({ duration: 5e2 }).show({ params: params_1 });
   await simpleText.config({ duration: opts.interval_ms }).show();
-  const { start_time, response, response_time } = await boxes.show({
+  const { frame_times, response, response_time } = await boxes.show({
     params: params_2,
     target_index,
   });
@@ -200,7 +204,7 @@ for (const box_num of staircase) {
     should_change_color,
     response,
     correct,
-    rt: response_time - start_time,
+    rt: response_time - /** @type {number} */ (frame_times[0]),
   });
 }
 

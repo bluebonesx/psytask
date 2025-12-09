@@ -1,5 +1,6 @@
 import { createApp, css, getCurrentScene } from 'psytask';
 import van from 'vanjs-core';
+import { reactive } from 'vanjs-ext';
 
 const { button, div, input } = van.tags;
 
@@ -9,49 +10,39 @@ using dc = app.collector('hello-world.csv', { backup_on_leave: false });
 // create scenes
 using simpleText = app.scene(
   /** @param {{ content: string }} props */
-  (props) => div({ class: 'psytask-container' }, () => props.content),
+  (props) => div({ class: 'psytask-center' }, () => props.content),
   { defaultProps: { content: '' } },
 );
 using question = app.scene(
   /** @param {{ placeholder: string }} props */
   (props) => {
-    let response_time = NaN;
-    const answer = van.state('');
+    /** @type {{ answer: number; response_time: number }} */
+    const data = reactive({ answer: NaN, response_time: NaN });
     const ctx = getCurrentScene();
 
-    ctx.on('scene:show', () => {
-      answer.val = ''; // reset answer
+    ctx.on('show', () => {
+      // reset data
+      data.answer = NaN;
+      data.response_time = NaN;
     });
     return {
       node: div(
         {
-          class: 'psytask-container',
-          style: css({ gap: '1rem', width: '20rem' }),
+          class: 'psytask-center',
+          style: css({ gap: '1rem' }),
         },
         input({
           type: 'number',
-          value: answer,
           placeholder: () => props.placeholder,
+          value: () => data.answer,
           onchange(e) {
-            response_time = e.timeStamp;
-            answer.val = e.target.value;
+            data.answer = +e.target.value;
+            data.response_time = e.timeStamp;
           },
         }),
-        button(
-          {
-            onclick() {
-              if (answer.val !== '') {
-                ctx.close();
-              }
-            },
-          },
-          'OK',
-        ),
+        button({ onclick: () => data.answer !== -1 && ctx.close() }, 'OK'),
       ),
-      data: () => ({
-        answer: +answer.val, // convert to number
-        response_time,
-      }),
+      data: () => data,
     };
   },
   { defaultProps: { placeholder: '' } },
@@ -76,7 +67,11 @@ while (answer !== target) {
   answer = data.answer; // update answer
 
   // collect data
-  dc.add({ placeholder, answer, rt: data.response_time - data.start_time });
+  dc.add({
+    placeholder,
+    answer,
+    rt: data.response_time - /** @type {number} */ (data.frame_times[0]),
+  });
 }
 
 document.body.textContent = dc.final();

@@ -9,6 +9,10 @@
     "@psytask/components": "workspace:*",
     "@psytask/jspsych": "workspace:*",
     "vanjs-core": "catalog:",
-    "vanjs-ext": "catalog:"
+    "vanjs-ext": "catalog:",
+    "playwright": "catalog:"
+  },
+  "dependencies": {
+    "chart.js": "^4.5.1"
   }
 }
