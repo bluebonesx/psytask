@@ -10,11 +10,20 @@ import van from 'vanjs-core';
 const { b, div, span } = van.tags;
 
 using app = await createApp({ alert_on_leave: false });
-using dc = app.collector('multiple-object-tracking.csv').on('add', console.log);
+using dc = app
+  .collector('multiple-object-tracking.csv', { backup_on_leave: false })
+  .on('add', console.log);
 
 using simpleText = app.scene(
   /** @param {{ content: string }} props */
-  (props) => div({ class: 'psytask-center' }, () => props.content),
+  (props) =>
+    div(
+      {
+        class: 'psytask-center',
+        style: css({ margin: '0 4rem', 'font-size': '1rem' }),
+      },
+      () => props.content,
+    ),
   { defaultProps: { content: '' } },
 );
 
@@ -23,7 +32,7 @@ simpleText.show({ content: 'Loading...' });
 using survey = app.scene(jsPsychStim, {
   defaultProps: {
     type: await import(
-      //@ts-ignore
+      //@ts-expect-error external module
       `https://cdn.jsdelivr.net/npm/@jspsych/plugin-survey/+esm`
     ).then((mod) => mod.default),
     survey_json: {
@@ -66,8 +75,15 @@ simpleText.close();
 
 // get task parameters
 const { deg2csspix } = await chinrest.show();
-/** @type {{ object_size: number; object_num: number; deg_per_sec: number }} */
-const opts = (await survey.show()).response;
+const opts =
+  /**
+   * @type {{
+   *   object_size: number;
+   *   object_num: number;
+   *   deg_per_sec: number;
+   * }}
+   */
+  ((await survey.show()).response);
 
 // create objects scene with deg2csspix available
 using objects = app.scene(

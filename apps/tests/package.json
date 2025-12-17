@@ -9,7 +9,6 @@
     "@psytask/core": "workspace:*",
     "@psytask/jspsych": "workspace:*",
     "vanjs-core": "catalog:",
-    "vanjs-ext": "catalog:",
-    "playwright": "catalog:"
+    "vanjs-ext": "catalog:"
   }
 }

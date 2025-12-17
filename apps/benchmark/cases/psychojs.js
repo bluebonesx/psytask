@@ -9,8 +9,7 @@ const detectFPS =
         requestAnimationFrame((time) => {
           if (times.length > count) {
             const durations = times.map((t, i, arr) =>
-              //@ts-ignore
-              i > 0 ? t - arr[i - 1] : 0,
+              i > 0 ? t - /** @type {number} */ (arr[i - 1]) : 0,
             );
             return resolve(
               durations.reduce((a, b) => a + b) / durations.length,
@@ -41,7 +40,7 @@ export default async (ctx) => {
   );
   ctx.root.innerHTML = '';
 
-  //@ts-ignore
+  //@ts-expect-error no type defs
   const { core, visual, util } = window['PsychoJS'];
   const app = new core.PsychoJS();
   app._saveResults = false;

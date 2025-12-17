@@ -9,11 +9,11 @@ export type Serializer<T extends LooseObject = LooseObject> = {
   footer: (rows: T[]) => string;
 };
 
-const csv_normalize = (value: any) =>
-  value == null
-    ? ''
-    : ((value = typeof value === 'object' ? JSON.stringify(value) : value + ''),
-      /[,"\n\r]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value);
+const csv_normalize = (value: unknown) => {
+  if (value == null) return '';
+  const text = typeof value === 'object' ? JSON.stringify(value) : value + '';
+  return /[,"\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+};
 const serializers = {
   /** @see {@link https://www.rfc-editor.org/rfc/rfc4180 RFC-4180} */
   csv: {
@@ -87,14 +87,14 @@ export class Collector<T extends LooseObject> extends EventEmitter<{
     super();
 
     // set serializer
-    const match = filename.match(/\.([^\.]+)$/);
+    const match = filename.match(/\.([^.]+)$/);
     const extname = match
       ? match[1]!
       : ERR(`Can't detect extension from "${filename}".`);
     if (options?.serializer) {
       this.#serializer = options.serializer;
     } else {
-      const extnames = $Object.keys(serializers);
+      const extnames: string[] = $Object.keys(serializers);
       this.#serializer = extnames.includes(extname)
         ? (serializers as Record<string, Serializer>)[extname]!
         : ERR(
@@ -119,7 +119,6 @@ Or add custom Serializer to Collector.serializers.`,
    * @returns The total serialized data up to now.
    */
   add(row: T) {
-    //@ts-ignore
     this.emit('add', row); // modify row
     const { rows } = this;
     const chunk =

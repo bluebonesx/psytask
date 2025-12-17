@@ -1,17 +1,24 @@
 import { jsPsychStim } from '@psytask/jspsych';
-import { createApp, getCurrentScene, on, StairCase } from 'psytask';
+import { createApp, css, getCurrentScene, on, StairCase } from 'psytask';
 import van from 'vanjs-core';
 
 const { div } = van.tags;
 
 using app = await createApp({ alert_on_leave: false });
 using dc = app
-  .collector('rapid-serial-visual-presentation.csv')
+  .collector('rapid-serial-visual-presentation.csv', { backup_on_leave: false })
   .on('add', console.log);
 
 using simpleText = app.scene(
   /** @param {{ content: string }} props */
-  (props) => div({ class: 'psytask-center' }, () => props.content),
+  (props) =>
+    div(
+      {
+        class: 'psytask-center',
+        style: css({ margin: '0 4rem', 'font-size': '1rem' }),
+      },
+      () => props.content,
+    ),
   { defaultProps: { content: '' } },
 );
 
@@ -20,7 +27,7 @@ simpleText.show({ content: 'Loading...' });
 using survey = app.scene(jsPsychStim, {
   defaultProps: {
     type: await import(
-      //@ts-ignore
+      //@ts-expect-error external module
       `https://cdn.jsdelivr.net/npm/@jspsych/plugin-survey/+esm`
     ).then((mod) => mod.default),
     survey_json: {
@@ -69,8 +76,9 @@ using reaction = app.scene(
 simpleText.close();
 
 // get task parameters
-/** @type {{ series_length: number }} */
-const opts = (await survey.show()).response;
+const opts =
+  /** @type {{ series_length: number }} */
+  ((await survey.show()).response);
 
 // instructions
 await simpleText.config({ close_on: 'pointerup' }).show({

@@ -55,7 +55,6 @@ export const Loader = <const T extends string[]>(props: {
 
     const ac = new AbortController();
     const promises = urls.map(
-      //@ts-ignore
       (url, i) =>
         new Promise<Blob>((resolve, reject) => {
           const res = useFetch({ url, signal: ac.signal });

@@ -5,7 +5,7 @@ import {
   Scene,
   type SceneOptions,
 } from '@psytask/core';
-import { ERR, isObject, modify, mount, rAF } from 'shared/utils';
+import { doc, ERR, isObject, modify, mount, rAF } from 'shared/utils';
 import van from 'vanjs-core';
 
 type Action = () => unknown;
@@ -47,9 +47,7 @@ export const DefaultScene = <T extends MaybeGenericComponent>(
 // assertions
 export const expect = <D extends 0 | 1 = 0>(
   ...e: [
-    raw: D extends 1
-      ? string | number | boolean | unknown[] | Record<string, unknown>
-      : unknown,
+    raw: D extends 1 ? unknown[] | Record<string, unknown> : unknown,
     expected?: unknown,
     deep?: D,
   ]
@@ -84,12 +82,8 @@ export const expect_closeTo = (
     ERR(`Expect ${raw} to be close to ${expected} ± ${delta}, but got ${diff}`);
   }
 };
-export const expect_includes = <T extends object>(
-  raw: T,
-  expected: Partial<T>,
-) => {
-  //@ts-ignore
-  for (const key of Object.keys(expected)) expect(raw[key], expected[key], 1);
+export const expect_includes = <T>(raw: T, expected: Partial<T>) => {
+  for (const key of Object.keys(expected)) expect(raw[key], expected[key]);
 };
 export const expect_dutationCloseTo = async (
   action: Action,
@@ -137,8 +131,11 @@ export const spy_listeners = (target: EventTarget) => {
 };
 export const spy_functionCall = <
   T,
-  K extends { [K in keyof T]: T[K] extends Function ? K : never }[keyof T],
-  //@ts-ignore
+  K extends {
+    //eslint-disable-next-line @typescript-eslint/no-explicit-any -- Required for infer Function keys
+    [K in keyof T]: T[K] extends (...e: any) => any ? K : never;
+  }[keyof T],
+  //@ts-expect-error Cannot infer K in T
   P extends [unknown[], unknown] = [Parameters<T[K]>, ReturnType<T[K]>],
 >(
   obj: T,
@@ -149,10 +146,10 @@ export const spy_functionCall = <
   const paramsArray = modify([] as P[0][], {
     [symbol]: () => (obj[key] = original),
   });
-  //@ts-ignore
+  //@ts-expect-error Cannot infer K in T
   obj[key] = function (...e: P[0]) {
     paramsArray.push(e);
-    //@ts-ignore
+    //@ts-expect-error Cannot infer T[K] is Function
     return (mock ?? original).call(this, ...e);
   };
   return paramsArray;
@@ -163,7 +160,7 @@ export const spy_browserDownload = async (action: Action) => {
     'createObjectURL',
     () => 'javascript:console.log("mock blob url")',
   );
-  using mountParams = spy_functionCall(document.body, 'appendChild', (e) => e);
+  using mountParams = spy_functionCall(doc.body, 'appendChild', (e) => e);
   await action();
 
   if (createParams.length + mountParams.length === 0) return null;
@@ -191,16 +188,11 @@ export const mock_event = <
   type: K | Event,
 ) => target.dispatchEvent(typeof type === 'string' ? new Event(type) : type);
 export const mock_leaveAndBack = async (delay = 1e2) => {
-  Object.defineProperty(document, 'hidden', {
-    configurable: true,
-    get: () => true,
-  });
+  Object.defineProperty(doc, 'hidden', { configurable: true, get: () => true });
+  mock_event(doc, 'visibilitychange');
 
-  mock_event(document, 'visibilitychange');
-  //  mock_event(window,'blur');
-
-  //@ts-ignore
-  delete document.hidden;
+  //@ts-expect-error remove hidden property from document
+  delete doc.hidden;
   await sleep(delay);
 };
 export const mock_changeDPR = () => {
@@ -217,7 +209,6 @@ export const mock_changeDPR = () => {
     }),
   );
   const original = Object.getOwnPropertyDescriptor(window, 'devicePixelRatio')!;
-
   return {
     change(zoom: number) {
       Object.defineProperty(window, 'devicePixelRatio', {

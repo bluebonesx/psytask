@@ -67,25 +67,28 @@ type ForbiddenData = { [K in keyof BuiltinData]?: never };
  * @see {@link Scene}
  */
 export type Component<
+  //eslint-disable-next-line @typescript-eslint/no-explicit-any -- Required for disable contravariance
   P extends LooseObject = any,
   D extends LooseObject = LooseObject & ForbiddenData,
-> = (props: P) =>
-  | NodeLike
-  | NodeLike[]
-  | {
-      /** The node(s) appended to the root element of scene */
-      node: NodeLike | NodeLike[];
-      /** Data getter to get data from elements */
-      data: () => D;
-    };
+> = {
+  (props: P):
+    | NodeLike
+    | NodeLike[]
+    | {
+        /** The node(s) appended to the root element of scene */
+        node: NodeLike | NodeLike[];
+        /** Data getter to get data from elements */
+        data: () => D;
+      };
+};
 
 type SceneShow<
-  P extends LooseObject = any,
+  P extends LooseObject = LooseObject,
   D extends LooseObject = LooseObject & ForbiddenData,
 > = (patchProps?: Partial<P>) => Promise<Merge<D, BuiltinData>>;
 /** Same with {@link SceneShow} */
 type GenericComponent<
-  P extends LooseObject = any,
+  P extends LooseObject = LooseObject,
   D extends LooseObject = LooseObject & ForbiddenData,
 > = SceneShow<P, D>;
 /**
@@ -108,22 +111,25 @@ export const generic: {
   <P extends LooseObject, D extends LooseObject & ForbiddenData = {}>(
     f: Component<P, D>,
   ): GenericComponent<P, D>;
-} = (f) => f as any;
+} = (f) =>
+  //@ts-expect-error impl generic component
+  f;
 /** @ignore */
 export type MaybeGenericComponent<
+  //eslint-disable-next-line @typescript-eslint/no-explicit-any -- Required for disable contravariance
   P extends LooseObject = any,
   D extends LooseObject & ForbiddenData = {},
 > = Component<P, D> | GenericComponent<P, D>;
 
 export type ComponentAdapter = {
   /** Wrap a component with reactive props */
-  define: <T extends MaybeGenericComponent>(component: T) => T;
+  define: <T extends Component>(component: T) => T;
   /** Render a component with default props and provided scene */
-  render: <T extends MaybeGenericComponent>(
+  render: <T extends Component>(
     component: T,
     defaultProps: Parameters<T>[0],
     /** If not provided, it will use current scene */
-    ctx?: Scene<any>,
+    ctx?: Scene<Component>,
   ) => {
     props: Parameters<T>[0];
   } & (ReturnType<T> extends infer R
@@ -135,12 +141,8 @@ export type ComponentAdapter = {
 export const createComponentAdapter = (
   reactive: <T extends LooseObject>(obj: T) => T,
 ): ComponentAdapter => ({
-  define:
-    (component) =>
-    //@ts-ignore
-    (props) =>
-      component(reactive(props)),
-  //@ts-ignore
+  define: (component) =>
+    ((props) => component(reactive(props))) as typeof component,
   render: (component, defaultProps, ctx) => {
     const props = reactive(defaultProps);
 
@@ -154,7 +156,7 @@ export const createComponentAdapter = (
         ? ((data = instanceOrNode.data), instanceOrNode.node)
         : instanceOrNode,
     );
-    return { props, nodes, data };
+    return { props, nodes, data } as ReturnType<ComponentAdapter['render']>;
   },
 });
 
@@ -168,13 +170,13 @@ export const createComponentAdapter = (
  * | frame | on each frame when the scene is shown |
  * | close | the scene is closed                   |
  */
-export interface SceneEventMap {
-  show: void;
+export type SceneEventMap = {
+  show: undefined;
   frame: number;
-  close: void;
-}
+  close: undefined;
+};
 
-const sceneStack: Scene<any>[] = [];
+const sceneStack: Scene<MaybeGenericComponent>[] = [];
 /**
  * @example
  *
@@ -217,8 +219,8 @@ export class Scene<
 > extends EventEmitter<SceneEventMap> {
   readonly root: HTMLDivElement;
   readonly #timer: Timer;
-  readonly #props: Parameters<T>[0];
-  readonly data: T extends MaybeGenericComponent<any, infer D>
+  readonly #props: LooseObject;
+  readonly data: T extends MaybeGenericComponent<infer P, infer D>
     ? () => D
     : undefined;
   /**
@@ -254,7 +256,7 @@ export class Scene<
    *
    * @function
    */
-  //@ts-ignore
+  //@ts-expect-error impl generic component
   show: T extends Component<infer P, infer D> ? SceneShow<P, D> : T =
     this.#show;
 
@@ -269,7 +271,7 @@ export class Scene<
     super();
     const { root, adapter, defaultProps, timer } = options;
     (this.root = root).tabIndex = -1; // support keyboard events
-    root.style.transform = 'scale(0)';
+    root.style.scale = '0';
 
     const { props, nodes, data } = adapter.render(
       component as Component,
@@ -278,9 +280,8 @@ export class Scene<
     );
     this.#timer = timer(); // create timer instance
 
-    this.#props = props;
-    //@ts-ignore
-    this.data = data;
+    //@ts-expect-error impl generic component
+    ((this.#props = props), (this.data = data));
     root.append(...nodes);
   }
   /** Add a microtask to close the scene. It is useful when close in 'show' */
@@ -298,7 +299,7 @@ export class Scene<
 
     // show
     this.emit('show');
-    root.style.transform = 'scale(1)';
+    root.style.scale = '1';
     root.focus();
 
     // wait timer
@@ -307,7 +308,7 @@ export class Scene<
     );
 
     // close
-    root.style.transform = 'scale(0)';
+    root.style.scale = '0';
     return {
       ...this.emit('close').data?.(),
       frame_times: records,

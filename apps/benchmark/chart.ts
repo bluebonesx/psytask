@@ -207,9 +207,7 @@ export const Charts = (results: BenchmarkResultMap) =>
             const scale = cfg.options!.scales![scaleKey];
             if (scale) {
               (scale.grid ??= {}).color = '#333';
-              (scale.ticks ??= {}).color =
-                //@ts-ignore
-                (scale.title ??= {}).color = '#fff';
+              (scale.ticks ??= {}).color = '#fff';
             }
           });
         }

@@ -1,5 +1,6 @@
 import { jsPsychStim } from '@psytask/jspsych';
 import { createApp } from 'psytask';
+import type { LooseObject } from 'shared/types';
 import { loadCss } from 'shared/utils';
 import {
   $,
@@ -25,20 +26,29 @@ const loadJsPsychPlugin = (name: string) =>
     `https://cdn.jsdelivr.net/npm/@jspsych/plugin-${name}/+esm`
   ).then((mod) => (plugins[name] = mod.default));
 
-const plugins = new Proxy({} as { [K in string]: Promise<any> }, {
-  async get(obj, name: string) {
-    await loadJsPsychCss();
-    return (obj[name] ??= await loadJsPsychPlugin(name));
+const plugins = new Proxy(
+  {} as {
+    //eslint-disable-next-line @typescript-eslint/no-explicit-any -- Required for test
+    [K in string]: Promise<any>;
   },
-});
+  {
+    async get(obj, name: string) {
+      await loadJsPsychCss();
+      return (obj[name] ??= await loadJsPsychPlugin(name));
+    },
+  },
+);
 
-const EmptyPlugin = (on_new?: (mock_jsPsych: any) => void) =>
+const EmptyPlugin = (
+  on_new?: //eslint-disable-next-line @typescript-eslint/no-explicit-any -- Required for test
+  (mock_jsPsych: Record<string, any>) => void,
+) =>
   class {
     static info = { parameters: {} };
-    constructor(public mock_jsPsych: any) {
+    constructor(public mock_jsPsych: LooseObject) {
       on_new?.(mock_jsPsych);
     }
-    async trial(dom: HTMLElement, trial: any, on_load: () => void) {
+    async trial(dom: HTMLElement, trial: LooseObject, on_load: () => void) {
       on_load();
       return { ...trial };
     }
@@ -100,7 +110,7 @@ export const Compatibility = {
         choices: 'NO_KEYS',
         trial_duration: 1e2,
         data: { info: 'original' },
-        on_start: (trial: any) => {
+        on_start: (trial) => {
           trial.stimulus = 'New Stimulus';
         },
         on_load: async () => {
@@ -108,7 +118,7 @@ export const Compatibility = {
           const el = $(s.root, '#jspsych-content');
           el.style.backgroundColor = 'red';
         },
-        on_finish: (data: any) => {
+        on_finish: (data) => {
           data.extra_info = 'finished';
         },
       },
@@ -165,7 +175,7 @@ export const Plugins = {
     using s = app.scene(jsPsychStim, {
       defaultProps: {
         type: await plugins['html-keyboard-response'],
-        stimulus: 'Press any key to continue.',
+        stimulus: 'Press unknown key to continue.',
         choices: 'ALL_KEYS',
       },
     });

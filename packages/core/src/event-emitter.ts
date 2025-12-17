@@ -2,27 +2,33 @@ import type { LooseObject } from 'shared/types';
 
 const symbol: typeof Symbol.dispose =
   Symbol.dispose ?? Symbol.for('Symbol.dispose');
+type EventMap<T extends LooseObject> = T & { dispose: undefined };
+
 /** {@link Disposable} event emitter, use {@link Set} to manage listeners */
 export class EventEmitter<
-  M extends LooseObject & { dispose?: never } = {},
-  EventMap extends { dispose: void } = M & { dispose: void },
-> implements Disposable
-{
+  T extends LooseObject & { dispose?: never } = {},
+> implements Disposable {
   readonly listeners: {
-    readonly [K in keyof EventMap]?: Set<(e: EventMap[K]) => void>;
+    [K in keyof EventMap<T>]?: Set<(e: EventMap<T>[K]) => void>;
   } = {};
   [symbol]() {
-    //@ts-ignore
     this.emit('dispose');
   }
   /** Add event listener */
-  on<K extends keyof EventMap>(type: K, listener: (evt: EventMap[K]) => void) {
-    //@ts-expect-error
-    (this.listeners[type] ??= new Set<any>()).add(listener);
+  on<K extends keyof EventMap<T>>(
+    type: K,
+    listener: (evt: EventMap<T>[K]) => void,
+  ) {
+    (this.listeners[type] ??= new Set<(evt: EventMap<T>[K]) => void>()).add(
+      listener,
+    );
     return this;
   }
   /** Remove event listener */
-  off<K extends keyof EventMap>(type: K, listener: (evt: EventMap[K]) => void) {
+  off<K extends keyof EventMap<T>>(
+    type: K,
+    listener: (evt: EventMap<T>[K]) => void,
+  ) {
     const listeners = this.listeners[type];
     if (listeners) {
       listeners.delete(listener);
@@ -31,11 +37,11 @@ export class EventEmitter<
     return this;
   }
   /** Add one-time event listener, can not be removed manually */
-  once<K extends keyof EventMap>(
+  once<K extends keyof EventMap<T>>(
     type: K,
-    listener: (evt: EventMap[K]) => void,
+    listener: (evt: EventMap<T>[K]) => void,
   ) {
-    const wrapper = (evt: EventMap[K]) => {
+    const wrapper = (evt: EventMap<T>[K]) => {
       try {
         listener(evt);
       } finally {
@@ -46,10 +52,11 @@ export class EventEmitter<
     return this;
   }
   /** Emit event listeners */
-  emit<K extends keyof EventMap>(
-    ...[type, evt]: EventMap[K] extends void
-      ? [type: K, evt?: void]
-      : [type: K, evt: EventMap[K]]
+  emit<K extends keyof EventMap<T>>(
+    type: K,
+    ...[evt]: EventMap<T>[K] extends undefined
+      ? [evt?: EventMap<T>[K]]
+      : [evt: EventMap<T>[K]]
   ) {
     const listeners = this.listeners[type];
     if (listeners) for (const listener of [...listeners]) listener(evt!);

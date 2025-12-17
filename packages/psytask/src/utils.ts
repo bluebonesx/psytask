@@ -1,6 +1,6 @@
 import { createComponentAdapter, createTimer } from '@psytask/core';
 import type { PropertiesHyphen } from 'csstype';
-import type { LooseObject, Merge } from 'shared/types';
+import type { Merge } from 'shared/types';
 import { $Object, doc, isObject, modify, mount } from 'shared/utils';
 import van from 'vanjs-core';
 import { noreactive, reactive } from 'vanjs-ext';
@@ -42,7 +42,8 @@ export const on = <T extends EventTarget, K extends EventType<T>>(
   type: K,
   listener: (
     ev: `on${K}` extends infer P extends Extract<keyof T, string>
-      ? T[P] & {} extends infer F extends (...args: any) => any
+      ? //eslint-disable-next-line @typescript-eslint/no-explicit-any -- Required for inferring event handler parameters
+        T[P] & {} extends infer F extends (...args: any) => any
         ? Parameters<F>[0]
         : never
       : never,
@@ -57,9 +58,10 @@ export const onPageLeave = (fn: () => void) =>
 
 const $Proxy = Proxy;
 const ShallowReactiveSymbol = Symbol();
-const shallowReactiveHandler: ProxyHandler<any> = {
+const shallowReactiveHandler: ProxyHandler<Record<string | symbol, unknown>> = {
   get: (target, prop) =>
-    prop === ShallowReactiveSymbol || ((target[prop] ??= void 0), target[prop]),
+    prop === ShallowReactiveSymbol ||
+    (prop in target || (target[prop] = void 0), target[prop]),
   set: (target, prop, value) =>
     (target[prop] = isObject(value) ? noreactive(value) : value) || 1,
 };
@@ -81,8 +83,7 @@ const shallowReactiveHandler: ProxyHandler<any> = {
  * ```
  */
 export const adapter = createComponentAdapter((obj) =>
-  //@ts-ignore
-  obj[ShallowReactiveSymbol]
+  obj[ShallowReactiveSymbol as keyof typeof obj]
     ? obj
     : modify(new $Proxy(reactive({}), shallowReactiveHandler), obj),
 );
@@ -102,14 +103,15 @@ export const adapter = createComponentAdapter((obj) =>
  * };
  * ```
  */
-export const defaultProps = <T extends LooseObject, U extends Partial<T>>(
+export const defaultProps = <
+  T extends Record<string | symbol, unknown>,
+  U extends Partial<T>,
+>(
   props: T,
   defaults: U,
 ) =>
   new $Proxy(props as unknown as Merge<T, U>, {
-    get: (target, prop) =>
-      //@ts-ignore
-      target[prop] ?? defaults[prop],
+    get: (target, prop) => target[prop] ?? defaults[prop],
   });
 
 /**

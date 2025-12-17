@@ -1,4 +1,5 @@
 import {
+  type MaybeGenericComponent,
   type Timer,
   EventEmitter,
   Scene,
@@ -25,7 +26,7 @@ const { button, div } = van.tags;
 
 export const _Scene = {
   async 'get current scene'() {
-    let ctx: Scene<any>;
+    let ctx: Scene<MaybeGenericComponent>;
 
     // basic usage
     {
@@ -62,7 +63,7 @@ export const _Scene = {
     expect(!node.isConnected);
   },
   async 'reset optional props'() {
-    let currentProps: any;
+    let currentProps: LooseObject = {};
     using s = DefaultScene(
       (p: { a: number; b?: number }) => {
         getCurrentScene().on('show', () => (currentProps = { ...p }));
@@ -140,14 +141,14 @@ export const _Scene = {
   //   });
   //   await expect_error(async () => {
   //     const dp = { obj: { a: 1, b: 2 } };
-  //     //@ts-ignore
+  //     //@ts-expect-error
   //     using _ = DefaultScene((p: typeof dp) => ((p.obj.c = 5), ''), {
   //       defaultProps: dp,
   //     });
   //   });
   //   await expect_error(async () => {
   //     const dp = { obj: { a: 1, b: 2 } };
-  //     //@ts-ignore
+  //     //@ts-expect-error
   //     using _ = DefaultScene((p: typeof dp) => (delete p.obj.a, ''), {
   //       defaultProps: dp,
   //     });
@@ -357,8 +358,8 @@ export const _Adapter = {
   },
   async 'with @vue/reactivity'() {
     const { shallowReactive, effect } = await import(
-      //@ts-ignore
-      '@vue/reactivity'
+      //@ts-expect-error external module
+      'https://esm.sh/@vue/reactivity@3.5.25?exports=shallowReactive,effect'
     );
     const node = div();
     const { props } = createComponentAdapter(shallowReactive).render(
@@ -378,8 +379,8 @@ export const _Adapter = {
   },
   async 'with @solidjs/signals'() {
     const { createStore, createEffect } = await import(
-      //@ts-ignore
-      '@solidjs/signals'
+      //@ts-expect-error external module
+      'https://esm.sh/@solidjs/signals@0.8.2?exports=createStore,createEffect'
     );
     const node = div();
     const { props } = createComponentAdapter((obj) => {
@@ -394,7 +395,7 @@ export const _Adapter = {
       (p: { text: string }) => {
         createEffect(
           () => p.text,
-          (val: any) => {
+          (val: string) => {
             node.textContent = val;
           },
         );
@@ -411,8 +412,8 @@ export const _Adapter = {
   },
   async 'with @preact/signals-core'() {
     const { signal, effect } = await import(
-      //@ts-ignore
-      '@preact/signals-core'
+      //@ts-expect-error external module
+      'https://esm.sh/@preact/signals-core@1.12.1?exports=signal,effect'
     );
     const node = div();
     const { props } = createComponentAdapter(
@@ -444,8 +445,8 @@ export const _Adapter = {
   },
   async 'with mobx'() {
     const { observable, autorun } = await import(
-      //@ts-ignore
-      'mobx'
+      //@ts-expect-error external module
+      'https://esm.sh/mobx@6.15.0?exports=observable,autorun'
     );
     const node = div();
     const { props } = createComponentAdapter(observable).render(
@@ -465,8 +466,8 @@ export const _Adapter = {
   },
   async 'with valtio/vanilla'() {
     const { proxy, subscribe } = await import(
-      //@ts-ignore
-      'valtio/vanilla'
+      //@ts-expect-error external module
+      'https://esm.sh/valtio@2.2.0/vanilla?exports=proxy,subscribe'
     );
     const node = div();
     const { props } = createComponentAdapter(proxy).render(
@@ -486,8 +487,8 @@ export const _Adapter = {
   },
   async 'with nanostores'() {
     const { map } = await import(
-      //@ts-ignore
-      'nanostores'
+      //@ts-expect-error external module
+      'https://esm.sh/nanostores@0.9.5?exports=map'
     );
     const node = div();
     const { props } = createComponentAdapter(
@@ -503,7 +504,9 @@ export const _Adapter = {
           },
         }),
     ).render(
+      //eslint-disable-next-line @typescript-eslint/no-explicit-any -- Required for test
       (p: any) => {
+        //eslint-disable-next-line @typescript-eslint/no-explicit-any -- Required for test
         p.subscribe((v: any) => (node.textContent = v.text));
         return node;
       },
@@ -531,7 +534,7 @@ export const _Timer = {
     expect(created, 2);
   },
   async 'on frame'() {
-    let frame_count = {
+    const frame_count = {
       hook: 0,
       timer: 0,
     };
@@ -718,11 +721,8 @@ export const _EventEmitter = {
 
 const __typecheck__ = {
   async generic() {
-    const comp = generic(<T extends LooseObject>(props: T) => ({
-      node: '',
-      data: () => props,
-    }));
-    using scene = DefaultScene(comp, { defaultProps: {} });
+    const comp = <T extends {}>(props: T) => ({ node: '', data: () => props });
+    using scene = DefaultScene(generic(comp), { defaultProps: {} });
     const props = {
       num: 1,
       hello: 'world',

@@ -6,7 +6,7 @@ const Dashboard = async () => {
   const { default: van } = await import('vanjs-core');
   const { calc, noreactive, reactive } = await import('vanjs-ext');
   const { detect } = await import(
-    //@ts-ignore
+    //@ts-expect-error external module
     'https://cdn.jsdelivr.net/npm/detect-browser@5.3.0/es/index.min.js'
   );
   const { div, button, select, option, input, label, pre, form, h2 } = van.tags;
@@ -70,7 +70,7 @@ const Dashboard = async () => {
     duration: 1e2,
   });
   const results = (window[
-    //@ts-ignore
+    //@ts-expect-error for debug
     'R'
   ] = reactive<BenchmarkResultMap>({}));
   window.__BENCHMARK_RUNNER__ = (cfg = config) =>
@@ -227,7 +227,7 @@ const Runner = async (hash: string) => {
   const nosleep = new (await import(extraDeps[0]!)).default();
 
   (async () => {
-    await new Promise(async (resolve) => {
+    await new Promise((resolve) => {
       mount(
         tags.pre({
           onclick() {
@@ -264,12 +264,7 @@ const Runner = async (hash: string) => {
         const { timings } = result;
         requestAnimationFrame((time) => {
           timings.length
-            ? timings.push(
-                time -
-                  //@ts-ignore
-                  timings.pop(),
-                time,
-              )
+            ? timings.push(time - timings.pop()!, time)
             : timings.push(time);
         });
       },
@@ -284,8 +279,7 @@ const Runner = async (hash: string) => {
         extraDeps.includes(r.name)
       )
         return;
-      //@ts-ignore
-      result.deps[r.name] = r['encodedBodySize'];
+      result.deps[r.name] = r.decodedBodySize;
     });
 
     if (window.__BENCHMARK_RECEIVER__) {

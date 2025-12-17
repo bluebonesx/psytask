@@ -20,7 +20,16 @@ const logLevelColors: {
 } = { error: red, warning: yellow /* info: green, log: cyan, debug: blue  */ };
 
 const browsers: { type: BrowserType; options?: LaunchOptions }[] = __DEV__
-  ? [{ type: chromium, options: { channel: 'chrome', headless: false } }]
+  ? [
+      {
+        type: chromium,
+        options: { channel: 'chrome', headless: false },
+      },
+      // {
+      //   type: firefox,
+      //   options: { executablePath: '/usr/bin/firefox', headless: false },
+      // },
+    ]
   : [{ type: chromium }, { type: firefox }, { type: webkit }];
 const scripts: Record<
   string,
@@ -53,7 +62,7 @@ const scripts: Record<
     const durations = __DEV__ ? [17] : [17 /* , 4e2, 7e2, 1e3 */];
     const injectedVar = {
       cases: [] as string[],
-      count: __DEV__ ? 10 : 1e3,
+      count: __DEV__ ? 1e3 : 1e3,
       duration: durations[0]!,
     };
     const downloadPath = path.join(__ROOT__, 'dist/download');
@@ -75,7 +84,7 @@ const scripts: Record<
           injectedVar.cases = await page.locator('option').allTextContents();
         }
         await page.evaluate(async ({ cases, duration, count }) => {
-          //@ts-ignore
+          //@ts-expect-error
           const fn = window['__BENCHMARK_RUNNER__'];
           if (!fn) throw Error('Cannot find __BENCHMARK_RUNNER__');
           for (const name of cases) await fn({ case: name, count, duration });
@@ -84,7 +93,7 @@ const scripts: Record<
         const [download]: [Download, any] = await Promise.all([
           page.waitForEvent('download'),
           page.evaluate(() => {
-            //@ts-ignore
+            //@ts-expect-error
             const fn = window['__BENCHMARK_EXPORT__'];
             if (!fn) throw Error('Cannot find __BENCHMARK_EXPORT__');
             return fn();
@@ -104,10 +113,10 @@ const script = scriptName && scripts[scriptName];
 if (!script) throw Error(`Usage: this ${Object.keys(scripts).join('|')}`);
 await Promise.all(
   browsers.map(async ({ type, options }) => {
-    const id = `${type.name()}-${scriptName}`;
+    const browser = await type.launch(options);
+    const id = `${type.name()}/${browser.version()}-${scriptName}`;
     console.log(` ============= ${id} ============= `);
 
-    const browser = await type.launch(options);
     const context = await browser.newContext();
     const page = (await context.newPage()).on('console', async (msg) => {
       const type = msg.type();

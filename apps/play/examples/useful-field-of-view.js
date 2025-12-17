@@ -12,11 +12,20 @@ import { calc, noreactive } from 'vanjs-ext';
 const { button, div } = van.tags;
 
 using app = await createApp({ alert_on_leave: false });
-using dc = app.collector('useful-field-of-view.csv').on('add', console.log);
+using dc = app
+  .collector('useful-field-of-view.csv', { backup_on_leave: false })
+  .on('add', console.log);
 
 using simpleText = app.scene(
   /** @param {{ content: string }} props */
-  (props) => div({ class: 'psytask-center' }, () => props.content),
+  (props) =>
+    div(
+      {
+        class: 'psytask-center',
+        style: css({ margin: '0 4rem', 'font-size': '1rem' }),
+      },
+      () => props.content,
+    ),
   { defaultProps: { content: '' } },
 );
 
@@ -25,7 +34,7 @@ simpleText.show({ content: 'Loading...' });
 using survey = app.scene(jsPsychStim, {
   defaultProps: {
     type: await import(
-      //@ts-ignore
+      //@ts-expect-error external module
       `https://cdn.jsdelivr.net/npm/@jspsych/plugin-survey/+esm`
     ).then((mod) => mod.default),
     survey_json: {
@@ -66,8 +75,9 @@ if (error) throw error;
 
 // get task parameters
 const { deg2pix, deg2csspix } = await chinrest.show();
-/** @type {{ image_size: number; mask_duration: number }} */
-const opts = (await survey.show()).response;
+const opts = /** @type {{ image_size: number; mask_duration: number }} */ (
+  (await survey.show()).response
+);
 
 // create stimuli scene
 const imageBitmaps = /** @type {[ImageBitmap, ImageBitmap]} */ (

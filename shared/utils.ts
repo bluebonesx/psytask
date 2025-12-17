@@ -1,3 +1,5 @@
+import type { LooseObject } from './types';
+
 // just for less code size
 export const ERR = (msg: string) => {
   throw Error(msg);
@@ -27,8 +29,11 @@ export const tags = new Proxy(
       },
     ) => HTMLElementTagNameMap[T];
   },
-  //@ts-ignore
-  { get: (_, tag) => (props) => modify(doc.createElement(tag), props) },
+  {
+    get: (_, tag) => (props: LooseObject) =>
+      //@ts-expect-error unsupport symbol
+      modify(doc.createElement(tag), props),
+  },
 );
 export const loadCss = (url: string) =>
   new Promise<void>((resolve, reject) =>

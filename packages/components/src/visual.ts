@@ -141,8 +141,9 @@ export const Grating = adapter.define(
               p.color.length === 2
                 ? [
                     ...p.color[1].map(
-                      //@ts-ignore
-                      (c, i) => c + intensity * (p.color[0][i] - c),
+                      (c, i) =>
+                        c +
+                        intensity * ((p.color as [RGB255, RGB255])[0][i]! - c),
                     ),
                     255,
                   ]
@@ -163,7 +164,16 @@ export const Grating = adapter.define(
 );
 // TODO: Noise
 
-const NumberField = <T extends LooseObject, K extends string & keyof T>(props: {
+const NumberField = <
+  T extends LooseObject,
+  K extends {
+    [P in keyof T]: P extends string
+      ? T[P] extends number
+        ? P
+        : never
+      : never;
+  }[keyof T],
+>(props: {
   label: () => string;
   model: T;
   key: K;
@@ -179,8 +189,7 @@ const NumberField = <T extends LooseObject, K extends string & keyof T>(props: {
       value: () => props.model[props.key],
       onchange(e) {
         const val = +(e.target as HTMLInputElement).value;
-        //@ts-ignore
-        if (!Number.isNaN(val)) props.model[props.key] = val;
+        if (!Number.isNaN(val)) props.model[props.key] = val as T[K];
         else console.warn(`Invalid ${props.key}:`, e);
       },
     }),
@@ -506,21 +515,22 @@ export const VirtualChinrest = modify(
         const { i18n, blindspot_deg, usePreviousData } = props;
 
         // check previous data
-        try {
-          data = VirtualChinrest.get();
+        if (usePreviousData !== false) {
+          try {
+            data = VirtualChinrest.get();
 
-          let confirmed = false;
-          if (usePreviousData == null) {
-            confirmed = confirm(
-              `Use previous chinrest data?\n\n${JSON.stringify(data, null, 2)}`,
-            );
+            if (
+              usePreviousData ||
+              confirm(
+                `Use previous chinrest data?\n\n${JSON.stringify(data, null, 2)}`,
+              )
+            ) {
+              await ctx.close();
+              return;
+            }
+          } catch (error) {
+            console.warn(error);
           }
-          if (usePreviousData || confirmed) {
-            await ctx.close();
-            return;
-          }
-        } catch (error) {
-          console.warn(error);
         }
 
         // run chinrest

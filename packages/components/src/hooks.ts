@@ -82,7 +82,7 @@ export const useFetch = (
         const { done, value } = await reader.read();
         if (done) break;
         chunks.push(value);
-        //@ts-ignore
+        //@ts-expect-error store type has been narrowing
         store.loaded += value.length;
       }
       modify(store, {

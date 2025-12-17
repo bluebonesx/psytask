@@ -9,7 +9,13 @@ import {
   ViewDistanceDetector,
   VirtualChinrest,
 } from '@psytask/components';
-import { createApp, generic, Scene, type Component } from 'psytask';
+import {
+  createApp,
+  generic,
+  Scene,
+  type Component,
+  type MaybeGenericComponent,
+} from 'psytask';
 import van from 'vanjs-core';
 import {
   $,
@@ -94,10 +100,14 @@ export const Hooks = {
     await sleep(50);
     expect(store.status, 'success');
     expect(store.loading, false);
-    //@ts-ignore
-    expect(store.data instanceof Blob);
-    //@ts-ignore
-    expect(store.data.size, 10);
+    expect(
+      (store as Extract<typeof store, { status: 'success' }>).data instanceof
+        Blob,
+    );
+    expect(
+      (store as Extract<typeof store, { status: 'success' }>).data.size,
+      10,
+    );
   },
   async 'useFetch - reactive inputs'() {
     using _ = mock_httpbin();
@@ -105,16 +115,20 @@ export const Hooks = {
     const store = useFetch(() => url.val);
 
     await sleep(50);
-    //@ts-ignore
-    expect(store.data.size, 20);
+    expect(
+      (store as Extract<typeof store, { status: 'success' }>).data.size,
+      20,
+    );
 
     // change URL
     url.val = '/bytes/30';
     await 0;
     expect(store.status, 'waiting'); // reset to waiting
     await sleep(50);
-    //@ts-ignore
-    expect(store.data.size, 30);
+    expect(
+      (store as Extract<typeof store, { status: 'success' }>).data.size,
+      30,
+    );
   },
   async 'useFetch - http error'() {
     using _ = mock_httpbin();
@@ -122,10 +136,15 @@ export const Hooks = {
     await sleep(50);
     expect(store.status, 'failed');
     expect(store.loading, false);
-    //@ts-ignore
-    expect(store.error instanceof Error);
-    //@ts-ignore
-    expect(store.error.message.includes('404'));
+    expect(
+      (store as Extract<typeof store, { status: 'failed' }>).error instanceof
+        Error,
+    );
+    expect(
+      (
+        store as Extract<typeof store, { status: 'failed' }>
+      ).error.message.includes('404'),
+    );
   },
 };
 
@@ -290,7 +309,7 @@ export const _Grating = {
     const el = $(s.root, 'canvas');
     expect(el.width, 100);
     expect(el.height, 100);
-    const ctx = el.getContext('2d', { willReadFrequently: true })!;
+    const ctx = el.getContext('2d')!;
 
     // half intensity
     for (let x = 0; x < 100; x += 25) {
@@ -346,9 +365,7 @@ export const _Grating = {
       },
       duration: 0,
     });
-    const ctx = $(s.root, 'canvas').getContext('2d', {
-      willReadFrequently: true,
-    })!;
+    const ctx = $(s.root, 'canvas').getContext('2d')!;
 
     // center should be visible
     expect(ctx.getImageData(50, 50, 1, 1).data[3], 255);
@@ -590,7 +607,7 @@ export const _ViewDistanceDetector = {
   },
 };
 
-const mock_VCtest = async (ctx: Scene<any>) => {
+const mock_VCtest = async (ctx: Scene<MaybeGenericComponent>) => {
   const forms = ctx.root.querySelectorAll<HTMLFormElement>('form');
   const pwd = forms[0]!,
     vdd = forms[1]!;
@@ -656,7 +673,7 @@ export const _VirtualChinrest = {
     using vc = app.scene(VirtualChinrest, { defaultProps: {} });
     await sleep(0);
 
-    let p: Promise<any>;
+    let p: Promise<unknown>;
     using confirmParams = spy_functionCall(window, 'confirm', () => false);
     const detectorEl = $(vc.root, 'form');
 
@@ -705,18 +722,20 @@ export const _VirtualChinrest = {
     using app = await createApp();
     using vc = app.scene(VirtualChinrest, { defaultProps: {} });
 
-    let p: Promise<any>;
+    let p: Promise<unknown>;
     using confirmParams = spy_functionCall(window, 'confirm', () => false);
+    using warnParams = spy_functionCall(console, 'warn', () => void 0);
     const detectorEl = $(vc.root, 'form');
 
     // value is true
     {
       VirtualChinrest.set(
-        //@ts-expect-error
+        //@ts-expect-error lack key
         { distance_cm: 57 },
       );
       p = vc.show({ usePreviousData: true });
       expect(confirmParams.length, 0);
+      expect(warnParams.length, 1);
       expect(detectorEl.getBoundingClientRect().width >= 0);
       await mock_VCtest(vc);
       await Promise.race([p, Promise.reject(Error('timeout'))]);
@@ -724,11 +743,12 @@ export const _VirtualChinrest = {
     // value is false
     {
       VirtualChinrest.set(
-        //@ts-expect-error
+        //@ts-expect-error lack key
         {},
       );
       p = vc.show({ usePreviousData: false });
       expect(confirmParams.length, 0);
+      expect(warnParams.length, 1);
       expect(detectorEl.getBoundingClientRect().width >= 0);
       await mock_VCtest(vc);
       await Promise.race([p, Promise.reject(Error('timeout'))]);
@@ -736,11 +756,12 @@ export const _VirtualChinrest = {
     // value is undefined
     {
       VirtualChinrest.set(
-        //@ts-expect-error
+        //@ts-expect-error lack key
         { pix_per_cm: 7 },
       );
       p = vc.show();
       expect(confirmParams.length, 0);
+      expect(warnParams.length, 2);
       expect(detectorEl.getBoundingClientRect().width >= 0);
       await mock_VCtest(vc);
       await Promise.race([p, Promise.reject(Error('timeout'))]);
@@ -752,20 +773,22 @@ export const _VirtualChinrest = {
     using app = await createApp();
     using vc = app.scene(VirtualChinrest, { defaultProps: {} });
 
-    let p: Promise<any>;
+    let p: Promise<unknown>;
     using confirmParams = spy_functionCall(window, 'confirm', () => false);
+    using warnParams = spy_functionCall(console, 'warn', () => void 0);
     const detectorEl = $(vc.root, 'form');
 
     // value is true
     {
       VirtualChinrest.set({
-        //@ts-expect-error
+        //@ts-expect-error error value type
         pix_per_cm: false,
-        //@ts-expect-error
+        //@ts-expect-error error value type
         distance_cm: '',
       });
       p = vc.show({ usePreviousData: true });
       expect(confirmParams.length, 0);
+      expect(warnParams.length, 1);
       expect(detectorEl.getBoundingClientRect().width >= 0);
       await mock_VCtest(vc);
       await Promise.race([p, Promise.reject(Error('timeout'))]);
@@ -774,11 +797,12 @@ export const _VirtualChinrest = {
     {
       VirtualChinrest.set({
         pix_per_cm: 1,
-        //@ts-expect-error
+        //@ts-expect-error error value type
         distance_cm: '',
       });
       p = vc.show({ usePreviousData: false });
       expect(confirmParams.length, 0);
+      expect(warnParams.length, 1);
       expect(detectorEl.getBoundingClientRect().width >= 0);
       await mock_VCtest(vc);
       await Promise.race([p, Promise.reject(Error('timeout'))]);
@@ -786,12 +810,13 @@ export const _VirtualChinrest = {
     // value is undefined
     {
       VirtualChinrest.set({
-        //@ts-expect-error
+        //@ts-expect-error error value type
         pix_per_cm: false,
         distance_cm: 8,
       });
       p = vc.show();
       expect(confirmParams.length, 0);
+      expect(warnParams.length, 2);
       expect(detectorEl.getBoundingClientRect().width >= 0);
       await mock_VCtest(vc);
       await Promise.race([p, Promise.reject(Error('timeout'))]);
@@ -803,8 +828,9 @@ export const _VirtualChinrest = {
     using app = await createApp();
     using vc = app.scene(VirtualChinrest, { defaultProps: {} });
 
-    let p: Promise<any>;
+    let p: Promise<unknown>;
     using confirmParams = spy_functionCall(window, 'confirm', () => false);
+    using warnParams = spy_functionCall(console, 'warn', () => void 0);
     const detectorEl = $(vc.root, 'form');
 
     // value is true
@@ -812,6 +838,7 @@ export const _VirtualChinrest = {
       VirtualChinrest.set({ pix_per_cm: 40, distance_cm: NaN });
       p = vc.show({ usePreviousData: true });
       expect(confirmParams.length, 0);
+      expect(warnParams.length, 1);
       expect(detectorEl.getBoundingClientRect().width >= 0);
       await mock_VCtest(vc);
       await Promise.race([p, Promise.reject(Error('timeout'))]);
@@ -821,6 +848,7 @@ export const _VirtualChinrest = {
       VirtualChinrest.set({ pix_per_cm: NaN, distance_cm: 45 });
       p = vc.show({ usePreviousData: false });
       expect(confirmParams.length, 0);
+      expect(warnParams.length, 1);
       expect(detectorEl.getBoundingClientRect().width >= 0);
       await mock_VCtest(vc);
       await Promise.race([p, Promise.reject(Error('timeout'))]);
@@ -830,6 +858,7 @@ export const _VirtualChinrest = {
       VirtualChinrest.set({ pix_per_cm: NaN, distance_cm: NaN });
       p = vc.show();
       expect(confirmParams.length, 0);
+      expect(warnParams.length, 2);
       expect(detectorEl.getBoundingClientRect().width >= 0);
       await mock_VCtest(vc);
       await Promise.race([p, Promise.reject(Error('timeout'))]);
@@ -841,8 +870,9 @@ export const _VirtualChinrest = {
     using app = await createApp();
     using vc = app.scene(VirtualChinrest, { defaultProps: {} });
 
-    let p: Promise<any>;
+    let p: Promise<unknown>;
     using confirmParams = spy_functionCall(window, 'confirm', () => false);
+    using warnParams = spy_functionCall(console, 'warn', () => void 0);
     const detectorEl = $(vc.root, 'form');
 
     // value is true
@@ -850,6 +880,7 @@ export const _VirtualChinrest = {
       localStorage.removeItem(VirtualChinrest.key);
       p = vc.show({ usePreviousData: true });
       expect(confirmParams.length, 0);
+      expect(warnParams.length, 1);
       expect(detectorEl.getBoundingClientRect().width >= 0);
       await mock_VCtest(vc);
       await Promise.race([p, Promise.reject(Error('timeout'))]);
@@ -859,6 +890,7 @@ export const _VirtualChinrest = {
       localStorage.removeItem(VirtualChinrest.key);
       p = vc.show({ usePreviousData: false });
       expect(confirmParams.length, 0);
+      expect(warnParams.length, 1);
       expect(detectorEl.getBoundingClientRect().width >= 0);
       await mock_VCtest(vc);
       await Promise.race([p, Promise.reject(Error('timeout'))]);
@@ -868,6 +900,7 @@ export const _VirtualChinrest = {
       localStorage.removeItem(VirtualChinrest.key);
       p = vc.show();
       expect(confirmParams.length, 0);
+      expect(warnParams.length, 2);
       expect(detectorEl.getBoundingClientRect().width >= 0);
       await mock_VCtest(vc);
       await Promise.race([p, Promise.reject(Error('timeout'))]);

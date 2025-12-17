@@ -10,13 +10,19 @@ using dc = app.collector('hello-world.csv', { backup_on_leave: false });
 // create scenes
 using simpleText = app.scene(
   /** @param {{ content: string }} props */
-  (props) => div({ class: 'psytask-center' }, () => props.content),
+  (props) =>
+    div(
+      {
+        class: 'psytask-center',
+        style: css({ margin: '0 4rem', 'font-size': '1rem' }),
+      },
+      () => props.content,
+    ),
   { defaultProps: { content: '' } },
 );
 using question = app.scene(
   /** @param {{ placeholder: string }} props */
   (props) => {
-    /** @type {{ answer: number; response_time: number }} */
     const data = reactive({ answer: NaN, response_time: NaN });
     const ctx = getCurrentScene();
 
@@ -27,10 +33,7 @@ using question = app.scene(
     });
     return {
       node: div(
-        {
-          class: 'psytask-center',
-          style: css({ gap: '1rem' }),
-        },
+        { class: 'psytask-center', style: css({ gap: '1rem' }) },
         input({
           type: 'number',
           placeholder: () => props.placeholder,
@@ -40,7 +43,7 @@ using question = app.scene(
             data.response_time = e.timeStamp;
           },
         }),
-        button({ onclick: () => data.answer !== -1 && ctx.close() }, 'OK'),
+        button({ onclick: () => data.answer >= 0 && ctx.close() }, 'OK'),
       ),
       data: () => data,
     };

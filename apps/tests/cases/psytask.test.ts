@@ -105,7 +105,7 @@ export const _createApp = {
 export const _App = {
   async 'dispose - remove DOM'() {
     const iframeEl = mount(iframe({ hidden: true }));
-    const root = mount(div(), iframeEl.contentDocument?.body!);
+    const root = mount(div(), iframeEl.contentDocument!.body!);
     {
       using app = await createApp({ root });
       expect(app.root, root);
@@ -577,7 +577,7 @@ export const _Scene = {
   async 'props - shallow reactive'() {
     let renderCount = 0;
     let derivedValue = 0;
-    let changeNested: Function | null = null;
+    let changeNested: ((v: number) => void) | null = null;
 
     using app = await createApp();
     using s = app.scene(
@@ -661,7 +661,7 @@ export const _IterableBuilder = {
       yield 1;
       yield 2;
     })();
-    //@ts-expect-error
+    //@ts-expect-error response should be never
     for (const v of it) it.response(v + 1);
   },
   async 'get data on iterate'() {
@@ -696,7 +696,7 @@ export const _RandomSampling = {
   },
   'use response'() {
     const rs = RandomSampling({ candidates: [1, 2, 3] });
-    //@ts-expect-error
+    //@ts-expect-error response should be never
     for (const v of rs) rs.response(true);
   },
   'default options'() {
@@ -1223,12 +1223,12 @@ export const _Collector = {
 
       dc.add({ x: 1, y: 'hello' });
       const info1 = (await spy_browserDownload(mock_leaveAndBack))!;
-      expect(/^test\.csv[\w-\.]+\.bak$/.test(info1[0]));
+      expect(/^test\.csv[\w-.]+\.bak$/.test(info1[0]));
       expect(info1[1], `x,y\n1,hello`);
 
       dc.add({ x: 2, y: 'world' });
       const info2 = (await spy_browserDownload(mock_leaveAndBack))!;
-      expect(/^test\.csv[\w-\.]+\.bak$/.test(info2[0]));
+      expect(/^test\.csv[\w-.]+\.bak$/.test(info2[0]));
       expect(info2[1], `x,y\n1,hello\n2,world`);
     }
 
@@ -1282,10 +1282,13 @@ export const _Collector = {
     expect(events, { add: 2, chunk: 3 }, 1);
   },
   'modify row after add'() {
-    using dc = new Collector('test.csv').on('add', (row) => {
-      //@ts-ignore
-      row.c = `${row.a}+${row.b}`;
-    });
+    using dc = new Collector<{ a: number; b: number }>('test.csv').on(
+      'add',
+      (row) => {
+        //@ts-expect-error c not in row
+        row.c = `${row.a}+${row.b}`;
+      },
+    );
     dc.add({ a: 1, b: 2 });
     dc.add({ a: 3, b: 4 });
     expect(
@@ -1453,7 +1456,7 @@ text,"hello, world","she said ""hello"" and 'world'","line1\nline2\rline3",,`,
 };
 
 // Utils
-export const Utils = {
+export const Adapter = {
   async 'adapter - shallow reactive'() {
     const { props } = adapter.render(
       (props: { a: number; b: { c: number } }) => '',
@@ -1491,8 +1494,28 @@ export const Utils = {
     expect(runCount, 3);
     expect(b_c_val, 4);
   },
-  async 'adapter - get non-exist key'() {
+  async 'adapter - get optional key (no default)'() {
     const { props } = adapter.render((p: { optional?: string }) => '', {});
+
+    let runCount = 0;
+    let val;
+    van.derive(() => {
+      runCount++;
+      val = props.optional;
+    });
+
+    expect(runCount, 1);
+    expect(val, void 0);
+
+    props.optional = 'hello';
+    await 0;
+    expect(runCount, 2);
+    expect(val, 'hello');
+  },
+  async 'adapter - get optional key (default undefined)'() {
+    const { props } = adapter.render((p: { optional?: string }) => '', {
+      optional: void 0,
+    });
 
     let runCount = 0;
     let val;
@@ -1556,10 +1579,7 @@ export const Utils = {
     {
       using s = app.scene(
         adapter.define((props: { text: string }) => div(() => props.text)),
-        {
-          defaultProps: { text: 'default' },
-          duration: 0,
-        },
+        { defaultProps: { text: 'default' }, duration: 0 },
       );
       expect(s.root.textContent, 'default');
       await s.show({ text: 'new' });
@@ -1574,10 +1594,22 @@ export const Utils = {
         adapter.define((props: { text?: string }) =>
           div(() => props.text ?? ''),
         ),
-        {
-          defaultProps: {},
-          duration: 0,
-        },
+        { defaultProps: {}, duration: 0 },
+      );
+      expect(s.root.textContent, '');
+      await s.show({ text: 'new' });
+      expect(s.root.textContent, 'new');
+      await s.show();
+      expect(s.root.textContent, '');
+    }
+
+    // default props is undefined
+    {
+      using s = app.scene(
+        adapter.define((props: { text?: string }) =>
+          div(() => props.text ?? ''),
+        ),
+        { defaultProps: { text: void 0 }, duration: 0 },
       );
       expect(s.root.textContent, '');
       await s.show({ text: 'new' });
@@ -1586,6 +1618,8 @@ export const Utils = {
       expect(s.root.textContent, '');
     }
   },
+};
+export const Utils = {
   async 'default porps - merge'() {
     // plain object
     {
@@ -1620,40 +1654,40 @@ export const Utils = {
     });
 
     const merged = defaultProps(props, { a: 1, b: 'hello' });
-    let _merged: typeof props = { b: '', c: true };
+    const _merged: typeof props = { b: '', c: true };
     van.derive(() => {
       _merged.a = merged.a;
       _merged.b = merged.b;
       _merged.c = merged.c;
-      //@ts-expect-error
+      //@ts-expect-error d not in merged
       _merged.d = merged.d;
     });
 
     merged.a = 5;
     merged.b = 'changed';
     merged.c = false;
-    //@ts-expect-error
+    //@ts-expect-error d not in merged
     merged.d = 'new prop';
     await 0;
     expect(_merged.a, 5);
     expect(_merged.b, 'changed');
     expect(_merged.c, false);
-    //@ts-expect-error
+    //@ts-expect-error d not in merged
     expect(_merged.d, 'new prop');
 
-    //@ts-expect-error
+    //@ts-expect-error error value type
     merged.a = true;
-    //@ts-expect-error
+    //@ts-expect-error error value type
     merged.b = 1;
-    //@ts-expect-error
+    //@ts-expect-error error value type
     merged.c = 'hello';
-    //@ts-expect-error
+    //@ts-expect-error d not in merged
     delete merged.d;
     await 0;
     expect(_merged.a, true);
     expect(_merged.b, 1);
     expect(_merged.c, 'hello');
-    //@ts-expect-error
+    //@ts-expect-error d not in merged
     expect(_merged.d, void 0);
   },
   async 'detect fps - alert on leave'() {
@@ -1694,22 +1728,24 @@ const __typecheck__ = {
       c: true,
     };
     defaultProps(props, {
-      //@ts-expect-error
+      //@ts-expect-error invaild value type
       a: '',
-      //@ts-expect-error
+      //@ts-expect-error invaild value type
       b: false,
-      //@ts-expect-error
+      //@ts-expect-error invaild value type
       c: 3,
     });
   },
   on() {
     type PropertyEventMap<T, K = keyof T> = {
-      //@ts-ignore
-      [P in K extends `on${infer R}` ? R : never]: Parameters<T[`on${P}`]>[0];
+      [P in K extends `on${infer R}` ? R : never]: Parameters<
+        //@ts-expect-error `on${P}` maybe not in T
+        T[`on${P}`]
+      >[0];
     };
     type Diff<T, U> = {
       [P in keyof T]: P extends string
-        ? U extends { [K in P]: any }
+        ? U extends { [K in P]: unknown }
           ? never
           : P
         : never;
@@ -1717,22 +1753,22 @@ const __typecheck__ = {
 
     on<
       Window,
-      //@ts-expect-error
+      //@ts-expect-error unsupported event literal types
       Diff<WindowEventMap, PropertyEventMap<Window>>
     >;
     on<
       Document,
-      //@ts-expect-error
+      //@ts-expect-error unsupported event literal types
       Diff<DocumentEventMap, PropertyEventMap<Document>>
     >;
     on<
       HTMLElement,
-      //@ts-expect-error
+      //@ts-expect-error unsupported event literal types
       Diff<HTMLElementEventMap, PropertyEventMap<HTMLElement>>
     >;
     on<
       HTMLMediaElement,
-      //@ts-expect-error
+      //@ts-expect-error unsupported event literal types
       Diff<HTMLMediaElementEventMap, PropertyEventMap<HTMLMediaElement>>
     >;
     on<

@@ -7,11 +7,20 @@ import { list, reactive, replace } from 'vanjs-ext';
 const { div } = van.tags;
 
 using app = await createApp({ alert_on_leave: false });
-using dc = app.collector('visual-short-term-memory.csv').on('add', console.log);
+using dc = app
+  .collector('visual-short-term-memory.csv', { backup_on_leave: false })
+  .on('add', console.log);
 
 using simpleText = app.scene(
   /** @param {{ content: string }} props */
-  (props) => div({ class: 'psytask-center' }, () => props.content),
+  (props) =>
+    div(
+      {
+        class: 'psytask-center',
+        style: css({ margin: '0 4rem', 'font-size': '1rem' }),
+      },
+      () => props.content,
+    ),
   { defaultProps: { content: '' } },
 );
 
@@ -20,7 +29,7 @@ simpleText.show({ content: 'Loading...' });
 using survey = app.scene(jsPsychStim, {
   defaultProps: {
     type: await import(
-      //@ts-ignore
+      //@ts-expect-error external module
       `https://cdn.jsdelivr.net/npm/@jspsych/plugin-survey/+esm`
     ).then((mod) => mod.default),
     survey_json: {
@@ -55,24 +64,22 @@ using boxes = app.scene(
     /** @type {{ response: boolean; response_time: number }} */
     let data;
     const ctx = getCurrentScene();
-    ctx.on('show', () => {
-      ctx.once(
-        'close',
-        on(ctx.root, 'keydown', (e) => {
-          if (props.target_index == null) return;
-          if (e.key === 'f') {
-            data = { response: true, response_time: e.timeStamp };
-            ctx.close();
-            return;
-          }
-          if (e.key === 'j') {
-            data = { response: false, response_time: e.timeStamp };
-            ctx.close();
-            return;
-          }
-        }),
-      );
-    });
+    ctx.on(
+      'dispose',
+      on(ctx.root, 'keydown', (e) => {
+        if (props.target_index == null) return;
+        if (e.key === 'f') {
+          data = { response: true, response_time: e.timeStamp };
+          ctx.close();
+          return;
+        }
+        if (e.key === 'j') {
+          data = { response: false, response_time: e.timeStamp };
+          ctx.close();
+          return;
+        }
+      }),
+    );
 
     /** @type {BoxParams[]} */
     const boxParams = reactive([]);
@@ -83,6 +90,7 @@ using boxes = app.scene(
     );
     return {
       node: div(
+        // cue frame
         div({
           hidden: () => !targetParams.val,
           style: () => {
@@ -105,33 +113,32 @@ using boxes = app.scene(
             );
           },
         }),
-        list(
-          () => div(),
-          boxParams,
-          (p) =>
-            div({
-              style: () =>
-                css({
-                  position: 'absolute',
-                  width: `${p.val.size}px`,
-                  height: `${p.val.size}px`,
-                  'background-color': p.val.color,
-                  transform: `translate(${p.val.pos[0]}px, ${p.val.pos[1]}px)`,
-                }),
-            }),
+        // boxes
+        list(div, boxParams, (p) =>
+          div({
+            style: () =>
+              css({
+                position: 'absolute',
+                width: `${p.val.size}px`,
+                height: `${p.val.size}px`,
+                'background-color': p.val.color,
+                transform: `translate(${p.val.pos[0]}px, ${p.val.pos[1]}px)`,
+              }),
+          }),
         ),
       ),
       data: () => data,
     };
   },
-  { defaultProps: { params: [], target_index: void 0 } },
+  { defaultProps: { params: [] } },
 );
 simpleText.close();
 
 // get task parameters
 const { deg2csspix } = await chinrest.show();
-/** @type {{ size_deg: number; interval_ms: number }} */
-const opts = (await survey.show()).response;
+const opts = /** @type {{ size_deg: number; interval_ms: number }} */ (
+  (await survey.show()).response
+);
 
 // instruction
 await simpleText.config({ close_on: 'pointerup' }).show({
@@ -171,10 +178,10 @@ for (const box_num of staircase) {
     { length: box_num },
     () =>
       /** @satisfies {BoxParams} */ ({
+        // anchor at top-left corner
         pos: [
-          // anchor at top-left corner
-          Math.random() * (window.innerWidth - size),
-          Math.random() * (window.innerHeight - size),
+          Math.random() * (innerWidth - size),
+          Math.random() * (innerHeight - size),
         ],
         color: `hsl(${Math.random() * 360}, 100%, 50%)`,
         size,

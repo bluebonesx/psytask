@@ -17,7 +17,7 @@ export default async (ctx) => {
   );
   ctx.root.innerHTML = 'Loading js...';
   const { initJsPsych } = await import(
-    //@ts-ignore
+    //@ts-expect-error external module
     'https://cdn.jsdelivr.net/npm/jspsych@8.2.0/+esm'
   );
   ctx.root.innerHTML = '';

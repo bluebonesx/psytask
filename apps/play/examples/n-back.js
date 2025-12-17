@@ -5,13 +5,18 @@ import van from 'vanjs-core';
 const { div } = van.tags;
 
 using app = await createApp({ alert_on_leave: false });
-using dc = app.collector('n-back.csv').on('add', console.log);
+using dc = app
+  .collector('n-back.csv', { backup_on_leave: false })
+  .on('add', console.log);
 
 using simpleText = app.scene(
   /** @param {{ content: string }} props */
   (props) =>
     div(
-      { class: 'psytask-center', style: css({ margin: '0 4rem' }) },
+      {
+        class: 'psytask-center',
+        style: css({ margin: '0 4rem', 'font-size': '1rem' }),
+      },
       () => props.content,
     ),
   { defaultProps: { content: '' } },
@@ -23,7 +28,7 @@ using survey = app.scene(jsPsychStim, {
   defaultProps: {
     type: (
       await import(
-        //@ts-ignore
+        //@ts-expect-error external module
         `https://cdn.jsdelivr.net/npm/@jspsych/plugin-survey/+esm`
       )
     ).default,
@@ -78,8 +83,9 @@ using stimulus = app.scene(
 simpleText.close();
 
 // get task parameters
-/** @type {{ back_num: number; trial_num: number }} */
-const opts = (await survey.show()).response;
+const opts =
+  /** @type {{ back_num: number; trial_num: number }} */
+  ((await survey.show()).response);
 const letters = Array.from({ length: opts.trial_num }, () =>
   String.fromCharCode(65 + Math.floor(Math.random() * 4)),
 );

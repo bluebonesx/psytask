@@ -24,7 +24,7 @@ See `,
 // static data
 const examples = glob('./examples/*.js').map(
   (f) => f.split('/').pop()!.split('.').shift()!,
-); //TODO: use macro
+);
 const importmapText = document.querySelector(
   'script[type="importmap"]',
 )?.textContent;
@@ -223,7 +223,7 @@ const monaco = await loadMonaco().catch((e: unknown) => {
   // module suggestions
   monaco.languages.registerCompletionItemProvider('javascript', {
     triggerCharacters: ['"', "'"],
-    provideCompletionItems(...[model, position]: any) {
+    provideCompletionItems(...[model, position]: unknown) {
       const textUntilPosition = model
         .getValueInRange({
           startLineNumber: position.lineNumber,
@@ -275,6 +275,7 @@ const models = map(files, (file) =>
     editor.trigger('editor', 'editor.action.formatDocument', null),
   );
   // save on ctrl+s
+  //eslint-disable-next-line @typescript-eslint/no-explicit-any -- unknown
   editor.onKeyDown((e: any) => {
     if (e.ctrlKey && e.browserEvent.key === 's') {
       e.preventDefault();
@@ -286,8 +287,4 @@ const models = map(files, (file) =>
 }
 
 store.indication = '';
-
-//@ts-ignore
-window.monaco = monaco;
-//@ts-ignore
-window.store = store;
+Object.assign(window, { monaco, store });

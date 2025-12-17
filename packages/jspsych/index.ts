@@ -28,9 +28,7 @@ const warnMissingKey = <T extends object>(
  * using scene = app.scene(jsPsychStim, {
  *   defaultProps: {
  *     type: (
- *       await import(
- *         'https://cdn.jsdelivr.net/npm/@jspsych/plugin-survey/+esm'
- *       )
+ *       await import('https://cdn.jsdelivr.net/npm/@jspsych/plugin-survey/+esm')
  *     ).default,
  *     stimulus: 'default',
  *     choices: ['f', 'j'],
@@ -62,7 +60,7 @@ export const jsPsychStim = ((props: TrialType<PluginInfo>) => {
     const trial = { ...props }; // non-reactive copy
     const Plugin = trial.type as Extract<
       TrialType<PluginInfo>['type'],
-      new (...args: any[]) => any
+      new (...args: unknown[]) => unknown
     > & { info: PluginInfo };
     if (
       typeof Plugin !== 'function' ||
@@ -82,7 +80,7 @@ export const jsPsychStim = ((props: TrialType<PluginInfo>) => {
       new TimeoutAPI(),
     ].reduce((api, item) => modify(api, autoBind(item)), {});
     const mock_jsPsych = {
-      finishTrial(trial_data: object) {
+      finishTrial(trial_data: LooseObject) {
         close(trial, trial_data);
       },
       pluginAPI: warnMissingKey(
@@ -106,7 +104,6 @@ export const jsPsychStim = ((props: TrialType<PluginInfo>) => {
           `jsPsych.${key.toString()} is not supported, only supports: ${$Object.keys(mock_jsPsych).join(', ')}`,
       ),
     );
-    //@ts-ignore
     const trial_data = await plugin.trial(content, trial, () =>
       trial.on_load?.(),
     );

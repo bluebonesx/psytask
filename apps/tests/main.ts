@@ -3,14 +3,13 @@ import van from 'vanjs-core';
 import { calc, noreactive, reactive } from 'vanjs-ext';
 const { button, details, div, pre, section, summary } = van.tags;
 
-type ViewRaw = { [key: string]: Function | ViewRaw };
 type CaseView = {
   render(): HTMLElement;
   state: 'pending' | 'passed' | 'failed' | 'running';
   duration: string;
   job(e?: PointerEvent): void;
-  raw: Function;
-  error?: any;
+  raw: () => void | Promise<void>;
+  error?: unknown;
 };
 type CaseSetView = {
   render(): HTMLElement;
@@ -19,6 +18,7 @@ type CaseSetView = {
   tree: ViewTree;
   size: number;
 };
+type ViewRaw = { [key: string]: CaseView['raw'] | ViewRaw };
 type ViewTree = { [key: string]: CaseView | CaseSetView };
 
 const mods = {
@@ -129,9 +129,6 @@ const runJob = (job: () => Promise<void>) => {
 mount(
   div(
     { id: 'app', style: 'height:100dvh;overflow:auto' },
-    ...Object.values(
-      //@ts-ignore
-      (window['store'] = raw2tree({ ALL: mods })),
-    ).map((v) => v.render()),
+    ...Object.values(raw2tree({ ALL: mods })).map((v) => v.render()),
   ),
 );

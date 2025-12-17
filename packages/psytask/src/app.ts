@@ -41,10 +41,10 @@ type ExtendedSceneOptions = {
   close_on?: keyof CloseEventMap | (keyof CloseEventMap)[];
 };
 const mouseSuffixs = ['left', 'middle', 'right'] as const;
-const prefix2type: Record<string, keyof HTMLElementEventMap> = {
+const prefix2type = {
   key: 'keydown',
   mouse: 'mousedown',
-};
+} satisfies Record<string, keyof HTMLElementEventMap>;
 
 export class App<
   T extends { frame_ms: number } = { frame_ms: number },
@@ -150,24 +150,18 @@ export class App<
       adapter,
       ...opts,
     };
-    const scene = new Scene<T>(component, options);
-    const close = () => scene.close();
+    const scene = new Scene<T>(component, options).on('close', () =>
+      $Object.keys(opts).map((key) => (opts[key] = options[key])),
+    );
 
-    return modify(
-      scene.on('close', () =>
-        $Object.keys(opts).map(
-          //@ts-ignore
-          (key) => (opts[key] = options[key]),
-        ),
-      ),
-      {
-        /** Change options one-time */
-        config(patchOptions: Partial<ExtendedSceneOptions>) {
-          modify(opts, patchOptions);
-          return scene;
-        },
+    const close = () => scene.close();
+    return modify(scene, {
+      /** Change options one-time */
+      config(patchOptions: Partial<ExtendedSceneOptions>) {
+        modify(opts, patchOptions);
+        return scene;
       },
-    ).on('show', () => {
+    }).on('show', () => {
       // use close_on listeners
       if (opts.close_on == null) return;
       const close_ons = array_normalize(opts.close_on);
@@ -175,20 +169,22 @@ export class App<
 
       let hasKeyType = 0,
         hasMouseType = 0;
-      const cleanups = close_ons.map((type) => {
-        const DOM_type =
-          prefix2type[type.split(':', 1)[0]!] ??
-          (type as keyof HTMLElementEventMap);
+      const cleanups = close_ons.map((type: (typeof close_ons)[0]) => {
+        type SafeKeys = keyof typeof prefix2type;
+        const DOM_type = (prefix2type[type.split(':')[0] as SafeKeys] ??
+          type) as
+          | (typeof prefix2type)[SafeKeys]
+          | Exclude<typeof type, `${SafeKeys}:${string}`>;
         return DOM_type === 'keydown'
           ? !hasKeyType++ &&
-              on(options.root, DOM_type, (e: KeyboardEvent) => {
+              on(options.root, DOM_type, (e) => {
                 (close_on_set.has(DOM_type) ||
                   close_on_set.has(`key:${e.key}`)) &&
                   close();
               })
           : DOM_type === 'mousedown'
             ? !hasMouseType++ &&
-              on(options.root, DOM_type, (e: MouseEvent) => {
+              on(options.root, DOM_type, (e) => {
                 (close_on_set.has(DOM_type) ||
                   close_on_set.has(
                     `mouse:${mouseSuffixs[e.button] ?? 'unknown'}`,
@@ -197,8 +193,14 @@ export class App<
               })
             : on(
                 options.root,
-                //@ts-ignore
-                DOM_type,
+                DOM_type as Exclude<
+                  keyof HTMLElementEventMap,
+                  | 'compositionend'
+                  | 'compositionstart'
+                  | 'compositionupdate'
+                  | 'focusin'
+                  | 'focusout'
+                >,
                 close,
               );
       });

@@ -7,7 +7,7 @@ export default async (ctx) => {
   );
   ctx.root.innerHTML = 'Loading js...';
   const app = await import(
-    //@ts-ignore
+    //@ts-expect-error external module
     'https://cdn.jsdelivr.net/npm/lab.js@20.2.4/+esm'
   );
   ctx.root.innerHTML = '';

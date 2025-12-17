@@ -14,7 +14,7 @@ Compared to jsPsych, PsyTask has:
 - Higher time precision.
 - Smaller bundle size, Faster loading speed.
 
-**[API Docs](https://bluebonesx.github.io/psytask)** or **[Play it now ! 🥳](https://bluebonesx.github.io/psytask/play)**
+**[API Docs](https://bluebonesx.github.io/psytask/) | [Benchmark](https://bluebonesx.github.io/psytask/benchmark/) | [Tests](https://bluebonesx.github.io/psytask/tests/) | [Play it now ! 🥳](https://bluebonesx.github.io/psytask/play/)**
 
 ## Install
 
@@ -25,7 +25,9 @@ npm create psytask # create a project
 ```
 
 ```bash
-npm i psytask # only install
+npm install psytask # just install
+npm install vanjs-core vanjs-ext # recommend
+npm install @psytask/component # optional
 ```
 
 via CDN:
@@ -95,6 +97,9 @@ Most of the time, you need to write the scene yourself, see [Component](#compone
 ```js
 import { on, getCurrentScene } from 'psytask';
 import { ImageStim } from '@psytask/components';
+import van from 'vanjs-core';
+
+const { div } = van.tags;
 
 using scene = app.scene(
   /** @param {{ text: string }} props */
@@ -102,10 +107,6 @@ using scene = app.scene(
     /** @type {{ response_key: string; response_time: number }} */
     let data;
     const ctx = getCurrentScene();
-    const node = document.createElement('div');
-
-    // use other Component
-    node.appendChild(ImageStim({ image: new ImageData(1) }));
 
     // add DOM event listener
     const cleanup = on(ctx.root, 'keydown', (e) => {
@@ -123,7 +124,13 @@ using scene = app.scene(
       .on('dispose', cleanup);
 
     // Return the element and data getter
-    return { node, data: () => data };
+    return {
+      node: div(
+        // use other Component
+        ImageStim({ image: new ImageData(1) }),
+      ),
+      data: () => data,
+    };
   },
   {
     defaultProps: { text: '' },
@@ -141,11 +148,11 @@ using scene = app.scene(
 Overide default props or options:
 
 ```js
-const data = await scene.show({ text: 'Press F or J' }); // with new props
-const data = await scene.config({ duration: 1e3 }).show(); // with new options
+const data = await scene.show({ text: 'Press F or J' }); // new props
+const data = await scene.config({ duration: 1e3 }).show(); // new options
 ```
 
-a series of trials:
+Show blocks:
 
 ```js
 import { RandomSampling, StairCase } from 'psytask';
@@ -193,15 +200,16 @@ for (const text of ['A', 'B', 'C']) {
   // `frame_times` will be recorded automatically
   const start_time = /** @type {number} */ (data.frame_times[0]);
 
+  // add a row
   dc.add({
     text,
     response: data.response_key,
     rt: data.response_time - start_time,
     correct: data.response_key === 'f',
-  }); // add a row
+  });
 }
 
-dc.final(); // get final text
+dc.final(); // file content
 dc.download(); // download file
 ```
 
@@ -241,17 +249,20 @@ Or using CDN:
 import { jsPsychStim } from '@psytask/jspsych';
 import Cloze from '@jspsych/plugin-cloze';
 
-using jspsych = app.scene(jsPsychStim, { defaultProps: {} });
-const data = await jspsych.show({
-  type: Cloze,
-  text: 'aba%%aba',
-  check_answers: true,
+using jspsych = app.scene(jsPsychStim, {
+  defaultProps: {
+    type: Cloze,
+    text: 'aba%%aba',
+    check_answers: true,
+  },
 });
+const data = await jspsych.show();
 ```
 
 ### [JATOS](https://www.jatos.org/Submit-and-upload-data-to-the-server.html)
 
 ```html
+<!-- add jatos script -->
 <script src="jatos.js"></script>
 ```
 
