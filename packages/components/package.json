@@ -1,10 +1,10 @@
 {
   "name": "@psytask/components",
-  "version": "1.0.0",
+  "version": "1.1.0-0",
   "type": "module",
   "author": "cubxx",
   "license": "MIT",
-  "description": "basic PsyTask components and hooks",
+  "description": "basic components and hooks for PsyTask",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -15,9 +15,14 @@
     "dist",
     "README.md"
   ],
-  "dependencies": {
+  "peerDependencies": {
+    "psytask": "workspace:*",
     "vanjs-core": "catalog:",
-    "vanjs-ext": "catalog:",
-    "psytask": "workspace:*"
+    "vanjs-ext": "catalog:"
+  },
+  "devDependencies": {
+    "psytask": "workspace:*",
+    "vanjs-core": "catalog:",
+    "vanjs-ext": "catalog:"
   }
 }

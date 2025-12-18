@@ -4,6 +4,7 @@ import type { LooseObject } from 'shared/types';
 import { loadCss } from 'shared/utils';
 import {
   $,
+  DefaultAdapter,
   expect,
   expect_includes,
   mock_event,
@@ -58,6 +59,7 @@ export const Compatibility = {
     using warnParams = spy_functionCall(console, 'warn', () => void 0);
     using app = await createApp();
     using s = app.scene(jsPsychStim, {
+      adapter: DefaultAdapter,
       defaultProps: {
         type: EmptyPlugin((mock_jsPsych) => {
           expect(mock_jsPsych.unsupportedFeature, void 0); // missing
@@ -66,12 +68,14 @@ export const Compatibility = {
         }),
       },
     });
-    await s.show();
     expect(warnParams.length, 2);
+    await s.show();
+    expect(warnParams.length, 2); // no change
   },
   async 'set post_trial_gap'() {
     using app = await createApp();
     using s = app.scene(jsPsychStim, {
+      adapter: DefaultAdapter,
       defaultProps: {
         type: EmptyPlugin(),
         post_trial_gap: 500,
@@ -88,6 +92,7 @@ export const Compatibility = {
   async 'set css_classes'() {
     using app = await createApp();
     using s = app.scene(jsPsychStim, {
+      adapter: DefaultAdapter,
       defaultProps: {
         type: EmptyPlugin(),
         css_classes: ['custom-class-1', 'custom-class-2'],
@@ -95,48 +100,74 @@ export const Compatibility = {
     });
     await nextFrame();
     const el = $(s.root, '#jspsych-content');
-    expect(
-      el.classList.contains('custom-class-1') &&
-        el.classList.contains('custom-class-2'),
-      true,
-    );
+    el.classList.remove('jspsych-content');
+    expect(el.className, 'custom-class-1 custom-class-2');
+
+    await s.show({ css_classes: 'class-single' });
+    el.classList.remove('jspsych-content');
+    expect(el.className, 'class-single');
+
+    await s.show({ css_classes: () => ['class-getter-1', 'class-getter-2'] });
+    el.classList.remove('jspsych-content');
+    expect(el.className, 'class-getter-1 class-getter-2');
+
+    await s.show({ css_classes: () => 'class-getter' });
+    el.classList.remove('jspsych-content');
+    expect(el.className, 'class-getter');
   },
   async 'lifecycle hooks'() {
     using app = await createApp();
     using s = app.scene(jsPsychStim, {
+      adapter: DefaultAdapter,
       defaultProps: {
         type: EmptyPlugin(),
         stimulus: 'Old Stimulus',
         choices: 'NO_KEYS',
         trial_duration: 1e2,
         data: { info: 'original' },
-        on_start: (trial) => {
+        on_start(trial) {
           trial.stimulus = 'New Stimulus';
         },
-        on_load: async () => {
+        async on_load() {
           await 0;
           const el = $(s.root, '#jspsych-content');
           el.style.backgroundColor = 'red';
         },
-        on_finish: (data) => {
+        on_finish(data) {
           data.extra_info = 'finished';
         },
       },
     });
-    const data = await s.show();
-    expect_includes(data, {
+    expect_includes(await s.show(), {
       stimulus: 'New Stimulus',
       info: 'original',
       extra_info: 'finished',
     });
     const el = $(s.root, '#jspsych-content');
     expect(el.style.backgroundColor, 'red');
+
+    expect_includes(
+      await s.show({
+        on_start(trial) {
+          trial.stimulus = 'NNew Stimulus';
+        },
+        on_finish(data) {
+          data.new_value = 'nonono';
+        },
+      }),
+      {
+        stimulus: 'NNew Stimulus',
+        info: 'original',
+        new_value: 'nonono',
+      },
+    );
   },
 };
 export const Plugins = {
   async survey() {
     using app = await createApp();
     using s = app.scene(jsPsychStim, {
+      adapter: DefaultAdapter,
       defaultProps: {
         type: await plugins['survey'],
         survey_json: {
@@ -173,6 +204,7 @@ export const Plugins = {
   async 'html-keyboard-response'() {
     using app = await createApp();
     using s = app.scene(jsPsychStim, {
+      adapter: DefaultAdapter,
       defaultProps: {
         type: await plugins['html-keyboard-response'],
         stimulus: 'Press unknown key to continue.',
@@ -191,6 +223,7 @@ export const Plugins = {
   async 'html-button-response'() {
     using app = await createApp();
     using s = app.scene(jsPsychStim, {
+      adapter: DefaultAdapter,
       defaultProps: {
         type: await plugins['html-button-response'],
         stimulus: 'Click the button to continue.',

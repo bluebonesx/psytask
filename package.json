@@ -51,8 +51,8 @@
     ],
     "catalog": {
       "jspsych": "^8.2.2",
-      "vanjs-core": "1.6.0",
-      "vanjs-ext": "0.6.3"
+      "vanjs-core": "^1.6.0",
+      "vanjs-ext": "^0.6.3"
     }
   },
   "browserslist": [

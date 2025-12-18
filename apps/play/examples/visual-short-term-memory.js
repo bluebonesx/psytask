@@ -1,4 +1,4 @@
-import { VirtualChinrest } from '@psytask/components';
+import { adapter, VirtualChinrest } from '@psytask/components';
 import { jsPsychStim } from '@psytask/jspsych';
 import { createApp, css, getCurrentScene, on, StairCase } from 'psytask';
 import van from 'vanjs-core';
@@ -21,12 +21,13 @@ using simpleText = app.scene(
       },
       () => props.content,
     ),
-  { defaultProps: { content: '' } },
+  { adapter, defaultProps: { content: '' } },
 );
 
 // show load progress
 simpleText.show({ content: 'Loading...' });
 using survey = app.scene(jsPsychStim, {
+  adapter,
   defaultProps: {
     type: await import(
       //@ts-expect-error external module
@@ -56,7 +57,7 @@ using survey = app.scene(jsPsychStim, {
     },
   },
 });
-using chinrest = app.scene(VirtualChinrest, { defaultProps: {} });
+using chinrest = app.scene(VirtualChinrest, { adapter, defaultProps: {} });
 /** @typedef {{ pos: [number, number]; color: string; size: number }} BoxParams */
 using boxes = app.scene(
   /** @param {{ params: BoxParams[]; target_index?: number }} props */
@@ -130,7 +131,7 @@ using boxes = app.scene(
       data: () => data,
     };
   },
-  { defaultProps: { params: [] } },
+  { adapter, defaultProps: { params: [] } },
 );
 simpleText.close();
 

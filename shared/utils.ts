@@ -31,8 +31,7 @@ export const tags = new Proxy(
   },
   {
     get: (_, tag) => (props: LooseObject) =>
-      //@ts-expect-error unsupport symbol
-      modify(doc.createElement(tag), props),
+      modify(doc.createElement(tag as string), props),
   },
 );
 export const loadCss = (url: string) =>

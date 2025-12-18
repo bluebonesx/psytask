@@ -123,7 +123,7 @@ export type MaybeGenericComponent<
 
 export type ComponentAdapter = {
   /** Wrap a component with reactive props */
-  define: <T extends Component>(component: T) => T;
+  wrap: <T extends Component>(component: T) => T;
   /** Render a component with default props and provided scene */
   render: <T extends Component>(
     component: T,
@@ -141,7 +141,7 @@ export type ComponentAdapter = {
 export const createComponentAdapter = (
   reactive: <T extends LooseObject>(obj: T) => T,
 ): ComponentAdapter => ({
-  define: (component) =>
+  wrap: (component) =>
     ((props) => component(reactive(props))) as typeof component,
   render: (component, defaultProps, ctx) => {
     const props = reactive(defaultProps);

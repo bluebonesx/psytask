@@ -1,4 +1,5 @@
 import {
+  adapter,
   ImageStim,
   Loader,
   useDevicePixelRatio,
@@ -26,12 +27,13 @@ using simpleText = app.scene(
       },
       () => props.content,
     ),
-  { defaultProps: { content: '' } },
+  { adapter, defaultProps: { content: '' } },
 );
 
 // show load progress
 simpleText.show({ content: 'Loading...' });
 using survey = app.scene(jsPsychStim, {
+  adapter,
   defaultProps: {
     type: await import(
       //@ts-expect-error external module
@@ -61,7 +63,7 @@ using survey = app.scene(jsPsychStim, {
     },
   },
 });
-using chinrest = app.scene(VirtualChinrest, { defaultProps: {} });
+using chinrest = app.scene(VirtualChinrest, { adapter, defaultProps: {} });
 simpleText.close();
 
 // load remote resources
@@ -69,7 +71,7 @@ const urls = /** @type {const} */ ([
   'https://picsum.photos/10?0',
   'https://picsum.photos/10?1',
 ]);
-using loader = app.scene(generic(Loader), { defaultProps: { urls } });
+using loader = app.scene(generic(Loader), { adapter, defaultProps: { urls } });
 const { blobs: imageBlobs, error } = await loader.show();
 if (error) throw error;
 
@@ -223,7 +225,10 @@ using stim = app.scene(
       ...fixed_triangle_els,
     );
   },
-  { defaultProps: { image_indexes: [0, 1], peripheral_angle_index: -1 } },
+  {
+    adapter,
+    defaultProps: { image_indexes: [0, 1], peripheral_angle_index: -1 },
+  },
 );
 using mask = app.scene(
   /** @param {{}} props */
@@ -245,7 +250,7 @@ using mask = app.scene(
     el.classList.add('psytask-center');
     return el;
   },
-  { defaultProps: {} },
+  { adapter, defaultProps: {} },
 );
 using identification = app.scene(
   /** @param {{ image_indexes: [0 | 1, 0 | 1] }} props */
@@ -286,7 +291,7 @@ using identification = app.scene(
       data: () => data,
     };
   },
-  { defaultProps: { image_indexes: [0, 1] } },
+  { adapter, defaultProps: { image_indexes: [0, 1] } },
 );
 using localization = app.scene(
   /** @param {{}} props */
@@ -335,7 +340,7 @@ using localization = app.scene(
       data: () => data,
     };
   },
-  { defaultProps: {} },
+  { adapter, defaultProps: {} },
 );
 
 // instructions

@@ -1,10 +1,10 @@
 {
   "name": "@psytask/jspsych",
-  "version": "1.0.0",
+  "version": "1.1.0-0",
   "type": "module",
   "author": "cubxx",
   "license": "MIT",
-  "description": "Use jsPsych plugins as PsyTask scenes",
+  "description": "Use jsPsych plugins as PsyTask components",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -17,7 +17,6 @@
   ],
   "dependencies": {
     "auto-bind": "^4.0.0",
-    "vanjs-core": "catalog:",
     "@psytask/core": "workspace:*"
   },
   "devDependencies": {

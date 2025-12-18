@@ -1,8 +1,6 @@
 import { clamp, ERR } from 'shared/utils';
 
 /**
- * Generate trials for tasks.
- *
  * @example
  *
  * Custom iterable builder

@@ -1,5 +1,5 @@
+import { adapter } from '@psytask/components';
 import {
-  adapter,
   Collector,
   createApp,
   createIterableBuilder,
@@ -204,6 +204,7 @@ export const _Scene = {
   async 'full size DOM'() {
     using app = await createApp();
     using s = app.scene((props: { text: string }) => div(() => props.text), {
+      adapter,
       defaultProps: { text: '' },
       duration: 500,
     });
@@ -233,6 +234,7 @@ export const _Scene = {
     // close on
     {
       using s = app.scene((p: {}) => '', {
+        adapter,
         defaultProps: {},
         close_on: 'click',
       });
@@ -299,7 +301,11 @@ export const _Scene = {
           return '';
         },
 
-        { defaultProps: {}, duration: app.data.frame_ms * 10 },
+        {
+          adapter,
+          defaultProps: {},
+          duration: app.data.frame_ms * 10,
+        },
       );
 
       await s.show();
@@ -319,7 +325,10 @@ export const _Scene = {
 
     // close on
     {
-      using s = app.scene((p: {}) => '', { defaultProps: {} });
+      using s = app.scene((p: {}) => '', {
+        adapter,
+        defaultProps: {},
+      });
       using params = spy_listeners(s.root);
 
       let p = s.show();
@@ -374,7 +383,10 @@ export const _Scene = {
           getCurrentScene().on('frame', () => frame_count++);
           return '';
         },
-        { defaultProps: {} },
+        {
+          adapter,
+          defaultProps: {},
+        },
       );
 
       let p = s.show();
@@ -416,7 +428,11 @@ export const _Scene = {
           );
           return '';
         },
-        { defaultProps: {}, close_on: 'pointerdown' },
+        {
+          adapter,
+          defaultProps: {},
+          close_on: 'pointerdown',
+        },
       );
       const p = s.show();
       mock_event(s.root, 'pointerdown');
@@ -436,7 +452,11 @@ export const _Scene = {
           );
           return '';
         },
-        { defaultProps: {}, close_on: 'key:s' },
+        {
+          adapter,
+          defaultProps: {},
+          close_on: 'key:s',
+        },
       );
       const p1 = s.show();
       mock_event(s.root, new KeyboardEvent('keydown', { key: ' ' }));
@@ -455,7 +475,11 @@ export const _Scene = {
           );
           return '';
         },
-        { defaultProps: {}, close_on: 'key:q' },
+        {
+          adapter,
+          defaultProps: {},
+          close_on: 'key:q',
+        },
       );
       const p = s.show();
       mock_event(s.root, new KeyboardEvent('keydown', { key: 'q' }));
@@ -473,7 +497,11 @@ export const _Scene = {
           );
           return '';
         },
-        { defaultProps: {}, close_on: 'key: ' },
+        {
+          adapter,
+          defaultProps: {},
+          close_on: 'key: ',
+        },
       );
       const p = s.show();
       mock_event(s.root, new KeyboardEvent('keydown', { key: ' ' }));
@@ -491,7 +519,11 @@ export const _Scene = {
           );
           return '';
         },
-        { defaultProps: {}, close_on: 'keydown' },
+        {
+          adapter,
+          defaultProps: {},
+          close_on: 'keydown',
+        },
       );
       const p = s.show();
       mock_event(s.root, new KeyboardEvent('keydown', { key: ' ' }));
@@ -511,7 +543,11 @@ export const _Scene = {
           );
           return '';
         },
-        { defaultProps: {}, close_on: 'mouse:right' },
+        {
+          adapter,
+          defaultProps: {},
+          close_on: 'mouse:right',
+        },
       );
       const p = s.show();
       mock_event(s.root, new MouseEvent('mousedown', { button: 0 }));
@@ -530,7 +566,11 @@ export const _Scene = {
           );
           return '';
         },
-        { defaultProps: {}, close_on: 'mouse:left' },
+        {
+          adapter,
+          defaultProps: {},
+          close_on: 'mouse:left',
+        },
       );
       const p = s.show();
       mock_event(s.root, new MouseEvent('mousedown', { button: 0 }));
@@ -548,7 +588,11 @@ export const _Scene = {
           );
           return '';
         },
-        { defaultProps: {}, close_on: 'mousedown' },
+        {
+          adapter,
+          defaultProps: {},
+          close_on: 'mousedown',
+        },
       );
       const p = s.show();
       mock_event(s.root, new MouseEvent('mousedown', { button: 0 }));
@@ -566,7 +610,11 @@ export const _Scene = {
           );
           return '';
         },
-        { defaultProps: {}, close_on: 'mouse:left' },
+        {
+          adapter,
+          defaultProps: {},
+          close_on: 'mouse:left',
+        },
       );
       const p = s.show();
       mock_event(s.root, new MouseEvent('mousedown', { button: 0 }));
@@ -591,7 +639,11 @@ export const _Scene = {
         });
         return '';
       },
-      { defaultProps: { nested: { value: 1 } }, duration: 0 },
+      {
+        adapter,
+        defaultProps: { nested: { value: 1 } },
+        duration: 0,
+      },
     );
     expect(typeof changeNested, 'function');
     expect(renderCount, 1);
@@ -619,7 +671,7 @@ export const _Scene = {
         });
         return '';
       },
-      { defaultProps: {}, duration: 0 },
+      { adapter, defaultProps: {}, duration: 0 },
     );
     expect(runCount, 1);
     expect(derivedValue, void 0);
@@ -1456,169 +1508,6 @@ text,"hello, world","she said ""hello"" and 'world'","line1\nline2\rline3",,`,
 };
 
 // Utils
-export const Adapter = {
-  async 'adapter - shallow reactive'() {
-    const { props } = adapter.render(
-      (props: { a: number; b: { c: number } }) => '',
-      { a: 1, b: { c: 2 } },
-    );
-
-    let runCount = 0;
-    let a_val, b_c_val;
-    van.derive(() => {
-      runCount++;
-      a_val = props.a;
-      b_c_val = props.b.c;
-    });
-
-    expect(runCount, 1);
-    expect(a_val, 1);
-    expect(b_c_val, 2);
-
-    // Update top-level
-    props.a = 2;
-    await 0;
-    expect(runCount, 2);
-    expect(a_val, 2);
-
-    // Update nested (should not trigger)
-    props.b.c = 3;
-    await 0;
-    expect(runCount, 2);
-    expect(b_c_val, 2); // derive didn't run
-    expect(props.b.c, 3); // value updated
-
-    // Update object ref
-    props.b = { c: 4 };
-    await 0;
-    expect(runCount, 3);
-    expect(b_c_val, 4);
-  },
-  async 'adapter - get optional key (no default)'() {
-    const { props } = adapter.render((p: { optional?: string }) => '', {});
-
-    let runCount = 0;
-    let val;
-    van.derive(() => {
-      runCount++;
-      val = props.optional;
-    });
-
-    expect(runCount, 1);
-    expect(val, void 0);
-
-    props.optional = 'hello';
-    await 0;
-    expect(runCount, 2);
-    expect(val, 'hello');
-  },
-  async 'adapter - get optional key (default undefined)'() {
-    const { props } = adapter.render((p: { optional?: string }) => '', {
-      optional: void 0,
-    });
-
-    let runCount = 0;
-    let val;
-    van.derive(() => {
-      runCount++;
-      val = props.optional;
-    });
-
-    expect(runCount, 1);
-    expect(val, void 0);
-
-    props.optional = 'hello';
-    await 0;
-    expect(runCount, 2);
-    expect(val, 'hello');
-  },
-  async 'adapter - repeat reactive wrap'() {
-    let props: { count: number };
-    const Comp = (p: typeof props) => {
-      props = p;
-      return '';
-    };
-
-    // define
-    {
-      expect(
-        adapter.render(adapter.define(Comp), {
-          count: 0,
-        }).props,
-        props!,
-      );
-      expect(
-        adapter.render(adapter.define(adapter.define(Comp)), {
-          count: 0,
-        }).props,
-        props!,
-      );
-      expect(
-        adapter.render(adapter.define(adapter.define(adapter.define(Comp))), {
-          count: 0,
-        }).props,
-        props!,
-      );
-    }
-
-    // render
-    {
-      const { props } = adapter.render(Comp, { count: 0 });
-
-      const { props: props2 } = adapter.render(Comp, props);
-      expect(props, props2);
-
-      const { props: props3 } = adapter.render(Comp, props2);
-      expect(props, props3);
-    }
-  },
-  async 'adapter - reactive props after wrap'() {
-    using app = await createApp();
-
-    // basic prop
-    {
-      using s = app.scene(
-        adapter.define((props: { text: string }) => div(() => props.text)),
-        { defaultProps: { text: 'default' }, duration: 0 },
-      );
-      expect(s.root.textContent, 'default');
-      await s.show({ text: 'new' });
-      expect(s.root.textContent, 'new');
-      await s.show();
-      expect(s.root.textContent, 'default');
-    }
-
-    // optional prop
-    {
-      using s = app.scene(
-        adapter.define((props: { text?: string }) =>
-          div(() => props.text ?? ''),
-        ),
-        { defaultProps: {}, duration: 0 },
-      );
-      expect(s.root.textContent, '');
-      await s.show({ text: 'new' });
-      expect(s.root.textContent, 'new');
-      await s.show();
-      expect(s.root.textContent, '');
-    }
-
-    // default props is undefined
-    {
-      using s = app.scene(
-        adapter.define((props: { text?: string }) =>
-          div(() => props.text ?? ''),
-        ),
-        { defaultProps: { text: void 0 }, duration: 0 },
-      );
-      expect(s.root.textContent, '');
-      await s.show({ text: 'new' });
-      expect(s.root.textContent, 'new');
-      await s.show();
-      expect(s.root.textContent, '');
-    }
-  },
-};
 export const Utils = {
   async 'default porps - merge'() {
     // plain object

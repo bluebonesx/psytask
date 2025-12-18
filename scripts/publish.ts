@@ -3,6 +3,8 @@ import { buildProject } from './build';
 import { __DEV__, green, log, projects, yellow } from './utils';
 
 const pkgs = projects.filter((e) => e.root === 'packages');
+const cmd = ['bun', 'publish', '-p', '--access', 'public'];
+__DEV__ && cmd.push('--dry-run');
 
 for (const pkg of pkgs) {
   // get package name and version
@@ -28,9 +30,9 @@ for (const pkg of pkgs) {
   // publish
   log(green('Publishing ') + `${name} (${publishedVersion} -> ${version})`);
   await buildProject(pkg); // build
-  try {
-    await Bun.$`cd ${pkg.path} && FORCE_COLOR=1 bun publish -p --access public${__DEV__ ? ' --dry-run' : ''}`;
-  } catch (e) {
-    throw Error(`Failed to publish ${name}: ${e}`);
+  const code = await Bun.spawn({ cwd: pkg.path, cmd, stdout: 'inherit' })
+    .exited;
+  if (code != 0) {
+    throw Error(`Failed to publish ${name}: ${code}`);
   }
 }

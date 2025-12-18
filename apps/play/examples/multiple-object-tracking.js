@@ -1,4 +1,5 @@
 import {
+  adapter,
   useDevicePixelRatio,
   useWindowPhysicalPix,
   VirtualChinrest,
@@ -24,12 +25,13 @@ using simpleText = app.scene(
       },
       () => props.content,
     ),
-  { defaultProps: { content: '' } },
+  { adapter, defaultProps: { content: '' } },
 );
 
 // show load progress
 simpleText.show({ content: 'Loading...' });
 using survey = app.scene(jsPsychStim, {
+  adapter,
   defaultProps: {
     type: await import(
       //@ts-expect-error external module
@@ -70,7 +72,7 @@ using survey = app.scene(jsPsychStim, {
     },
   },
 });
-using chinrest = app.scene(VirtualChinrest, { defaultProps: {} });
+using chinrest = app.scene(VirtualChinrest, { adapter, defaultProps: {} });
 simpleText.close();
 
 // get task parameters
@@ -223,6 +225,7 @@ using objects = app.scene(
     };
   },
   {
+    adapter,
     defaultProps: {
       deg_pre_sec: 0,
       indexes: false,

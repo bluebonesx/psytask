@@ -8,27 +8,22 @@ import {
 import type { LooseObject } from 'shared/types';
 import { $Object, array_normalize, doc, modify, mount } from 'shared/utils';
 import { Collector } from './collector';
-import { adapter, css, detectFPS, div, on, onPageLeave, style } from './utils';
+import { css, detectFPS, div, on, onPageLeave, style } from './utils';
 
 // import styles
-mount(
-  style(
-    `.psytask-scene{${css({
-      all: 'unset',
-      position: 'fixed',
-      inset: 0,
-      overflow: 'hidden',
-    })}}.psytask-center{${css({
-      display: 'flex',
-      'flex-direction': 'column',
-      'align-items': 'center',
-      'justify-content': 'center',
-      'white-space': 'pre-wrap',
-      height: '100%',
-    })}}`,
-  ),
-  doc.head,
-);
+mount(style(), doc.head).innerText = `.psytask-scene{${css({
+  all: 'unset',
+  position: 'fixed',
+  inset: 0,
+  overflow: 'hidden',
+})}}.psytask-center{${css({
+  display: 'flex',
+  'flex-direction': 'column',
+  'align-items': 'center',
+  'justify-content': 'center',
+  'white-space': 'pre-wrap',
+  height: '100%',
+})}}`;
 
 // extend scene
 export type CloseEventMap = HTMLElementEventMap & {
@@ -128,8 +123,8 @@ export class App<
     ]
       ? [
           L,
-          Pick<R, 'defaultProps'> &
-            Partial<Omit<R, 'defaultProps'>> &
+          Pick<R, 'defaultProps' | 'adapter'> &
+            Partial<Omit<R, 'defaultProps' | 'adapter'>> &
             ExtendedSceneOptions,
         ]
       : never
@@ -141,13 +136,12 @@ export class App<
     const options = {
       root: mount(
         div({
-          class: 'psytask-scene',
+          className: 'psytask-scene',
           oncontextmenu: (e) => e.preventDefault(),
         }),
         this.root,
       ),
       timer: () => createTimer(timer_condition),
-      adapter,
       ...opts,
     };
     const scene = new Scene<T>(component, options).on('close', () =>
@@ -220,7 +214,7 @@ export class App<
  * using app = await createApp();
  * using dc = app.collector();
  * using fixation = app.scene(
- *   (props: {}, ctx) => {
+ *   (props: {}) => {
  *     const node = document.createElement('div');
  *     node.textContent = '+';
  *     return node;

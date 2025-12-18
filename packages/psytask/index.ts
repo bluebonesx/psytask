@@ -2,4 +2,4 @@ export * from '@psytask/core'; // re-export core
 export * from './src/app';
 export * from './src/collector';
 export * from './src/iterator';
-export { adapter, css, defaultProps, detectFPS, on } from './src/utils';
+export { css, defaultProps, detectFPS, on } from './src/utils';

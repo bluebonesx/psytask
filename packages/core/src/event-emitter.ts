@@ -5,9 +5,9 @@ const symbol: typeof Symbol.dispose =
 type EventMap<T extends LooseObject> = T & { dispose: undefined };
 
 /** {@link Disposable} event emitter, use {@link Set} to manage listeners */
-export class EventEmitter<
-  T extends LooseObject & { dispose?: never } = {},
-> implements Disposable {
+export class EventEmitter<T extends LooseObject & { dispose?: never } = {}>
+  implements Disposable
+{
   readonly listeners: {
     [K in keyof EventMap<T>]?: Set<(e: EventMap<T>[K]) => void>;
   } = {};
@@ -19,9 +19,7 @@ export class EventEmitter<
     type: K,
     listener: (evt: EventMap<T>[K]) => void,
   ) {
-    (this.listeners[type] ??= new Set<(evt: EventMap<T>[K]) => void>()).add(
-      listener,
-    );
+    (this.listeners[type] ??= new Set<typeof listener>()).add(listener);
     return this;
   }
   /** Remove event listener */
@@ -41,7 +39,7 @@ export class EventEmitter<
     type: K,
     listener: (evt: EventMap<T>[K]) => void,
   ) {
-    const wrapper = (evt: EventMap<T>[K]) => {
+    const wrapper: typeof listener = (evt) => {
       try {
         listener(evt);
       } finally {

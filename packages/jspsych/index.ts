@@ -2,12 +2,23 @@ import { type Component, getCurrentScene } from '@psytask/core';
 import autoBind from 'auto-bind';
 import type { PluginInfo, TrialType } from 'jspsych';
 import type { LooseObject } from 'shared/types';
-import { $Object, array_normalize, ERR, modify } from 'shared/utils';
-import van from 'vanjs-core';
+import {
+  $Object,
+  array_normalize,
+  doc,
+  ERR,
+  getter_normalize,
+  modify,
+  mount,
+} from 'shared/utils';
 import { KeyboardListenerAPI } from '../../node_modules/jspsych/src/modules/plugin-api/KeyboardListenerAPI';
 import { TimeoutAPI } from '../../node_modules/jspsych/src/modules/plugin-api/TimeoutAPI';
 
-const { div } = van.tags;
+const div = (
+  props: Omit<Partial<HTMLElementTagNameMap['div']>, 'style'> & {
+    style?: string;
+  },
+) => modify(doc.createElement('div'), props);
 const warnMissingKey = <T extends object>(
   obj: T,
   handleMissingKey: (key: PropertyKey) => string,
@@ -41,11 +52,15 @@ export const jsPsychStim = ((props: TrialType<PluginInfo>) => {
   let data: LooseObject;
 
   // create jsPsych DOM
-  const content = div({
-    id: 'jspsych-content',
-    class: () =>
-      ['jspsych-content', ...array_normalize(props.css_classes)].join(' '),
+  const root = div({
+    className: 'jspsych-display-element',
+    style: 'height:100%;width:100%',
   });
+  const content = mount(
+    div({ id: 'jspsych-content' }),
+    mount(div({ className: 'jspsych-content-wrapper' }), root),
+  );
+
   const ctx = getCurrentScene();
   const close = (trial: typeof props, trial_data: LooseObject) => {
     data = { ...trial.data, ...trial_data };
@@ -54,10 +69,8 @@ export const jsPsychStim = ((props: TrialType<PluginInfo>) => {
       ? setTimeout(() => ctx.close(), trial.post_trial_gap)
       : ctx.close();
   };
-
   /** @see https://github.com/jspsych/jsPsych/blob/main/packages/jspsych/src/timeline/Trial.ts */
-  van.derive(async () => {
-    const trial = { ...props }; // non-reactive copy
+  const update = async (trial: typeof props) => {
     const Plugin = trial.type as Extract<
       TrialType<PluginInfo>['type'],
       new (...args: unknown[]) => unknown
@@ -95,8 +108,14 @@ export const jsPsychStim = ((props: TrialType<PluginInfo>) => {
     // on start
     trial.on_start?.(trial);
 
-    // execute trial
+    // add css classes
+    content.className = [
+      'jspsych-content',
+      ...array_normalize(getter_normalize(props.css_classes)),
+    ].join(' ');
     content.innerHTML = ''; // clear content
+
+    // execute trial
     const plugin = new Plugin(
       warnMissingKey(
         mock_jsPsych,
@@ -108,13 +127,13 @@ export const jsPsychStim = ((props: TrialType<PluginInfo>) => {
       trial.on_load?.(),
     );
     trial_data && close(trial, trial_data);
+  };
+  update({ ...props });
+
+  ctx.on('show', () => {
+    $Object.keys(props).some((k) => ctx.options.defaultProps[k] !== props[k]) &&
+      update({ ...props });
   });
 
-  return {
-    node: div(
-      { class: 'jspsych-display-element', style: 'height:100%;width:100%' },
-      div({ class: 'jspsych-content-wrapper' }, content),
-    ),
-    data: () => data,
-  };
+  return { node: root, data: () => data };
 }) satisfies Component;

@@ -43,6 +43,7 @@ export const DefaultScene = <T extends MaybeGenericComponent>(
     ...options,
   }).on('dispose', () => container.remove());
 };
+export const DefaultAdapter = createComponentAdapter((e) => e);
 
 // assertions
 export const expect = <D extends 0 | 1 = 0>(

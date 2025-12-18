@@ -5,14 +5,21 @@
 ![jsDelivr hits (npm)](https://img.shields.io/jsdelivr/npm/hm/psytask)
 
 JavaScript Framework for Psychology tasks.
-Make psychology task development like making PPTs.
-Compatible with the [jsPsych](https://github.com/jspsych/jsPsych) plugins.
+Make development like making PPTs.
 
-Compared to jsPsych, PsyTask has:
+Compared to others, it:
 
-- Easier and more flexible development experiment.
-- Higher time precision.
-- Smaller bundle size, Faster loading speed.
+- Easier and more flexible
+- Higher time precision. see [benchmark](#benchmark)
+- Smaller bundle size, Faster loading speed. see [benchmark](#benchmark)
+- Type-Safe
+
+[Integration](#integration) with:
+
+- [jsPsych](https://github.com/jspsych/jsPsych) plugins.
+- Data server: [JATOS]() ...
+- UI framework: [Vue](https://vuejs.org), [Solid](https://docs.solidjs.com), [Lit](https://lit.dev), [Van](https://vanjs.org) ...
+- Reactive framework: [Rxjs](https://rxjs.dev), [Mobx](https://mobx.js.org), [Valtio](https://valtio.dev) ...
 
 **[API Docs](https://bluebonesx.github.io/psytask/) | [Benchmark](https://bluebonesx.github.io/psytask/benchmark/) | [Tests](https://bluebonesx.github.io/psytask/tests/) | [Play it now ! 🥳](https://bluebonesx.github.io/psytask/play/)**
 
@@ -25,9 +32,8 @@ npm create psytask # create a project
 ```
 
 ```bash
-npm install psytask # just install
-npm install vanjs-core vanjs-ext # recommend
-npm install @psytask/component # optional
+npm install psytask # only framework
+npm install @psytask/component vanjs-core vanjs-ext # optional: use VanJS
 ```
 
 via CDN:
@@ -70,21 +76,21 @@ via CDN:
 ## Usage
 
 The psychology tasks are just like PPTs, they both have a series of scenes.
-So writing a psychology task only requires 2 steps:
-
-1. create scene
-2. show scene
+So writing a task only requires 2 steps: creating and showing scene.
 
 ### Create Scene
 
+All you need is [Component](#component):
+
 ```js
-import { Grating } from '@psytask/components';
+import { Grating, adapter } from '@psytask/components';
 
 using simpleText = app.scene(
   // component
   Grating,
   // scene options
   {
+    adapter, // VanJS support
     defaultProps: { type: Math.sin, size: 100, sf: 0.02 }, // show params
     duration: 1e3, // show 1000 ms
     close_on: 'key: ', // close on space key
@@ -92,67 +98,16 @@ using simpleText = app.scene(
 );
 ```
 
-Most of the time, you need to write the scene yourself, see [Component](#component):
-
-```js
-import { on, getCurrentScene } from 'psytask';
-import { ImageStim } from '@psytask/components';
-import van from 'vanjs-core';
-
-const { div } = van.tags;
-
-using scene = app.scene(
-  /** @param {{ text: string }} props */
-  (props) => {
-    /** @type {{ response_key: string; response_time: number }} */
-    let data;
-    const ctx = getCurrentScene();
-
-    // add DOM event listener
-    const cleanup = on(ctx.root, 'keydown', (e) => {
-      if (e.key !== 'f' || e.key !== 'j') return;
-      data = { response_key: e.key, response_time: e.timeStamp };
-      ctx.close(); // close on 'f' or 'j'
-    });
-
-    ctx
-      // reset data on show
-      .on('show', () => {
-        data = { response_key: '', response_time: 0 };
-      })
-      // remove DOM event listenr on dispose
-      .on('dispose', cleanup);
-
-    // Return the element and data getter
-    return {
-      node: div(
-        // use other Component
-        ImageStim({ image: new ImageData(1) }),
-      ),
-      data: () => data,
-    };
-  },
-  {
-    defaultProps: { text: '' },
-    duration: 1e3,
-    close_on: 'mouse:left',
-  },
-);
-```
-
-> [!TIP]
-> use [JSDoc Comment](https://www.typescriptlang.org/docs/handbook/jsdoc-supported-types.html) to get type hint in JavaScript.
-
 ### Show Scene
 
-Overide default props or options:
+Override default props or options:
 
 ```js
 const data = await scene.show({ text: 'Press F or J' }); // new props
 const data = await scene.config({ duration: 1e3 }).show(); // new options
 ```
 
-Show blocks:
+Block:
 
 ```js
 import { RandomSampling, StairCase } from 'psytask';
@@ -211,6 +166,120 @@ for (const text of ['A', 'B', 'C']) {
 
 dc.final(); // file content
 dc.download(); // download file
+```
+
+## Learn more
+
+### Component
+
+It a function
+that inputs **Props** and outputs a object includes **Node** and **Data Getter**:
+
+- **Props** means show params that control the display of the scene.
+- **Node** is the string or element or array, which be mounted to the scene root element.
+- **Data Getter** is used to get generated data.
+
+```js
+const Component = (props) => {
+  const ctx = getCurrentScene();
+  return { node: '', data: () => ({}) };
+};
+const Component = (props) => 'text node';
+const Component = (props) => document.createElement('div');
+const Component = (props) => ['text node', document.createElement('div')];
+```
+
+> [!CAUTION]
+> You shouldn't modify props whatever, as it may change the default props.
+> See one-way data flow in [Redux](https://redux.js.org/tutorials/fundamentals/part-2-concepts-data-flow) and [Vue](https://vuejs.org/guide/components/props.html#one-way-data-flow).
+
+A practical example:
+
+```js
+import { on, getCurrentScene } from 'psytask';
+import { ImageStim, adapter } from '@psytask/components';
+import van from 'vanjs-core';
+
+const { div } = van.tags;
+const Component =
+  /** @param {{ text: string }} props */
+  (props) => {
+    /** @type {{ response_key: string; response_time: number }} */
+    let data;
+    const ctx = getCurrentScene();
+
+    // add DOM event listener
+    const cleanup = on(ctx.root, 'keydown', (e) => {
+      if (e.key !== 'f' || e.key !== 'j') return;
+      data = { response_key: e.key, response_time: e.timeStamp };
+      ctx.close(); // close on 'f' or 'j'
+    });
+
+    ctx
+      // reset data on show
+      .on('show', () => {
+        data = { response_key: '', response_time: 0 };
+      })
+      // remove DOM event listenr on dispose
+      .on('dispose', cleanup);
+
+    // Return the element and data getter
+    return {
+      node: div(
+        // use other Component
+        ImageStim({ image: new ImageData(1) }),
+      ),
+      data: () => data,
+    };
+  };
+```
+
+> [!TIP]
+> use [JSDoc Comment](https://www.typescriptlang.org/docs/handbook/jsdoc-supported-types.html) to get type hint in JavaScript.
+
+### Setup
+
+When you call `app.scene(Component, { adapter, defaultProps })`,
+it will use `adapter.render` to call `Component` with `defaultProps` once,
+then **Node** will be mount to `this.root`.
+
+> [!NOTE]
+> the component will be called only once, the following DOM update will be triggered by **Props** update. See [reactivity](#reactivity).
+
+### Show
+
+When you call `await scene.show(patchProps)`, it will excute the following process:
+
+- Update props: merge patch props with default props to update current props, which will trigger [reactivity](#reactivity) update.
+- Listeners added by `this.on('show')` will be called.
+- Display and focus `this.root`, it will be displayed on the screen _in the next frame_.
+- Create timer by `this.options.timer` and wait it to stop.
+- Listeners added by `this.on('frame')` will be called when timer is running.
+- Hide `this.root` when timer is stoped, it will be hidden on the screen _in the next frame_.
+- Listeners added by `this.on('close')` will be called.
+- Merge the timer records and the data from **Data Getter**.
+
+```mermaid
+graph LR
+a[update props] --> l1[on show] --> b[display & focus DOM] --> d[wait timer] --> l2[on frame] --> d --> e[hide root] --> l3[on close] --> f[merge data]
+```
+
+### Reactivity
+
+Stay tuned...
+
+Better to see: [VanJS tutorial](https://vanjs.org/tutorial), [Vue reactivity](https://vuejs.org/guide/extras/reactivity-in-depth.html)
+
+## [Benchmark](https://bluebonesx.github.io/psytask/benchmark/)
+
+The bunlde size of PsyTask is 1/12 of labjs, 1/50 of jspsych, and 1/260 of psychojs.
+
+```mermaid
+xychart
+    title "Bundle Size (KB)"
+    x-axis [psytask, labjs, jspsych, psychojs]
+    y-axis 0 --> 2600
+    bar [10.67, 122.45, 502.06, 2598.33]
 ```
 
 ## Integration
@@ -274,45 +343,4 @@ using dc = app.collector().on('add', (row) => {
   // send data to JATOS server
   jatos.appendResultData(row);
 });
-```
-
-## Learn more
-
-Stay tuned...
-
-### Component
-
-To create a scene, we need a component
-that inputs **Props** and outputs a object includes **Node** and **Data Getter**:
-
-```js
-const Component = (props) => {
-  const ctx = getCurrentScene();
-  return { node: '', data: () => ({}) };
-};
-using scene = app.scene(Component);
-```
-
-Or, just outputs **Node**:
-
-```js
-const Component = (props) => 'text node';
-const Component = (props) => document.createElement('div');
-const Component = (props) => ['text node', document.createElement('div')];
-```
-
-- **Props** means show params that control the display of the scene.
-- **Node** is the string or element or array, which be mounted to the scene root element.
-- **Data Getter** is used to get generated data.
-
-> [!CAUTION]
-> You shouldn't modify props, as it may change the default props.
->
-> If you don't know whether you modify the default props, try to recursively [freeze](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/freeze) all its properties.
-
-### Show
-
-```mermaid
-graph TD
-a[modify props] --> show --> b[display & focus DOM] --> d[wait timer] --> frame --> d --> e[hide root] --> close
 ```

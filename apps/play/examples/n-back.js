@@ -1,3 +1,4 @@
+import { adapter } from '@psytask/components';
 import { jsPsychStim } from '@psytask/jspsych';
 import { createApp, css, getCurrentScene, on } from 'psytask';
 import van from 'vanjs-core';
@@ -19,12 +20,13 @@ using simpleText = app.scene(
       },
       () => props.content,
     ),
-  { defaultProps: { content: '' } },
+  { adapter, defaultProps: { content: '' } },
 );
 
 // show load progress
 simpleText.show({ content: 'Loading...' });
 using survey = app.scene(jsPsychStim, {
+  adapter,
   defaultProps: {
     type: (
       await import(
@@ -78,7 +80,7 @@ using stimulus = app.scene(
       data: () => data,
     };
   },
-  { defaultProps: { letter: '' }, duration: 300 },
+  { adapter, defaultProps: { letter: '' }, duration: 300 },
 );
 simpleText.close();
 

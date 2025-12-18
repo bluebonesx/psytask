@@ -1,4 +1,5 @@
 import {
+  adapter,
   Grating,
   ImageStim,
   Loader,
@@ -27,8 +28,167 @@ import {
   sleep,
   spy_functionCall,
 } from './utils';
+const { div } = van.tags;
 
-// hooks
+export const Adapter = {
+  async 'adapter - shallow reactive'() {
+    const { props } = adapter.render(
+      (props: { a: number; b: { c: number } }) => '',
+      { a: 1, b: { c: 2 } },
+    );
+
+    let runCount = 0;
+    let a_val, b_c_val;
+    van.derive(() => {
+      runCount++;
+      a_val = props.a;
+      b_c_val = props.b.c;
+    });
+
+    expect(runCount, 1);
+    expect(a_val, 1);
+    expect(b_c_val, 2);
+
+    // Update top-level
+    props.a = 2;
+    await 0;
+    expect(runCount, 2);
+    expect(a_val, 2);
+
+    // Update nested (should not trigger)
+    props.b.c = 3;
+    await 0;
+    expect(runCount, 2);
+    expect(b_c_val, 2); // derive didn't run
+    expect(props.b.c, 3); // value updated
+
+    // Update object ref
+    props.b = { c: 4 };
+    await 0;
+    expect(runCount, 3);
+    expect(b_c_val, 4);
+  },
+  async 'adapter - get optional key (no default)'() {
+    const { props } = adapter.render((p: { optional?: string }) => '', {});
+
+    let runCount = 0;
+    let val;
+    van.derive(() => {
+      runCount++;
+      val = props.optional;
+    });
+
+    expect(runCount, 1);
+    expect(val, void 0);
+
+    props.optional = 'hello';
+    await 0;
+    expect(runCount, 2);
+    expect(val, 'hello');
+  },
+  async 'adapter - get optional key (default undefined)'() {
+    const { props } = adapter.render((p: { optional?: string }) => '', {
+      optional: void 0,
+    });
+
+    let runCount = 0;
+    let val;
+    van.derive(() => {
+      runCount++;
+      val = props.optional;
+    });
+
+    expect(runCount, 1);
+    expect(val, void 0);
+
+    props.optional = 'hello';
+    await 0;
+    expect(runCount, 2);
+    expect(val, 'hello');
+  },
+  async 'adapter - repeat reactive wrap'() {
+    let props: { count: number };
+    const Comp = (p: typeof props) => {
+      props = p;
+      return '';
+    };
+
+    // define
+    {
+      expect(
+        adapter.render(adapter.wrap(Comp), {
+          count: 0,
+        }).props,
+        props!,
+      );
+      expect(
+        adapter.render(adapter.wrap(adapter.wrap(Comp)), {
+          count: 0,
+        }).props,
+        props!,
+      );
+      expect(
+        adapter.render(adapter.wrap(adapter.wrap(adapter.wrap(Comp))), {
+          count: 0,
+        }).props,
+        props!,
+      );
+    }
+
+    // render
+    {
+      const { props } = adapter.render(Comp, { count: 0 });
+
+      const { props: props2 } = adapter.render(Comp, props);
+      expect(props, props2);
+
+      const { props: props3 } = adapter.render(Comp, props2);
+      expect(props, props3);
+    }
+  },
+  async 'adapter - reactive props after wrap'() {
+    using app = await createApp();
+
+    // basic prop
+    {
+      using s = app.scene(
+        adapter.wrap((props: { text: string }) => div(() => props.text)),
+        { adapter, defaultProps: { text: 'default' }, duration: 0 },
+      );
+      expect(s.root.textContent, 'default');
+      await s.show({ text: 'new' });
+      expect(s.root.textContent, 'new');
+      await s.show();
+      expect(s.root.textContent, 'default');
+    }
+
+    // optional prop
+    {
+      using s = app.scene(
+        adapter.wrap((props: { text?: string }) => div(() => props.text ?? '')),
+        { adapter, defaultProps: {}, duration: 0 },
+      );
+      expect(s.root.textContent, '');
+      await s.show({ text: 'new' });
+      expect(s.root.textContent, 'new');
+      await s.show();
+      expect(s.root.textContent, '');
+    }
+
+    // default props is undefined
+    {
+      using s = app.scene(
+        adapter.wrap((props: { text?: string }) => div(() => props.text ?? '')),
+        { adapter, defaultProps: { text: void 0 }, duration: 0 },
+      );
+      expect(s.root.textContent, '');
+      await s.show({ text: 'new' });
+      expect(s.root.textContent, 'new');
+      await s.show();
+      expect(s.root.textContent, '');
+    }
+  },
+};
 export const Hooks = {
   async useDevicePixelRatio() {
     let runCount = 0;
@@ -44,7 +204,7 @@ export const Hooks = {
         });
         return '';
       },
-      { defaultProps: {} },
+      { adapter, defaultProps: {} },
     );
     expect(runCount, 1);
 
@@ -75,7 +235,7 @@ export const Hooks = {
         });
         return '';
       },
-      { defaultProps: {} },
+      { adapter, defaultProps: {} },
     );
     expect(runCount, 1);
 
@@ -169,7 +329,7 @@ export const _Loader = {
     using fetchParams = mock_httpbin();
     using app = await createApp();
     using loader = app
-      .scene(generic(Loader), { defaultProps: { urls: ['/bytes/1'] } })
+      .scene(generic(Loader), { adapter, defaultProps: { urls: ['/bytes/1'] } })
       .on('show', () => loader.close());
     expect_Loader_dataSizes(await loader.show(), []);
     expect(fetchParams.length, 1); // close is async
@@ -179,7 +339,10 @@ export const _Loader = {
 
     // default empty
     {
-      using loader = app.scene(generic(Loader), { defaultProps: { urls: [] } });
+      using loader = app.scene(generic(Loader), {
+        adapter,
+        defaultProps: { urls: [] },
+      });
       expect_Loader_dataSizes(await loader.show(), []);
     }
 
@@ -187,6 +350,7 @@ export const _Loader = {
     {
       using fetchParams = mock_httpbin();
       using loader = app.scene(generic(Loader), {
+        adapter,
         defaultProps: { urls: ['/bytes/1'] },
       });
       expect(fetchParams.length, 0); // only fetch on show
@@ -198,6 +362,7 @@ export const _Loader = {
     using _ = mock_httpbin();
     using app = await createApp();
     using loader = app.scene(generic(Loader), {
+      adapter,
       defaultProps: { urls: ['/bytes/1'] },
     });
     expect_Loader_dataSizes(await loader.show(), [1]);
@@ -207,7 +372,10 @@ export const _Loader = {
   async 'change urls'() {
     using _ = mock_httpbin();
     using app = await createApp();
-    using loader = app.scene(generic(Loader), { defaultProps: { urls: [] } });
+    using loader = app.scene(generic(Loader), {
+      adapter,
+      defaultProps: { urls: [] },
+    });
     expect_Loader_dataSizes(await loader.show({ urls: ['/bytes/1'] }), [1]);
     expect_Loader_dataSizes(await loader.show(), []);
     expect_Loader_dataSizes(
@@ -220,6 +388,7 @@ export const _Loader = {
     using _ = mock_httpbin();
     using app = await createApp();
     using loader = app.scene(generic(Loader), {
+      adapter,
       defaultProps: { urls: ['/bytes/100', '/bytes/50'] },
     });
 
@@ -240,6 +409,7 @@ export const _Loader = {
     using _ = mock_httpbin();
     using app = await createApp();
     using loader = app.scene(generic(Loader), {
+      adapter,
       defaultProps: {
         urls: ['/status/404', '/bytes/1', '/bytes/2', '/bytes/3'],
       },
@@ -255,6 +425,7 @@ export const _ImageStim = {
   async 'render ImageData'() {
     using app = await createApp();
     using s = app.scene(ImageStim, {
+      adapter,
       defaultProps: { image: new ImageData(10, 20) },
       duration: 0,
     });
@@ -269,6 +440,7 @@ export const _ImageStim = {
   async 'render ImageBitmap'() {
     using app = await createApp();
     using s = app.scene(ImageStim, {
+      adapter,
       defaultProps: { image: await createImageBitmap(new ImageData(15, 25)) },
       duration: 0,
     });
@@ -284,6 +456,7 @@ export const _ImageStim = {
     using app = await createApp();
     let called = 0;
     using s = app.scene(ImageStim, {
+      adapter,
       defaultProps: { draw: () => called++ },
       duration: 0,
     });
@@ -297,6 +470,7 @@ export const _Grating = {
   async 'basic render'() {
     using app = await createApp();
     using s = app.scene(Grating, {
+      adapter,
       defaultProps: {
         type: Math.sin,
         size: 100,
@@ -340,6 +514,7 @@ export const _Grating = {
   async 'update props'() {
     using app = await createApp();
     using s = app.scene(Grating, {
+      adapter,
       defaultProps: {
         type: Math.sin,
         size: 100,
@@ -356,6 +531,7 @@ export const _Grating = {
   async 'mask - circle'() {
     using app = await createApp();
     using s = app.scene(Grating, {
+      adapter,
       defaultProps: {
         type: (x) => 1, // full intensity
         size: 100,
@@ -382,7 +558,7 @@ export const _Grating = {
 export const _PhysicalWidthDetector = {
   async 'calculation logic'() {
     using app = await createApp();
-    using pwd = app.scene(PhysicalWidthDetector, { defaultProps: {} });
+    using pwd = app.scene(PhysicalWidthDetector, { adapter, defaultProps: {} });
     const state = pwd.data(); // deep reactive
 
     // set line distance cm, fixed line distance pix
@@ -409,7 +585,7 @@ export const _PhysicalWidthDetector = {
   },
   async 'calculation logic - 0 or NaN'() {
     using app = await createApp();
-    using pwd = app.scene(PhysicalWidthDetector, { defaultProps: {} });
+    using pwd = app.scene(PhysicalWidthDetector, { adapter, defaultProps: {} });
     const state = pwd.data(); // deep reactive
 
     // line_distance_cm
@@ -449,7 +625,7 @@ export const _PhysicalWidthDetector = {
   },
   async 'interaction - drag'() {
     using app = await createApp();
-    using pwd = app.scene(PhysicalWidthDetector, { defaultProps: {} });
+    using pwd = app.scene(PhysicalWidthDetector, { adapter, defaultProps: {} });
     const showPromise = pwd.show();
     const state = pwd.data();
 
@@ -501,7 +677,7 @@ export const _PhysicalWidthDetector = {
       pix_per_cm: '每厘米像素数',
     };
     using pwd = app
-      .scene(PhysicalWidthDetector, { defaultProps: { i18n } })
+      .scene(PhysicalWidthDetector, { adapter, defaultProps: { i18n } })
       .on('show', () => pwd.close());
     await pwd.show();
 
@@ -522,6 +698,7 @@ export const _ViewDistanceDetector = {
 
     using app = await createApp();
     using vdd = app.scene(ViewDistanceDetector, {
+      adapter,
       defaultProps: { pix_per_cm, blindspot_deg },
     });
     const state = vdd.data(); // deep reactive
@@ -545,6 +722,7 @@ export const _ViewDistanceDetector = {
 
     using app = await createApp();
     using vdd = app.scene(ViewDistanceDetector, {
+      adapter,
       defaultProps: { pix_per_cm },
     });
     const showPromise = vdd.show();
@@ -595,7 +773,10 @@ export const _ViewDistanceDetector = {
       view_distance: '视距',
     };
     using s = app
-      .scene(ViewDistanceDetector, { defaultProps: { pix_per_cm: 40, i18n } })
+      .scene(ViewDistanceDetector, {
+        adapter,
+        defaultProps: { pix_per_cm: 40, i18n },
+      })
       .on('show', () => s.close());
     await s.show();
 
@@ -639,6 +820,7 @@ export const _VirtualChinrest = {
 
     using app = await createApp();
     using vc = app.scene(VirtualChinrest, {
+      adapter,
       defaultProps: { usePreviousData: true },
     });
     VirtualChinrest.set({ pix_per_cm, distance_cm });
@@ -670,7 +852,7 @@ export const _VirtualChinrest = {
   },
   async 'correct prev data'() {
     using app = await createApp();
-    using vc = app.scene(VirtualChinrest, { defaultProps: {} });
+    using vc = app.scene(VirtualChinrest, { adapter, defaultProps: {} });
     await sleep(0);
 
     let p: Promise<unknown>;
@@ -720,7 +902,7 @@ export const _VirtualChinrest = {
   },
   async 'incorrect prev data - lack key'() {
     using app = await createApp();
-    using vc = app.scene(VirtualChinrest, { defaultProps: {} });
+    using vc = app.scene(VirtualChinrest, { adapter, defaultProps: {} });
 
     let p: Promise<unknown>;
     using confirmParams = spy_functionCall(window, 'confirm', () => false);
@@ -771,7 +953,7 @@ export const _VirtualChinrest = {
   },
   async 'incorrect prev data - error value'() {
     using app = await createApp();
-    using vc = app.scene(VirtualChinrest, { defaultProps: {} });
+    using vc = app.scene(VirtualChinrest, { adapter, defaultProps: {} });
 
     let p: Promise<unknown>;
     using confirmParams = spy_functionCall(window, 'confirm', () => false);
@@ -826,7 +1008,7 @@ export const _VirtualChinrest = {
   },
   async 'incorrect prev data - NaN value'() {
     using app = await createApp();
-    using vc = app.scene(VirtualChinrest, { defaultProps: {} });
+    using vc = app.scene(VirtualChinrest, { adapter, defaultProps: {} });
 
     let p: Promise<unknown>;
     using confirmParams = spy_functionCall(window, 'confirm', () => false);
@@ -868,7 +1050,7 @@ export const _VirtualChinrest = {
   },
   async 'no prev data'() {
     using app = await createApp();
-    using vc = app.scene(VirtualChinrest, { defaultProps: {} });
+    using vc = app.scene(VirtualChinrest, { adapter, defaultProps: {} });
 
     let p: Promise<unknown>;
     using confirmParams = spy_functionCall(window, 'confirm', () => false);

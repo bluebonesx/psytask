@@ -1,3 +1,4 @@
+import { adapter } from '@psytask/components';
 import { type NodeLike, createApp } from 'psytask';
 import van from 'vanjs-core';
 
@@ -9,14 +10,14 @@ using dc = app.collector('demo.csv');
 using simpleText = app.scene(
   (props: { content: NodeLike }) =>
     div({ class: 'psytask-center' }, () => props.content),
-  { defaultProps: { content: '' } },
+  { defaultProps: { content: '' }, adapter },
 );
 
 await simpleText.show({
   content: div(
     'Welcome to PsyTask template!\nsee more ',
     a(
-      { href: 'https://bluebonesx.github.io/psytask/play', target: '_blank' },
+      { href: 'https://bluebonesx.github.io/psytask/play/', target: '_blank' },
       'Information & Examples',
     ),
     '\n\nClick to continue.',

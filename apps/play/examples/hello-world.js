@@ -1,8 +1,9 @@
+import { adapter } from '@psytask/components';
 import { createApp, css, getCurrentScene } from 'psytask';
 import van from 'vanjs-core';
 import { reactive } from 'vanjs-ext';
 
-const { button, div, input } = van.tags;
+const { button, div, input, form } = van.tags;
 
 using app = await createApp({ alert_on_leave: false });
 using dc = app.collector('hello-world.csv', { backup_on_leave: false });
@@ -18,7 +19,7 @@ using simpleText = app.scene(
       },
       () => props.content,
     ),
-  { defaultProps: { content: '' } },
+  { adapter, defaultProps: { content: '' } },
 );
 using question = app.scene(
   /** @param {{ placeholder: string }} props */
@@ -32,8 +33,16 @@ using question = app.scene(
       data.response_time = NaN;
     });
     return {
-      node: div(
-        { class: 'psytask-center', style: css({ gap: '1rem' }) },
+      node: form(
+        {
+          class: 'psytask-center',
+          style: css({ gap: '1rem' }),
+          /** @param {SubmitEvent} e */
+          onsubmit(e) {
+            e.preventDefault();
+            data.answer >= 0 && ctx.close();
+          },
+        },
         input({
           type: 'number',
           placeholder: () => props.placeholder,
@@ -43,12 +52,12 @@ using question = app.scene(
             data.response_time = e.timeStamp;
           },
         }),
-        button({ onclick: () => data.answer >= 0 && ctx.close() }, 'OK'),
+        button({ type: 'submit' }, 'OK'),
       ),
       data: () => data,
     };
   },
-  { defaultProps: { placeholder: '' } },
+  { adapter, defaultProps: { placeholder: '' } },
 );
 
 // show scenes

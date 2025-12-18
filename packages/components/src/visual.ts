@@ -1,15 +1,9 @@
-import {
-  adapter,
-  css,
-  defaultProps,
-  getCurrentScene,
-  on,
-  Scene,
-} from 'psytask';
+import { css, defaultProps, getCurrentScene, on, Scene } from 'psytask';
 import type { LooseObject } from 'shared/types';
 import { ERR, modify, mount } from 'shared/utils';
 import van from 'vanjs-core';
 import { calc, list, noreactive, reactive } from 'vanjs-ext';
+import { adapter } from './adapter';
 import { useDevicePixelRatio } from './hooks';
 
 const { canvas, div, input, label, h2: h2, span, button, form } = van.tags;
@@ -48,7 +42,7 @@ const { PI, sin, cos, tan } = Math; // just for minimize
  * });
  * ```
  */
-export const ImageStim = adapter.define(
+export const ImageStim = adapter.wrap(
   (props: {
     image?: ImageBitmap | ImageData;
     draw?(ctx: CanvasRenderingContext2D): void;
@@ -98,7 +92,7 @@ type RGB255 = [R: number, G: number, B: number];
  * });
  * ```
  */
-export const Grating = adapter.define(
+export const Grating = adapter.wrap(
   (props: {
     /** Convert radians (-Inf, Inf) to amplitude [-1, 1] */
     type: (x: number) => number;
@@ -214,7 +208,7 @@ const Triangles = (color: string, size = 6) =>
     }),
   );
 
-export const PhysicalWidthDetector = adapter.define(
+export const PhysicalWidthDetector = adapter.wrap(
   (props: {
     line_distance_pix?: number;
     i18n?: Record<
@@ -327,7 +321,7 @@ Or, input the pixels per centimeter (pix/cm) directly if you know.`,
     };
   },
 );
-export const ViewDistanceDetector = adapter.define(
+export const ViewDistanceDetector = adapter.wrap(
   (props: {
     pix_per_cm: number;
     /** @default 13.5 */
