@@ -93,18 +93,21 @@ const modify = async (
       ),
     ),
   ];
-  // js
-  if (!useTypeScript) {
-    modifyTasks.push(
-      modify(pth('index.html'), (content) =>
-        content.replace('main.ts', 'main.js'),
-      ),
-      fs.rename(pth('main.ts'), pth('main.js')),
-      fs.rename(pth('tsconfig.json'), pth('jsconfig.json')),
-    );
-  }
-  await Promise.all(modifyTasks);
 
+  // js/ts
+  modifyTasks.push(
+    ...(useTypeScript
+      ? [fs.rm(pth('main.js'))]
+      : [
+          modify(pth('index.html'), (content) =>
+            content.replace('main.ts', 'main.js'),
+          ),
+          fs.rm(pth('main.ts')),
+          fs.rename(pth('tsconfig.json'), pth('jsconfig.json')),
+        ]),
+  );
+
+  await Promise.all(modifyTasks);
   outro(`Project created successfully: ${targetDir}`);
 })().catch((err) => {
   console.error(err);
