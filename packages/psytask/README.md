@@ -25,6 +25,9 @@ Compared to others, it:
 
 ## Install
 
+> [!WARNING]
+> In early stages, there will be frequent breaking changes, please pin the version number.
+
 via NPM:
 
 ```bash
