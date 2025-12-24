@@ -15,7 +15,7 @@ type BenchmarkCase = {
     config: BenchmarkConfig;
     load: (
       name: string,
-      url: `${string}.${'js' | 'css'}`,
+      url: `${string}.${'mjs' | 'js' | 'css'}`,
       create?: (text: string) => HTMLElement,
     ) => Promise<void>;
     onDraw(): void;

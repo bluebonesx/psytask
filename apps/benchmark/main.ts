@@ -11,8 +11,8 @@ const Dashboard = async () => {
   );
   const { div, button, select, option, input, label, pre, form, h2 } = van.tags;
 
-  const cases = glob('**/*.js', { cwd: 'cases' })
-    .map((f) => f.replace('.js', ''))
+  const cases = glob('**/*.bench.js', { cwd: 'cases' })
+    .map((f) => f.replace('.bench.js', ''))
     .sort((a, b) => (a > b ? -1 : 1));
   const env = await (async () => {
     const ua = navigator.userAgent;
@@ -57,7 +57,7 @@ const Dashboard = async () => {
       frame_times: noreactive(
         await detectFPS({
           root: doc.body,
-          frames_count: 20,
+          frame_count: 20,
           leave_alert: 'Please DO NOT leave this tab during FPS detection.',
         }),
       ),
@@ -216,7 +216,7 @@ const Runner = async (hash: string) => {
   const urlPrefix = location.origin + location.pathname;
 
   const config: BenchmarkConfig = JSON.parse(decodeURIComponent(hash));
-  const filepath = `./${config.case}.js`;
+  const filepath = `./${config.case}.bench.js`;
   const module = await import(filepath);
   const job: BenchmarkCase = module.default;
   if (typeof job !== 'function')

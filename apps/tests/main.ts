@@ -1,6 +1,7 @@
 import { error_normalize, isObject, mount } from 'shared/utils';
 import van from 'vanjs-core';
 import { calc, noreactive, reactive } from 'vanjs-ext';
+import { sleep } from './cases/utils';
 const { button, details, div, pre, section, summary } = van.tags;
 
 type CaseView = {
@@ -115,6 +116,7 @@ const runJob = (job: () => Promise<void>) => {
     window.queueMicrotask(async () => {
       for (const job of todos) {
         try {
+          await sleep(0); // after render pipeline
           await job();
           todos.delete(job);
         } catch (err) {

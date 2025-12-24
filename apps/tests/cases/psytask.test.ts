@@ -31,12 +31,12 @@ const { div, iframe } = van.tags;
 // App
 export const _createApp = {
   async 'more frames count'() {
-    const frames_count = 26;
+    const frame_count = 26;
     let frame_calls = 0;
-    const counter = () => ++frame_calls < frames_count && rAF(counter);
+    const counter = () => ++frame_calls < frame_count && rAF(counter);
     rAF(counter);
-    using app = await createApp({ frames_count });
-    expect(frame_calls, frames_count);
+    using app = await createApp({ frame_count });
+    expect(frame_calls, frame_count);
   },
   async 'alert on leave (enabled)'() {
     using alertParams = spy_functionCall(window, 'alert', () => {});
@@ -1586,7 +1586,7 @@ export const Utils = {
     const leave_alert = 'This text will show when you leave the page.';
     const p = detectFPS({
       root: doc.body,
-      frames_count: 19,
+      frame_count: 19,
       leave_alert,
     });
 
@@ -1599,7 +1599,7 @@ export const Utils = {
   async 'detect fps - return durations'() {
     const durations = await detectFPS({
       root: doc.body,
-      frames_count: 19,
+      frame_count: 19,
       leave_alert: 'Please stay on the page.',
     });
     expect(durations.length, 19);

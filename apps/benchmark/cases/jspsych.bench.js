@@ -25,9 +25,12 @@ export default async (ctx) => {
   const app = initJsPsych({ display_element: ctx.root.id });
   await app.run([
     {
-      timeline_variables: Array.from({ length: ctx.config.count }, (_, i) => ({
-        text: ((i / ctx.config.count) * 100).toFixed(2) + '%',
-      })),
+      timeline_variables: Array.from(
+        { length: ctx.config.count + 1 },
+        (_, i) => ({
+          text: ((i / ctx.config.count) * 100).toFixed(2) + '%',
+        }),
+      ),
       timeline: [
         {
           type: await loadPlugin('html-keyboard-response'),

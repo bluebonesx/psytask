@@ -66,7 +66,7 @@ export default async (ctx) => {
 
   return new Promise((resolve) => {
     const { count, duration } = ctx.config;
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i <= count; i++) {
       const text = ((i / count) * 100).toFixed(2) + '%';
       app.schedule(() => {
         st = clock.getTime();
@@ -76,7 +76,7 @@ export default async (ctx) => {
         return util.Scheduler.Event.NEXT;
       });
       app.schedule(() =>
-        1e3 * (clock.getTime() - st) < duration - frame_ms / 2
+        1e3 * (clock.getTime() - st) <= duration - frame_ms / 2
           ? util.Scheduler.Event.FLIP_REPEAT
           : util.Scheduler.Event.NEXT,
       );

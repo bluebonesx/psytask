@@ -1,4 +1,5 @@
 import {
+  createComponentAdapter,
   createTimer,
   EventEmitter,
   Scene,
@@ -96,22 +97,24 @@ export class App<
    * Create text scene
    *
    * ```ts
-   * const Component = (props: { text: string }, ctx: Scene<any>) => {
+   * const Component = (props: { text: string }) => {
    *   const el = document.createElement('div');
-   *   ctx.on('show', (props) => {
+   *   const ctx = getCurrentScene();
+   *   ctx.on('show', () => {
    *     el.textContent = props.text; // update element
    *   });
-   *   return { node: el, data: () => ({ text: el.textContent }) }; // return element and data getter
+   *   return {
+   *     node: el,
+   *     data: () => ({ text: el.textContent }),
+   *   };
    * };
    *
-   * // create scene
    * using scene = app.scene(Component, {
+   *   adapter: createComponentAdapter((e) => e),
    *   defaultProps: { text: 'default text' }, // default props is required
-   *   close_on: 'key: ', // close when space is pressed
-   *   duration: 100, // auto close after 100ms
+   *   close_on: 'click',
+   *   duration: 100,
    * });
-   * // change props.text and show, then get data
-   * const data = await scene.show({ text: 'new text' });
    * ```
    *
    * @see {@link Scene}
@@ -123,16 +126,18 @@ export class App<
     ]
       ? [
           L,
-          Pick<R, 'defaultProps' | 'adapter'> &
-            Partial<Omit<R, 'defaultProps' | 'adapter'>> &
+          Pick<R, 'defaultProps'> &
+            Partial<Omit<R, 'defaultProps'>> &
             ExtendedSceneOptions,
         ]
       : never
   ) {
-    const timer_condition: Parameters<typeof createTimer>[0] = (records) =>
+    const timer_condition: Parameters<typeof createTimer>[0] = (
+      cur_frame_time,
+      records,
+    ) =>
       opts.duration != null &&
-      records[records.length - 1]! - records[0]! >
-        opts.duration! - this.data.frame_ms * 1.5;
+      cur_frame_time - records[0]! >= opts.duration - this.data.frame_ms / 2;
     const options = {
       root: mount(
         div({
@@ -141,6 +146,7 @@ export class App<
         }),
         this.root,
       ),
+      adapter: createComponentAdapter((e) => e),
       timer: () => createTimer(timer_condition),
       ...opts,
     };
@@ -150,7 +156,18 @@ export class App<
 
     const close = () => scene.close();
     return modify(scene, {
-      /** Change options one-time */
+      /**
+       * Change options one-time
+       *
+       * @example
+       *
+       * Show with new options
+       *
+       * ```ts
+       * await scene.config({ duration: 1e2 }).show();
+       * await scene.config({ close_on: 'click' }).show();
+       * ```
+       */
       config(patchOptions: Partial<ExtendedSceneOptions>) {
         modify(opts, patchOptions);
         return scene;
@@ -236,24 +253,7 @@ export const createApp = async ({
     leave_alert_on_task: "Please DON'T leave the page during the task!",
     beforeunload_alert: 'Your progress will be lost. Are you sure?',
   },
-  frames_count = 10,
-  frame_calcer = (durations) => {
-    const sorted = [...durations].sort((a, b) => a - b);
-    const Q1_idx = sorted.length / 4;
-    const Q1 = sorted[Math.floor(Q1_idx)]!;
-    const Q3 = sorted[Math.floor(Q1_idx * 3)]!;
-    const valid_durations = durations.filter((d) => Q1 <= d && d <= Q3);
-    const frame_ms =
-      valid_durations.reduce((a, b) => a + b) / valid_durations.length;
-
-    console.info('Detect fps', frame_ms, {
-      durations,
-      Q1,
-      Q3,
-      valid_durations,
-    });
-    return frame_ms;
-  },
+  frame_count = 30,
 }: Partial<{
   /** @default document.createElement('div') */
   root: HTMLElement;
@@ -267,21 +267,36 @@ export const createApp = async ({
     /** Alert before close or reload the page, not compatible with IOS */
     beforeunload_alert: string;
   };
-  /** @default 10 */
-  frames_count: number;
-  frame_calcer: (durations: number[]) => number;
+  /** @default 30 */
+  frame_count: number;
 }> = {}) => {
-  const data = {
-    // detect fps
-    frame_ms: frame_calcer(
-      await detectFPS({
-        root,
-        leave_alert: i18n.leave_alert_on_fps,
-        frames_count,
-      }),
-    ),
-    leave_count: 0,
-  };
+  // detect fps
+  const durations = await detectFPS({
+    root,
+    leave_alert: i18n.leave_alert_on_fps,
+    frame_count,
+  });
+  const sorted = [...durations].sort((a, b) => a - b);
+  const Q1_idx = sorted.length / 4,
+    Q1 = sorted[Math.floor(Q1_idx)]!,
+    Q3 = sorted[Math.floor(Q1_idx * 3)]!,
+    IQR = Q3 - Q1,
+    lower = Q1 - 1.5 * IQR,
+    upper = Q3 + 1.5 * IQR;
+  const valid_durations = durations.filter((d) => lower <= d && d <= upper);
+  const frame_ms =
+    valid_durations.reduce((a, b) => a + b) / valid_durations.length;
+  console.info('Detect fps', frame_ms, {
+    durations,
+    Q1,
+    Q3,
+    IQR,
+    lower,
+    upper,
+    valid_durations,
+  });
+
+  const data = { frame_ms, leave_count: 0 };
 
   // event listeners
   const cleanups = [

@@ -10,8 +10,8 @@ Make development like making PPTs.
 Compared to others, it:
 
 - Easier and more flexible
-- Higher time precision. see [benchmark](#benchmark)
-- Smaller bundle size, Faster loading speed. see [benchmark](#benchmark)
+- Higher time precision. See [benchmark](#benchmark)
+- Smaller bundle size, Faster loading speed. See [benchmark](#benchmark)
 - Type-Safe
 
 [Integration](#integration) with:
@@ -25,18 +25,15 @@ Compared to others, it:
 
 ## Install
 
-> [!WARNING]
-> In early stages, there will be frequent breaking changes, please pin the version number.
+> [!NOTE]
+> The project is in early development. Please pin the version when using it.
 
 via NPM:
 
 ```bash
-npm create psytask # create a project
-```
-
-```bash
-npm install psytask # only framework
-npm install @psytask/component vanjs-core vanjs-ext # optional: use VanJS
+npm create psytask # optional: use template
+npm install psytask # only package
+npm install @psytask/component vanjs-core vanjs-ext # optional: use components
 ```
 
 via CDN:
@@ -78,8 +75,8 @@ via CDN:
 
 ## Usage
 
-The psychology tasks are just like PPTs, they both have a series of scenes.
-So writing a task only requires 2 steps: creating and showing scene.
+The psychology tasks are just like PPTs; they both have a series of scenes.
+So writing a task only requires 2 steps: creating and showing scenes.
 
 ### Create Scene
 
@@ -171,15 +168,15 @@ dc.final(); // file content
 dc.download(); // download file
 ```
 
-## Learn more
+## Learn More
 
 ### Component
 
 It a function
-that inputs **Props** and outputs a object includes **Node** and **Data Getter**:
+that inputs **Props** and outputs an object includes **Node** and **Data Getter**:
 
-- **Props** means show params that control the display of the scene.
-- **Node** is the string or element or array, which be mounted to the scene root element.
+- **Props** means the show parameters that control the display of the scene.
+- **Node** is a string or element, or array, that is mounted to the scene root element.
 - **Data Getter** is used to get generated data.
 
 ```js
@@ -193,7 +190,7 @@ const Component = (props) => ['text node', document.createElement('div')];
 ```
 
 > [!CAUTION]
-> You shouldn't modify props whatever, as it may change the default props.
+> You shouldn't modify props, whatever, as it may change the default props.
 > See one-way data flow in [Redux](https://redux.js.org/tutorials/fundamentals/part-2-concepts-data-flow) and [Vue](https://vuejs.org/guide/components/props.html#one-way-data-flow).
 
 A practical example:
@@ -223,7 +220,7 @@ const Component =
       .on('show', () => {
         data = { response_key: '', response_time: 0 };
       })
-      // remove DOM event listenr on dispose
+      // remove DOM event listener on dispose
       .on('dispose', cleanup);
 
     // Return the element and data getter
@@ -238,27 +235,25 @@ const Component =
 ```
 
 > [!TIP]
-> use [JSDoc Comment](https://www.typescriptlang.org/docs/handbook/jsdoc-supported-types.html) to get type hint in JavaScript.
+> Use [JSDoc Comment](https://www.typescriptlang.org/docs/handbook/jsdoc-supported-types.html) to get type hint in JavaScript.
 
 ### Setup
 
-When you call `app.scene(Component, { adapter, defaultProps })`,
-it will use `adapter.render` to call `Component` with `defaultProps` once,
-then **Node** will be mount to `this.root`.
+When you call `app.scene(Component, { adapter, defaultProps })`, it will use `adapter.render` to call `Component` with `defaultProps` once, then **Node** will be mounted to `this.root`.
 
 > [!NOTE]
-> the component will be called only once, the following DOM update will be triggered by **Props** update. See [reactivity](#reactivity).
+> The component will be called only once; the following DOM update will be triggered by the **Props** update. See [reactivity](#reactivity).
 
 ### Show
 
-When you call `await scene.show(patchProps)`, it will excute the following process:
+When you call `await scene.show(patchProps)`, it will execute the following process:
 
 - Update props: merge patch props with default props to update current props, which will trigger [reactivity](#reactivity) update.
 - Listeners added by `this.on('show')` will be called.
 - Display and focus `this.root`, it will be displayed on the screen _in the next frame_.
-- Create timer by `this.options.timer` and wait it to stop.
-- Listeners added by `this.on('frame')` will be called when timer is running.
-- Hide `this.root` when timer is stoped, it will be hidden on the screen _in the next frame_.
+- Create a timer by `this.options.timer` and wait for it to stop.
+- Listeners added by `this.on('frame')` will be called when the timer is running.
+- Hide `this.root` when the timer is stopped, it will be hidden on the screen _in the next frame_.
 - Listeners added by `this.on('close')` will be called.
 - Merge the timer records and the data from **Data Getter**.
 
@@ -275,7 +270,7 @@ Better to see: [VanJS tutorial](https://vanjs.org/tutorial), [Vue reactivity](ht
 
 ## [Benchmark](https://bluebonesx.github.io/psytask/benchmark/)
 
-The bunlde size of PsyTask is 1/12 of labjs, 1/50 of jspsych, and 1/260 of psychojs.
+The bundle size of PsyTask is 1/12 of labjs, 1/50 of jspsych, and 1/260 of psychojs.
 
 ```mermaid
 xychart

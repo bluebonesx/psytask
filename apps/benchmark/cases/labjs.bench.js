@@ -15,9 +15,12 @@ export default async (ctx) => {
   ctx.root.style.lineHeight = '100dvh';
   const flow = new app.flow.Loop({
     el: ctx.root,
-    templateParameters: Array.from({ length: ctx.config.count }, (_, i) => ({
-      text: ((i / ctx.config.count) * 100).toFixed(2) + '%',
-    })),
+    templateParameters: Array.from(
+      { length: ctx.config.count + 1 },
+      (_, i) => ({
+        text: ((i / ctx.config.count) * 100).toFixed(2) + '%',
+      }),
+    ),
     /** @param {{ text: string }} param */
     template(param) {
       return new app.html.Screen({

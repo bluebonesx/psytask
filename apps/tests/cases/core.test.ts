@@ -10,7 +10,7 @@ import {
 } from '@psytask/core';
 import { on } from 'psytask';
 import type { LooseObject } from 'shared/types';
-import { map } from 'shared/utils';
+import { map, rAF } from 'shared/utils';
 import van from 'vanjs-core';
 import { reactive } from 'vanjs-ext';
 import {
@@ -19,6 +19,7 @@ import {
   expect,
   expect_error,
   mock_event,
+  nextFrame,
   sleep,
 } from './utils';
 
@@ -177,19 +178,22 @@ export const _Scene = {
           .on('frame', () => counts.frame++),
         ''
       ),
+      {
+        timer: () => createTimer((_, records) => records.length == 2),
+      },
     );
     expect(counts, { show: 0, close: 0, frame: 0 }, 1);
 
     await s.show();
     expect(counts.show, 1);
     expect(counts.close, 1);
-    expect(counts.frame > 0);
+    expect(counts.frame, 2);
 
     counts.frame = 0;
     await s.show();
     expect(counts.show, 2);
     expect(counts.close, 2);
-    expect(counts.frame > 0);
+    expect(counts.frame, 2);
   },
   async 'show - display DOM'() {
     const node = div('world');
@@ -208,26 +212,6 @@ export const _Scene = {
     expect(node.textContent, 'world');
     expect(node.getBoundingClientRect().width, 0);
   },
-  async 'show - return data'() {
-    using s = DefaultScene((p: {}) => '', {
-      timer: () => createTimer(() => true),
-    });
-
-    const data1 = await s.show();
-    expect(data1.frame_times.length, 1);
-    expect(typeof data1.frame_times[0], 'number');
-
-    const data2 = await s.show();
-    expect(data2.frame_times.length, 1);
-    expect(typeof data2.frame_times[0], 'number');
-    expect(data1.frame_times[0] !== data2.frame_times[0]);
-  },
-  // async 'show - repeat call'() {
-  //   await expect_error(async () => {
-  //     using s = DefaultScene((p: {}) => '');
-  //     await Promise.all([s.show(), s.show()]);
-  //   });
-  // },
   async 'show - multi call'() {
     const frame_times: number[] = [];
     using s = DefaultScene(
@@ -248,7 +232,7 @@ export const _Scene = {
       const p = s.show();
       s.close();
       const data = await p;
-      expect(data.frame_times, [], 1);
+      expect(data.frame_times.length, 0);
     }
     {
       using s = DefaultScene((p: {}) => {
@@ -257,7 +241,7 @@ export const _Scene = {
         return '';
       });
       const data = await s.show();
-      expect(data.frame_times, [], 1);
+      expect(data.frame_times.length, 0);
     }
   },
   async 'close - with DOM listeners'() {
@@ -280,6 +264,90 @@ export const _Scene = {
     mock_event(s.root, 'keydown');
     await sleep(10);
     await Promise.race([p, Promise.reject('timeout')]);
+  },
+  async 'data - frame times'() {
+    // no frames
+    {
+      let frameCount = 0;
+      using s = DefaultScene((p: {}) => '', {
+        timer: () => createTimer(() => true),
+      }).on('frame', () => frameCount++);
+
+      const data1 = await s.show();
+      expect(frameCount, 0);
+      expect(data1.frame_times.length, 0);
+
+      const data2 = await s.show(); // one frame
+      expect(frameCount, 1);
+      expect(data2.frame_times.length, 1);
+    }
+
+    // has frames
+    {
+      let frameCount = 0;
+      using s = DefaultScene((p: {}) => '', {
+        timer: () => createTimer((_, records) => records.length > 2),
+      }).on('frame', () => frameCount++);
+
+      const data1 = await s.show();
+      expect(frameCount, 3);
+      expect(data1.frame_times.length, 3);
+      expect(typeof data1.frame_times[0], 'number');
+
+      const data2 = await s.show();
+      expect(frameCount, 6);
+      expect(data2.frame_times.length, 3);
+      expect(typeof data2.frame_times[0], 'number');
+      expect(data1.frame_times[0] !== data2.frame_times[0]);
+    }
+  },
+  async 'data - start time'() {
+    using s = DefaultScene((p: {}) => '', {
+      timer: () => createTimer((_, records) => records.length > 2),
+    }).on('frame', (time) => performance.mark('f-' + time));
+
+    // sole show
+    {
+      let startTime = NaN;
+      rAF((time) => (startTime = time) && performance.mark('s-' + time));
+      const { frame_times } = await s.show();
+      expect(frame_times[0], startTime);
+    }
+
+    // delay show
+    {
+      const data1 = await s.show();
+      await sleep(0);
+      const data2 = await s.show();
+      expect(
+        data1.frame_times[data1.frame_times.length - 1]! <
+          data2.frame_times[0]!,
+      );
+    }
+
+    // multi show
+    {
+      const data1 = await s.show();
+      const data2 = await s.show();
+      expect(
+        data1.frame_times[data1.frame_times.length - 1]! <
+          data2.frame_times[0]!,
+      );
+    }
+
+    // rAF callback
+    {
+      let startTime = NaN,
+        records: number[] = [];
+      rAF((time) => {
+        startTime = time;
+        s.show().then(({ frame_times }) => (records = frame_times));
+      });
+
+      await nextFrame();
+      await sleep(1e2);
+      expect(records[0], startTime);
+    }
   },
 };
 export const _Adapter = {
@@ -543,15 +611,15 @@ export const _Timer = {
       {
         defaultProps: {},
         timer: () =>
-          createTimer((records) => {
+          createTimer((time, records) => {
             frame_count.timer++;
-            return records[records.length - 1]! - records[0]! > 100; // timeout after 100ms
+            return time - records[0]! > 100; // timeout after 100ms
           }),
       },
     );
     await s.show();
     expect(frame_count.hook > 0);
-    expect(frame_count.timer, frame_count.hook);
+    expect(frame_count.timer, frame_count.hook + 1);
   },
   async 'off frame'() {
     let frame_count = 0;

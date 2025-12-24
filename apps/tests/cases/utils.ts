@@ -24,7 +24,7 @@ export const $ = ((root: HTMLElement, selector: string) =>
   <T extends HTMLElement>(root: HTMLElement, selector: string): T;
 };
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-export const nextFrame = () => new Promise((r) => rAF(r));
+export const nextFrame = () => new Promise<DOMHighResTimeStamp>((r) => rAF(r));
 export const DefaultScene = <T extends MaybeGenericComponent>(
   ...[comp, options]: ConstructorParameters<typeof Scene<T>> extends [
     infer L,

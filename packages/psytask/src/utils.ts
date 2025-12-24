@@ -96,7 +96,7 @@ export const defaultProps = <
  */
 export const detectFPS = async (options: {
   root: HTMLElement;
-  frames_count: number;
+  frame_count: number;
   leave_alert: string;
 }) => {
   const el = mount(
@@ -104,10 +104,10 @@ export const detectFPS = async (options: {
     options.root,
   );
   const cleanup = onPageLeave(() => (alert(options.leave_alert), history.go()));
-  const records = await createTimer((records) => {
-    const progress = records.length / (options.frames_count + 1); // +1 to record durations
-    el.innerText = `Detecting FPS... ${(progress * 100).toFixed(0)}%`;
-    return progress >= 1;
+  const records = await createTimer((time, records) => {
+    const progress = records.length / options.frame_count;
+    el.textContent = `Detecting FPS... ${(progress * 100).toFixed(0)}%`;
+    return progress >= 1 && (records.push(time), true);
   }).start();
   el.remove();
   cleanup();
