@@ -39,6 +39,8 @@ const setCurrentFrameTime = (time: number) => (
   rAF(setCurrentFrameTime)
 );
 /**
+ * Create {@link requestAnimationFrame rAF} timer
+ *
  * @example Basic usage
  *
  * ```ts
@@ -54,6 +56,8 @@ export const createTimer = (
    * Return true to stop timer
    *
    * @param time Current frame time
+   * @param records History frame times, the first frame means the first frame
+   *   that triggers VSync
    */
   shouldStop: (time: number, records: TimerRecords) => boolean,
 ) => {
