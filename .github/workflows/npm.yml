@@ -1,0 +1,16 @@
+name: Publish
+on:
+  # push:
+  #   tags:
+  #     - '*'
+  workflow_dispatch:
+jobs:
+  publish-npm:
+    runs-on: ubuntu-24.04
+    env:
+      NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun ci
+      - run: bun run publish

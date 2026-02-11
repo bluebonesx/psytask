@@ -1,4 +1,4 @@
-name: CI
+name: Deploy to page
 on:
   push:
     tags:
@@ -12,7 +12,7 @@ concurrency:
   group: pages
   cancel-in-progress: false
 jobs:
-  build-pages:
+  build:
     timeout-minutes: 3
     runs-on: ubuntu-24.04
     steps:
@@ -26,8 +26,8 @@ jobs:
         with:
           path: dist
 
-  deploy-pages:
-    needs: build-pages
+  deploy:
+    needs: build
     runs-on: ubuntu-24.04
     environment:
       name: github-pages
@@ -37,14 +37,4 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-  publish-npm:
-    if: contains(github.ref, 'refs/tags/')
-    needs: build-pages
-    runs-on: ubuntu-24.04
-    env:
-      NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
-      - run: bun ci
-      - run: bun run publish
+
