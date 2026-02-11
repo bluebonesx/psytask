@@ -29,6 +29,7 @@ type UserConfig = {
   watchItems?: string[];
   before?: () => MaybePromise<void>;
   after?: () => MaybePromise<void>;
+  resolve?: (path: string) => string | null;
 };
 export type Project = {
   root: string;

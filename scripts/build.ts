@@ -2,9 +2,9 @@ import commonjs from '@rollup/plugin-commonjs';
 import resolve from '@rollup/plugin-node-resolve';
 import esbuild from 'esbuild';
 import { walk } from 'estree-walker';
-import fs from 'fs/promises';
 import MagicString from 'magic-string';
-import path from 'path';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import * as rollup from 'rollup';
 import { dts } from 'rollup-plugin-dts';
 import {
@@ -34,6 +34,7 @@ type BuildConfig = {
   minify?: boolean;
   sourcemap?: boolean;
   banner?: string;
+  resolve?(path: string): string | null;
   /** Only for app */
   html?: Parameters<typeof generateHtml>[0];
 };
@@ -93,6 +94,7 @@ const resolveProjectConfig = async (proj: Project): Promise<BuildConfig[]> => {
         minify: false,
         external: deps,
         banner,
+        resolve: proj.userConfig?.resolve,
       },
       // Browser (Minified)
       {
@@ -102,6 +104,7 @@ const resolveProjectConfig = async (proj: Project): Promise<BuildConfig[]> => {
         external: Object.keys(sharedImportmap),
         banner,
         sourcemap: __DEV__,
+        resolve: proj.userConfig?.resolve,
       },
     ];
   } else {
@@ -122,6 +125,7 @@ const resolveProjectConfig = async (proj: Project): Promise<BuildConfig[]> => {
         sourcemap: __DEV__,
         external: Object.keys(importmap),
         html: { title: appTitle, importmap, styles },
+        resolve: proj.userConfig?.resolve,
       },
     ];
   }
@@ -168,21 +172,35 @@ const BunBuilder: Builder = (configs) =>
         banner: cfg.banner,
         naming: cfg.output,
         splitting: true,
-        plugins: cfg.html && [
-          {
-            name: 'generate index html',
-            setup(build) {
-              build.onResolve({ filter: /^index.html$/ }, () => ({
-                path: 'html',
-                namespace: 'virtual',
-              }));
-              build.onLoad({ filter: /^html$/, namespace: 'virtual' }, () => ({
-                contents: generateHtml(cfg.html!),
-                loader: 'html',
-              }));
+        plugins: (
+          [
+            cfg.resolve && {
+              name: 'custom resolve',
+              setup(build) {
+                build.onResolve({ filter: /[\s\S]+/ }, (e) => ({
+                  ...e,
+                  path: cfg.resolve!(e.path) ?? e.path,
+                }));
+              },
             },
-          },
-        ],
+            cfg.html && {
+              name: 'generate index html',
+              setup(build) {
+                build.onResolve({ filter: /^index.html$/ }, () => ({
+                  path: 'html',
+                  namespace: 'virtual',
+                }));
+                build.onLoad(
+                  { filter: /^html$/, namespace: 'virtual' },
+                  () => ({
+                    contents: generateHtml(cfg.html!),
+                    loader: 'html',
+                  }),
+                );
+              },
+            },
+          ] as (false | Bun.BunPlugin)[]
+        ).filter((e) => !!e),
       });
       if (__DEV__) return;
       for (const output of outputs)
@@ -275,6 +293,7 @@ const RollupBuilder: Builder = (() => {
     Promise.all(
       configs.map(async (cfg) => {
         const plugins: rollup.InputPluginOption = [
+          cfg.resolve && { name: 'custom resolve', resolveId: cfg.resolve },
           ...sharedPlugins,
           {
             name: 'esbuild',

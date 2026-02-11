@@ -11,8 +11,8 @@ import {
   modify,
   mount,
 } from 'shared/utils';
-import { KeyboardListenerAPI } from '../../node_modules/jspsych/src/modules/plugin-api/KeyboardListenerAPI';
-import { TimeoutAPI } from '../../node_modules/jspsych/src/modules/plugin-api/TimeoutAPI';
+import { KeyboardListenerAPI } from 'internal:jspsych:src/modules/plugin-api/KeyboardListenerAPI.ts';
+import { TimeoutAPI } from 'internal:jspsych:src/modules/plugin-api/TimeoutAPI.ts';
 
 const div = (
   props: Omit<Partial<HTMLElementTagNameMap['div']>, 'style'> & {
