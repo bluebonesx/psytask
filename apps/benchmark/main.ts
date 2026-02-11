@@ -1,3 +1,4 @@
+/// <reference types='shared/env' />
 import { glob } from 'shared/macro' with { type: 'macro' };
 import { doc, ERR, error_normalize, mount, tags } from 'shared/utils';
 
