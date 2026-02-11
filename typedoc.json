@@ -8,6 +8,7 @@
     "skipErrorChecking": true
   },
   "name": "PsyTask | API Docs",
+  "cleanOutputDir": false,
   "out": "dist",
   "includeVersion": true,
   "useTsLinkResolution": true,
@@ -17,9 +18,9 @@
       "devicePixelRatio": "https://developer.mozilla.org/docs/Web/API/Window/devicePixelRatio",
       "innerWidth": "https://developer.mozilla.org/docs/Web/API/Window/innerWidth",
       "Disposable": "https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Symbol/dispose",
-      "localStorage": "https://developer.mozilla.org/docs/Web/API/Window/localStorage"
+      "localStorage": "https://developer.mozilla.org/docs/Web/API/Window/localStorage",
+      "requestAnimationFrame": "https://developer.mozilla.org/docs/Web/API/Window/requestAnimationFrame"
     }
   },
   "plugin": ["typedoc-plugin-mdn-links", "typedoc-github-theme"]
-  // "theme": "fresh"
 }

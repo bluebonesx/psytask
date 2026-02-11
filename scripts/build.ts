@@ -144,7 +144,8 @@ const bundleDts = async (cwd: string) => {
     file: path.join(cwd, 'dist/index.d.ts'),
     format: 'esm',
   });
-  if (__DEV__) return;
+
+  // show bundle size
   for (const chunkOrAsset of output) {
     log(
       `  ${cyan(chunkOrAsset.fileName)}  ${
@@ -202,7 +203,8 @@ const BunBuilder: Builder = (configs) =>
           ] as (false | Bun.BunPlugin)[]
         ).filter((e) => !!e),
       });
-      if (__DEV__) return;
+
+      // show bundle size
       for (const output of outputs)
         log(
           `  ${cyan(path.relative('dist', output.path))}  ${
@@ -337,7 +339,8 @@ const RollupBuilder: Builder = (() => {
           sourcemap: cfg.sourcemap,
           banner: cfg.banner,
         });
-        if (__DEV__) return;
+
+        // show bundle size
         for (const chunkOrAsset of output) {
           log(
             `  ${cyan(chunkOrAsset.fileName)}  ${
@@ -356,6 +359,11 @@ const RollupBuilder: Builder = (() => {
 export const buildProject = async (proj: Project, clear = !__DEV__) => {
   if (proj.state === 1) return;
   proj.state = 1; // built
+
+  // build deps
+  for (const dep of proj.deps) await buildProject(dep);
+
+  // build self
   using _ = withCwd(proj.path);
 
   log(blue(`Building ${proj.name}`));
@@ -364,13 +372,7 @@ export const buildProject = async (proj: Project, clear = !__DEV__) => {
   // fallback to package.json build script
   if (!proj.userConfig) {
     if (proj.pkgJson.scripts?.build) {
-      const code = await Bun.spawn({
-        cwd: proj.path,
-        cmd: ['bun', 'run', 'build'],
-        stdout: 'inherit',
-      }).exited;
-      if (code === 0) return;
-      throw Error('Build failed: ' + proj.name);
+      await Bun.$`bun run build`;
     }
   }
 
@@ -391,8 +393,7 @@ const buildAll = async () => {
       cyan(projects.reduce((acc, e) => acc + ' ' + e.name, '')),
   );
 
-  // await fs.rm('dist', { recursive: true, force: true });
-  await Bun.$`bun docs`;
+  await fs.rm('dist', { recursive: true, force: true });
   await fs.mkdir('dist/public', { recursive: true });
 
   for (const proj of projects) {
@@ -403,6 +404,8 @@ const buildAll = async () => {
       { recursive: true },
     );
   }
+
+  await Bun.$`bun docs`;
 };
 
 // CLI Usage: bun run build.ts [project-name]
