@@ -14,7 +14,7 @@ import {
 } from 'playwright';
 import { __DEV__, __ROOT__, red, yellow } from './utils';
 
-const prefix = `http://127.0.0.1:3000`;
+const prefix = `http://127.0.0.1:3000/psytask`;
 const logLevelColors: {
   [K in ReturnType<ConsoleMessage['type']>]?: (msg: string) => string;
 } = { error: red, warning: yellow /* info: green, log: cyan, debug: blue  */ };

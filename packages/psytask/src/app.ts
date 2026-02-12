@@ -42,6 +42,7 @@ const prefix2type = {
   key: 'keydown',
   mouse: 'mousedown',
 } satisfies Record<string, keyof HTMLElementEventMap>;
+const defaultAdapter = createComponentAdapter((e) => e);
 
 export class App<
   T extends { frame_ms: number } = { frame_ms: number },
@@ -133,23 +134,22 @@ export class App<
         ]
       : never
   ) {
+    const root = opts.root ?? div();
+    root.classList.add('psytask-scene');
+    root.oncontextmenu = (e) => e.preventDefault();
+
     const timer_condition: Parameters<typeof createTimer>[0] = (
       cur_frame_time,
       records,
     ) =>
       opts.duration != null &&
       cur_frame_time - records[0]! >= opts.duration - this.data.frame_ms / 2;
+
     const options = {
-      root: mount(
-        div({
-          className: 'psytask-scene',
-          oncontextmenu: (e) => e.preventDefault(),
-        }),
-        this.root,
-      ),
-      adapter: createComponentAdapter((e) => e),
+      adapter: defaultAdapter,
       timer: () => createTimer(timer_condition),
       ...opts,
+      root: mount(root, this.root),
     };
     const scene = new Scene<T>(component, options).on('close', () =>
       $Object.keys(opts).map((key) => (opts[key] = options[key])),
