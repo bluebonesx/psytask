@@ -20,6 +20,7 @@ import {
 import van from 'vanjs-core';
 import {
   $,
+  DefaultScene,
   expect,
   expect_closeTo,
   mock_changeDPR,
@@ -1089,5 +1090,15 @@ export const _VirtualChinrest = {
     }
 
     localStorage.removeItem(VirtualChinrest.key); // clean up
+  },
+};
+
+const __typecheck__ = {
+  async Loader() {
+    using app = await createApp();
+    using scene = app.scene(generic(Loader), { defaultProps: { urls: [] } });
+    const { blobs } = await scene.show({ urls: ['', ''] });
+    const __should_be_blob_tuple__: [Blob, Blob] =
+      [] as unknown as typeof blobs & {};
   },
 };

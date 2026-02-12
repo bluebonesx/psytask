@@ -14,7 +14,9 @@ const { li, ul } = van.tags;
  * Basic usage
  *
  * ```ts
- * using loader = app.scene(Loader, { urls: ['a.png', 'b.json'] });
+ * using loader = app.scene(generic(Loader), {
+ *   defaultProps: { urls: ['a.png', 'b.json'] },
+ * });
  * const { blobs, error } = await loader.show();
  * if (error) throw error;
  *
@@ -25,7 +27,9 @@ const { li, ul } = van.tags;
  * Auto change resources
  *
  * ```ts
- * using loader = app.scene(Loader, { urls: [] });
+ * using loader = app.scene(generic(Loader), {
+ *   defaultProps: { urls: [] },
+ * });
  *
  * let result;
  * for (let i = 0; i < 5; i++) {
@@ -37,17 +41,13 @@ const { li, ul } = van.tags;
  * const imageUrl = URL.createObjectURL(result.blobs[0]);
  * ```
  */
-export const Loader = <const T extends string[]>(props: {
-  urls: Readonly<T>;
-}) => {
+export const Loader = <const T extends string[]>(props: { urls: T }) => {
   let result: { blobs: null; error: Error } | { blobs: Blob[]; error: null } = {
     blobs: [],
     error: null,
   };
   const views = reactive<string[]>([]);
-  const ctx = getCurrentScene();
-
-  ctx.on('show', async () => {
+  const ctx = getCurrentScene().on('show', async () => {
     const urls = props.urls;
     views.splice(0, views.length, ...urls);
     if (urls.length === 0)
