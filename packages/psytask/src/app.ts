@@ -21,8 +21,8 @@ mount(style(), doc.head).innerText = `.psytask-scene{${css({
 })}}.psytask-center{${css({
   display: 'flex',
   'flex-direction': 'column',
-  'align-items': 'center',
-  'justify-content': 'center',
+  'align-items': 'safe center',
+  'justify-content': 'safe center',
   'white-space': 'pre-wrap',
   height: '100%',
 })}}`;

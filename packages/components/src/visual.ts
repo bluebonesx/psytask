@@ -208,6 +208,17 @@ const Triangles = (color: string, size = 6) =>
     }),
   );
 
+/**
+ * @example
+ *
+ * Modify css
+ *
+ * ```css
+ * #physical-width-detector {
+ *   color: #000;
+ * }
+ * ```
+ */
 export const PhysicalWidthDetector = adapter.wrap(
   (props: {
     line_distance_pix?: number;
@@ -268,6 +279,7 @@ Or, input the pixels per centimeter (pix/cm) directly if you know.`,
     return {
       node: form(
         {
+          id: 'physical-width-detector',
           class: 'psytask-center',
           style: css({ margin: 'auto', width: 'fit-content' }),
           onsubmit: (e) => (e.preventDefault(), ctx.close()),
@@ -321,6 +333,17 @@ Or, input the pixels per centimeter (pix/cm) directly if you know.`,
     };
   },
 );
+/**
+ * @example
+ *
+ * Modify css
+ *
+ * ```css
+ * #view-distance-detector {
+ *   color: #000;
+ * }
+ * ```
+ */
 export const ViewDistanceDetector = adapter.wrap(
   (props: {
     pix_per_cm: number;
@@ -362,11 +385,12 @@ Click again when the red circle disappears.`,
 
     const isMoving = van.state<0 | 1>(0);
     const ctx = getCurrentScene();
-    ctx.on('frame', () => isMoving.val && state.move_width_pix++); //NOTE: speed prop?
+    ctx.on('frame', () => isMoving.val && state.move_width_pix++); // NOTE:: speed prop?
 
     return {
       node: form(
         {
+          id: 'view-distance-detector',
           class: 'psytask-center',
           style: css({ margin: 'auto', width: 'fit-content' }),
           onsubmit: (e) => (e.preventDefault(), ctx.close()),
