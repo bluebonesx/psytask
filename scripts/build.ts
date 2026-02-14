@@ -144,6 +144,7 @@ const bundleDts = async (cwd: string) => {
     file: path.join(cwd, 'dist/index.d.ts'),
     format: 'esm',
   });
+  if (__DEV__) return;
 
   // show bundle size
   for (const chunkOrAsset of output) {
@@ -203,6 +204,7 @@ const BunBuilder: Builder = (configs) =>
           ] as (false | Bun.BunPlugin)[]
         ).filter((e) => !!e),
       });
+      if (__DEV__) return;
 
       // show bundle size
       for (const output of outputs)
@@ -339,6 +341,7 @@ const RollupBuilder: Builder = (() => {
           sourcemap: cfg.sourcemap,
           banner: cfg.banner,
         });
+        if (__DEV__) return;
 
         // show bundle size
         for (const chunkOrAsset of output) {

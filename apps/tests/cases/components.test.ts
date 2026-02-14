@@ -821,7 +821,6 @@ export const _VirtualChinrest = {
 
     using app = await createApp();
     using vc = app.scene(VirtualChinrest, {
-      adapter,
       defaultProps: { usePreviousData: true },
     });
     VirtualChinrest.set({ pix_per_cm, distance_cm });
@@ -853,7 +852,7 @@ export const _VirtualChinrest = {
   },
   async 'correct prev data'() {
     using app = await createApp();
-    using vc = app.scene(VirtualChinrest, { adapter, defaultProps: {} });
+    using vc = app.scene(VirtualChinrest, { defaultProps: {} });
     await sleep(0);
 
     let p: Promise<unknown>;
@@ -903,7 +902,7 @@ export const _VirtualChinrest = {
   },
   async 'incorrect prev data - lack key'() {
     using app = await createApp();
-    using vc = app.scene(VirtualChinrest, { adapter, defaultProps: {} });
+    using vc = app.scene(VirtualChinrest, { defaultProps: {} });
 
     let p: Promise<unknown>;
     using confirmParams = spy_functionCall(window, 'confirm', () => false);
@@ -954,7 +953,7 @@ export const _VirtualChinrest = {
   },
   async 'incorrect prev data - error value'() {
     using app = await createApp();
-    using vc = app.scene(VirtualChinrest, { adapter, defaultProps: {} });
+    using vc = app.scene(VirtualChinrest, { defaultProps: {} });
 
     let p: Promise<unknown>;
     using confirmParams = spy_functionCall(window, 'confirm', () => false);
@@ -1009,7 +1008,7 @@ export const _VirtualChinrest = {
   },
   async 'incorrect prev data - NaN value'() {
     using app = await createApp();
-    using vc = app.scene(VirtualChinrest, { adapter, defaultProps: {} });
+    using vc = app.scene(VirtualChinrest, { defaultProps: {} });
 
     let p: Promise<unknown>;
     using confirmParams = spy_functionCall(window, 'confirm', () => false);
@@ -1051,7 +1050,7 @@ export const _VirtualChinrest = {
   },
   async 'no prev data'() {
     using app = await createApp();
-    using vc = app.scene(VirtualChinrest, { adapter, defaultProps: {} });
+    using vc = app.scene(VirtualChinrest, { defaultProps: {} });
 
     let p: Promise<unknown>;
     using confirmParams = spy_functionCall(window, 'confirm', () => false);
@@ -1111,13 +1110,21 @@ export const _VirtualChinrest = {
 
 或者，如果你知道的话，直接输入当前屏幕距离你眼睛的距离（cm）`,
     };
-    using s = app
-      .scene(VirtualChinrest, { adapter, defaultProps: { i18n } })
-      .on('show', () => s.close());
-    await s.show();
 
-    const html = s.root.innerHTML;
-    expect(html.includes(i18n.confirmation));
+    VirtualChinrest.set({ pix_per_cm: 50, distance_cm: 40 });
+    using vc = app.scene(VirtualChinrest, { defaultProps: { i18n } });
+
+    using confirmParams = spy_functionCall(window, 'confirm', () => false);
+    const p = vc.show();
+
+    expect(confirmParams.length, 1);
+    expect(confirmParams[0]!.length, 1);
+    expect(confirmParams[0]![0]!.includes(i18n.confirmation));
+
+    await mock_VCtest(vc);
+    await Promise.race([p, Promise.reject(Error('timeout'))]);
+
+    const html = vc.root.innerHTML;
     expect(html.includes(i18n.ok));
     expect(html.includes(i18n.line_distance));
     expect(html.includes(i18n.pix_per_cm));
@@ -1126,6 +1133,8 @@ export const _VirtualChinrest = {
     expect(html.includes(i18n.view_distance));
     expect(html.includes(i18n.view_distance_title));
     expect(html.includes(i18n.view_distance_text));
+
+    localStorage.removeItem(VirtualChinrest.key);
   },
 };
 
