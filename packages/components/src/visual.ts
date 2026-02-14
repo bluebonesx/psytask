@@ -263,8 +263,7 @@ Or, input the pixels per centimeter (pix/cm) directly if you know.`,
     );
 
     let sx = 0; // start x, no drag if 0
-    const ctx = getCurrentScene();
-    ctx.on('show', () => {
+    const ctx = getCurrentScene().on('show', () => {
       const cleanups = [
         on(ctx.root, 'pointerup', () => (sx = 0)),
         on(
@@ -384,8 +383,10 @@ Click again when the red circle disappears.`,
     const right = 32;
 
     const isMoving = van.state<0 | 1>(0);
-    const ctx = getCurrentScene();
-    ctx.on('frame', () => isMoving.val && state.move_width_pix++); // NOTE:: speed prop?
+    const ctx = getCurrentScene().on(
+      'frame',
+      () => isMoving.val && state.move_width_pix++, // TODO: speed prop?
+    );
 
     return {
       node: form(
@@ -490,8 +491,6 @@ export const VirtualChinrest = modify(
     /** Internationalization strings */
     i18n?: Record<
       | 'confirmation'
-      | 'yes'
-      | 'no'
       | 'ok'
       | 'line_distance'
       | 'pix_per_cm'
@@ -513,11 +512,13 @@ export const VirtualChinrest = modify(
     const windowWidthDetector = new Scene(PhysicalWidthDetector, {
       ...ctx.options,
       root: mount(Root(), ctx.root),
+      adapter,
       defaultProps: {},
     });
     const viewDistanceDetector = new Scene(ViewDistanceDetector, {
       ...ctx.options,
       root: mount(Root(), ctx.root),
+      adapter,
       defaultProps: {
         pix_per_cm: 0, // overwritten on show
       },
@@ -540,7 +541,9 @@ export const VirtualChinrest = modify(
             if (
               usePreviousData ||
               confirm(
-                `Use previous chinrest data?\n\n${JSON.stringify(data, null, 2)}`,
+                (i18n?.confirmation ?? 'Use previous chinrest data?') +
+                  `\n\n` +
+                  JSON.stringify(data, null, 2),
               )
             ) {
               await ctx.close();

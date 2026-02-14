@@ -1091,6 +1091,42 @@ export const _VirtualChinrest = {
 
     localStorage.removeItem(VirtualChinrest.key); // clean up
   },
+  async 'i18n - chinese'() {
+    using app = await createApp();
+    const i18n = {
+      confirmation: '是否使用之前的测量结果',
+      ok: '确认',
+      line_distance: '两线间距',
+      pix_per_cm: '每厘米像素数',
+      physical_width_title: '物理宽度校准',
+      physical_width_text: `移动红线，使两线间距等于一张银行卡的宽度（8.56 cm）
+或者，输入你自行测量的两线间距（cm）
+
+或者，如果你知道的话，直接输入当前屏幕每厘米的像素数`,
+      view_distance: '视距',
+      view_distance_title: '视距校准',
+      view_distance_text: `保持头部于屏幕中心，闭上右眼，左眼注视黑色方块，保持头部不动
+点击黑色方块，红色圆形将会向左移动
+当红色圆形在视野中消失时，则再次点击黑色方块
+
+或者，如果你知道的话，直接输入当前屏幕距离你眼睛的距离（cm）`,
+    };
+    using s = app
+      .scene(VirtualChinrest, { adapter, defaultProps: { i18n } })
+      .on('show', () => s.close());
+    await s.show();
+
+    const html = s.root.innerHTML;
+    expect(html.includes(i18n.confirmation));
+    expect(html.includes(i18n.ok));
+    expect(html.includes(i18n.line_distance));
+    expect(html.includes(i18n.pix_per_cm));
+    expect(html.includes(i18n.physical_width_title));
+    expect(html.includes(i18n.physical_width_text));
+    expect(html.includes(i18n.view_distance));
+    expect(html.includes(i18n.view_distance_title));
+    expect(html.includes(i18n.view_distance_text));
+  },
 };
 
 const __typecheck__ = {
