@@ -1,6 +1,6 @@
 {
   "name": "psytask",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "type": "module",
   "author": "cubxx",
   "license": "MIT",
@@ -30,7 +30,7 @@
     "url": "https://github.com/bluebonesx/psytask.git"
   },
   "dependencies": {
-    "@psytask/core": "workspace:*"
+    "@psytask/core": "workspace:^"
   },
   "devDependencies": {
     "csstype": "^3.1.3"

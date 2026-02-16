@@ -69,14 +69,14 @@
     },
     "packages/components": {
       "name": "@psytask/components",
-      "version": "1.1.4",
+      "version": "1.1.5",
       "dependencies": {
-        "psytask": "workspace:*",
+        "psytask": "workspace:^",
         "vanjs-core": "catalog:",
         "vanjs-ext": "catalog:",
       },
       "peerDependencies": {
-        "psytask": "workspace:*",
+        "psytask": "workspace:^",
         "vanjs-core": "catalog:",
         "vanjs-ext": "catalog:",
       },
@@ -97,7 +97,7 @@
     },
     "packages/jspsych": {
       "name": "@psytask/jspsych",
-      "version": "1.1.1",
+      "version": "1.1.2",
       "dependencies": {
         "@psytask/core": "workspace:*",
         "auto-bind": "^4.0.0",
@@ -108,9 +108,9 @@
     },
     "packages/psytask": {
       "name": "psytask",
-      "version": "1.2.4",
+      "version": "1.2.5",
       "dependencies": {
-        "@psytask/core": "workspace:*",
+        "@psytask/core": "workspace:^",
       },
       "devDependencies": {
         "csstype": "^3.1.3",
