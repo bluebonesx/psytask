@@ -56,8 +56,8 @@ export const createTimer = (
    * Return true to stop timer
    *
    * @param time Current frame time
-   * @param records History frame times, the first frame means the first frame
-   *   that triggers VSync
+   * @param records History frame times, whose elements represent the start time
+   *   of each frame that triggers VSync
    */
   shouldStop: (time: number, records: TimerRecords) => boolean,
 ) => {
@@ -84,7 +84,15 @@ export const createTimer = (
 
 // component system
 export type NodeLike = string | Node;
-type BuiltinData = { frame_times: TimerRecords };
+type BuiltinData = {
+  /**
+   * History frame times, whose elements represent the start time of each frame
+   * that triggers VSync
+   */
+  frame_times: TimerRecords;
+  /** Real show duration */
+  duration: number;
+};
 type ForbiddenData = { [K in keyof BuiltinData]?: never };
 
 /**
@@ -316,6 +324,7 @@ export class Scene<
     return {
       ...this.emit('close').data?.(),
       frame_times: records,
+      duration: currentFrameTime - records[0]!,
     } satisfies BuiltinData;
   }
 }

@@ -349,6 +349,15 @@ export const _Scene = {
       expect(records[0], startTime);
     }
   },
+  async 'data - duration'() {
+    using s = DefaultScene((p: {}) => '', {
+      timer: () => createTimer((_, records) => records.length > 2),
+    });
+
+    const data1 = await s.show();
+    const data2 = await s.show();
+    expect(data2.frame_times[0]! - data1.frame_times[0]!, data1.duration);
+  },
 };
 export const _Adapter = {
   async 'render - default props'() {

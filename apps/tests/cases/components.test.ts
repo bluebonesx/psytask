@@ -20,7 +20,6 @@ import {
 import van from 'vanjs-core';
 import {
   $,
-  DefaultScene,
   expect,
   expect_closeTo,
   mock_changeDPR,
