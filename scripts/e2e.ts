@@ -33,11 +33,11 @@ const browsers: { type: BrowserType; options?: LaunchOptions }[] = __DEV__
   : [{ type: chromium }, { type: firefox }, { type: webkit }];
 const scripts: Record<
   string,
-  (page: Page, context: BrowserContext) => Promise<void>
+  (id: string, page: Page, context: BrowserContext) => Promise<void>
 > = {
-  async tests(page) {
+  async tests(id, page) {
     await page.locator('button').first().click();
-    await page.evaluate(() => {
+    await page.evaluate((id: string) => {
       const target = document.querySelector('[data-test]');
       if (!target) throw Error('Cannot find target element');
 
@@ -48,7 +48,9 @@ const scripts: Record<
             if (m.type !== 'attributes') return;
             const value = target.getAttribute(m.attributeName!);
             if (value === 'failed')
-              reject(Error(`E2E Failed: ${m.attributeName} is ${value}`));
+              return reject(
+                Error(`${id}: attr ${m.attributeName} is ${value}`),
+              );
             if (value === 'passed') return resolve(0);
           }
         }).observe(target, {
@@ -56,7 +58,7 @@ const scripts: Record<
           attributeFilter: ['data-test'],
         });
       });
-    });
+    }, id);
   },
   benchmark: (() => {
     const durations = __DEV__ ? [17] : [17 /* , 4e2, 7e2, 1e3 */];
@@ -76,7 +78,7 @@ const scripts: Record<
     //     60,
     // );
 
-    return async (page, context) => {
+    return async (id, page, context) => {
       context.on('page', (page) => page.locator('pre').click());
       for (const duration of durations) {
         injectedVar.duration = duration;
@@ -86,7 +88,7 @@ const scripts: Record<
         await page.evaluate(async ({ cases, duration, count }) => {
           //@ts-expect-error
           const fn = window['__BENCHMARK_RUNNER__'];
-          if (!fn) throw Error('Cannot find __BENCHMARK_RUNNER__');
+          if (!fn) throw Error(`${id}: Cannot find __BENCHMARK_RUNNER__`);
           for (const name of cases) await fn({ case: name, count, duration });
         }, injectedVar);
 
@@ -95,7 +97,7 @@ const scripts: Record<
           page.evaluate(() => {
             //@ts-expect-error
             const fn = window['__BENCHMARK_EXPORT__'];
-            if (!fn) throw Error('Cannot find __BENCHMARK_EXPORT__');
+            if (!fn) throw Error(`${id}: Cannot find __BENCHMARK_EXPORT__`);
             return fn();
           }),
         ]);
@@ -133,7 +135,7 @@ await Promise.all(
     });
 
     await page.goto(`${prefix}/${scriptName}/`, { waitUntil: 'networkidle' });
-    await script(page, context);
+    await script(id, page, context);
     await page.close();
     await browser.close();
   }),

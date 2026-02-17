@@ -171,7 +171,7 @@ export const _Scene = {
   async 'listener - scene hooks'() {
     const counts = { show: 0, close: 0, frame: 0 };
     using s = DefaultScene(
-      (p: {}) => (
+      (_: {}) => (
         getCurrentScene()
           .on('show', () => counts.show++)
           .on('close', () => counts.close++)
@@ -228,14 +228,35 @@ export const _Scene = {
   },
   async 'close - immediately'() {
     {
-      using s = DefaultScene((p: {}) => '');
+      await nextFrame();
+      using s = DefaultScene((_: {}) => '');
       const p = s.show();
       s.close();
       const data = await p;
       expect(data.frame_times.length, 0);
     }
     {
-      using s = DefaultScene((p: {}) => {
+      await sleep(1e2);
+      using s = DefaultScene((_: {}) => '');
+      const p = s.show();
+      s.close();
+      const data = await p;
+      expect(data.frame_times.length, 0);
+    }
+
+    {
+      await nextFrame();
+      using s = DefaultScene((_: {}) => {
+        const ctx = getCurrentScene();
+        ctx.on('show', () => ctx.close());
+        return '';
+      });
+      const data = await s.show();
+      expect(data.frame_times.length, 0);
+    }
+    {
+      await sleep(1e2);
+      using s = DefaultScene((_: {}) => {
         const ctx = getCurrentScene();
         ctx.on('show', () => ctx.close());
         return '';
@@ -350,13 +371,27 @@ export const _Scene = {
     }
   },
   async 'data - duration'() {
-    using s = DefaultScene((p: {}) => '', {
-      timer: () => createTimer((_, records) => records.length > 2),
-    });
+    {
+      using s = DefaultScene((_: {}) => '', {
+        timer: () => createTimer((_, records) => records.length > 2),
+      });
 
-    const data1 = await s.show();
-    const data2 = await s.show();
-    expect(data2.frame_times[0]! - data1.frame_times[0]!, data1.duration);
+      const data1 = await s.show();
+      const data2 = await s.show();
+      expect(data2.frame_times[0]! - data1.frame_times[0]!, data1.duration);
+    }
+
+    {
+      using s = DefaultScene((_: {}) => '', {
+        timer: () => createTimer(() => false),
+      });
+
+      setTimeout(() => s.close(), 1e2);
+      const data1 = await s.show();
+      setTimeout(() => s.close(), 1e2);
+      const data2 = await s.show();
+      expect(data2.frame_times[0]! - data1.frame_times[0]!, data1.duration);
+    }
   },
 };
 export const _Adapter = {

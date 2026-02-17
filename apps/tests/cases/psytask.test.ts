@@ -20,6 +20,7 @@ import {
   expect_includes,
   mock_event,
   mock_leaveAndBack,
+  nextFrame,
   sleep,
   spy_browserDownload,
   spy_functionCall,
@@ -233,8 +234,7 @@ export const _Scene = {
 
     // close on
     {
-      using s = app.scene((p: {}) => '', {
-        adapter,
+      using s = app.scene((_: {}) => '', {
         defaultProps: {},
         close_on: 'click',
       });
@@ -247,7 +247,7 @@ export const _Scene = {
         1,
       );
       mock_event(s.root, 'click');
-      await sleep(0);
+      await nextFrame();
       await Promise.race([p, Promise.reject(Error('not closed'))]);
       expect(
         map(params, (v) => v.length),
@@ -262,7 +262,7 @@ export const _Scene = {
         1,
       );
       mock_event(s.root, 'click');
-      await 0;
+      await nextFrame();
       expect(
         await Promise.race([p, Promise.resolve('not closed')]),
         'not closed',
@@ -283,7 +283,7 @@ export const _Scene = {
         1,
       );
       mock_event(s.root, 'click');
-      await sleep(0);
+      await nextFrame();
       await Promise.race([p, Promise.reject(Error('not closed'))]);
       expect(
         map(params, (v) => v.length),
@@ -296,13 +296,11 @@ export const _Scene = {
     {
       let frame_count = 0;
       using s = app.scene(
-        (p: {}) => {
+        (_: {}) => {
           getCurrentScene().on('frame', () => frame_count++);
           return '';
         },
-
         {
-          adapter,
           defaultProps: {},
           duration: app.data.frame_ms * 10,
         },
@@ -325,8 +323,7 @@ export const _Scene = {
 
     // close on
     {
-      using s = app.scene((p: {}) => '', {
-        adapter,
+      using s = app.scene((_: {}) => '', {
         defaultProps: {},
       });
       using params = spy_listeners(s.root);
@@ -337,7 +334,8 @@ export const _Scene = {
         {},
         1,
       );
-      await s.close();
+      s.close();
+      await nextFrame();
       await Promise.race([p, Promise.reject(Error('not closed'))]);
       expect(
         map(params, (v) => v.length),
@@ -352,7 +350,7 @@ export const _Scene = {
         1,
       );
       mock_event(s.root, 'click');
-      await sleep(0);
+      await nextFrame();
       await Promise.race([p, Promise.reject(Error('not closed'))]);
       expect(
         map(params, (v) => v.length),
@@ -366,7 +364,8 @@ export const _Scene = {
         {},
         1,
       );
-      await s.close();
+      s.close();
+      await nextFrame();
       await Promise.race([p, Promise.reject(Error('not closed'))]);
       expect(
         map(params, (v) => v.length),
@@ -379,37 +378,34 @@ export const _Scene = {
     {
       let frame_count = 0;
       using s = app.scene(
-        (p: {}) => {
+        (_: {}) => {
           getCurrentScene().on('frame', () => frame_count++);
           return '';
         },
-        {
-          adapter,
-          defaultProps: {},
-        },
+        { defaultProps: {} },
       );
 
       let p = s.show();
-      await sleep(1e2);
+      await nextFrame();
       expect(
         await Promise.race([p, Promise.resolve('not closed')]),
         'not closed',
       );
-      await s.close();
+      s.close();
       await p;
 
       const original_frame_count = frame_count;
       frame_count = 0;
-      await s.config({ duration: 16 }).show();
-      expect(frame_count < original_frame_count);
+      await s.config({ duration: 1e2 }).show();
+      expect(frame_count > original_frame_count);
 
       p = s.show();
-      await sleep(1e2);
+      await sleep(0);
       expect(
         await Promise.race([p, Promise.resolve('not closed')]),
         'not closed',
       );
-      await s.close();
+      s.close();
       await p;
     }
   },

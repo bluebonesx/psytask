@@ -25,6 +25,7 @@ import {
   mock_changeDPR,
   mock_event,
   mock_httpbin,
+  nextFrame,
   sleep,
   spy_functionCall,
 } from './utils';
@@ -864,7 +865,7 @@ export const _VirtualChinrest = {
       p = vc.show({ usePreviousData: true });
       expect(confirmParams.length, 0);
       expect(detectorEl.getBoundingClientRect().width == 0);
-      await await 0; // wait close
+      await nextFrame(); // wait close
       await Promise.race([p, Promise.reject(Error('timeout'))]);
     }
     // value is false
@@ -883,7 +884,7 @@ export const _VirtualChinrest = {
       p = vc.show();
       expect(confirmParams.length, 1);
       expect(detectorEl.getBoundingClientRect().width == 0);
-      await await 0;
+      await nextFrame();
       await Promise.race([p, Promise.reject(Error('timeout'))]);
     }
     // value is undefined - cancel

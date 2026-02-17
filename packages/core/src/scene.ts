@@ -32,6 +32,11 @@ export type Timer = {
   stop(): void;
 };
 
+/**
+ * - `undefined`: waiting for launching
+ * - `0`: not in frame
+ * - Other number: current frame time
+ */
 let currentFrameTime: number;
 const setCurrentFrameTime = (time: number) => (
   (currentFrameTime = time),
@@ -66,16 +71,20 @@ export const createTimer = (
     start: (cb) =>
       new Promise((resolve) => {
         const records: number[] = [];
-        const record = (time: number) => (records.push(time), cb?.(time));
-        currentFrameTime && record(currentFrameTime); // first frame
+        currentFrameTime &&
+          (records.push(currentFrameTime), cb?.(currentFrameTime)); // first frame
 
         const frame = (time: number) => {
-          shouldStop(time, records)
-            ? timer.stop()
-            : ((handle = rAF(frame)), record(time));
+          const is_stoped = shouldStop(time, records);
+          records.push(time);
+          is_stoped ? timer.stop() : (cb?.(time), (handle = rAF(frame)));
         };
         let handle = rAF(frame);
-        timer.stop = () => (cancelAnimationFrame(handle), resolve(records));
+        timer.stop = () => {
+          records.pop();
+          cancelAnimationFrame(handle);
+          resolve(records);
+        };
       }),
     stop() {},
   };
@@ -298,10 +307,10 @@ export class Scene<
     ((this.#props = props), (this.data = data));
     root.append(...nodes);
   }
-  /** Add a microtask to close the scene. It is useful when close in 'show' */
-  async close() {
-    await 0;
-    this.#timer.stop();
+  /** Add close task as Microtask if is caled in the frame else next rAF. */
+  close() {
+    const t = this.#timer;
+    (currentFrameTime ? queueMicrotask : rAF)(() => t.stop());
   }
   async #show(patchProps?: Partial<LooseObject>) {
     const { root, defaultProps } = this.options;
