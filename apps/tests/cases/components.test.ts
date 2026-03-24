@@ -1141,9 +1141,10 @@ export const _VirtualChinrest = {
 const __typecheck__ = {
   async Loader() {
     using app = await createApp();
-    using scene = app.scene(generic(Loader), { defaultProps: { urls: [] } });
-    const { blobs } = await scene.show({ urls: ['', ''] });
-    const __should_be_blob_tuple__: [Blob, Blob] =
+    const urls = [] as const;
+    using scene = app.scene(generic(Loader), { defaultProps: { urls } });
+    const { blobs } = await scene.show({ urls: ['', ''] as const });
+    const __should_be_blob_tuple__: readonly [Blob, Blob] =
       [] as unknown as typeof blobs & {};
   },
 };

@@ -41,7 +41,9 @@ const { li, ul } = van.tags;
  * const imageUrl = URL.createObjectURL(result.blobs[0]);
  * ```
  */
-export const Loader = <const T extends string[]>(props: { urls: T }) => {
+export const Loader = <const T extends readonly string[]>(props: {
+  urls: T;
+}) => {
   let result: { blobs: null; error: Error } | { blobs: Blob[]; error: null } = {
     blobs: [],
     error: null,
