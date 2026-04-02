@@ -729,7 +729,7 @@ export const _EventEmitter = {
     let count = 0;
     const ee = new EventEmitter<{ test: string }>().once('test', (e) => {
       expect(e, 'hello');
-      expect_EE_listenerCount(ee, { test: 1 });
+      expect_EE_listenerCount(ee, {});
       count++;
     });
     expect_EE_listenerCount(ee, { test: 1 });
@@ -818,6 +818,16 @@ export const _EventEmitter = {
     ee.emit('test', null);
     expect(count, 3);
     expect_EE_listenerCount(ee, { test: 1 });
+  },
+  async 'emit - inside listener (once)'() {
+    let count = 0;
+    const ee = new EventEmitter<{ test: null }>().once('test', () => {
+      count++;
+      if (count < 3) ee.emit('test', null);
+    });
+    ee.emit('test', null);
+    expect(count, 1);
+    expect_EE_listenerCount(ee, {});
   },
   async 'emit - multi times'() {
     let count = 0;
