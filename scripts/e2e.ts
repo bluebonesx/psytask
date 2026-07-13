@@ -120,19 +120,23 @@ await Promise.all(
     console.log(` ============= ${id} ============= `);
 
     const context = await browser.newContext();
-    const page = (await context.newPage()).on('console', async (msg) => {
-      const type = msg.type();
-      const typeText = logLevelColors[type]?.(`[${type.toUpperCase()}]`);
-      typeText &&
-        console.log(
-          id,
-          typeText,
-          msg.text(),
-          ...(await Promise.all(
-            msg.args().map((h) => h.jsonValue().catch((err) => '' + err)),
-          )),
-        );
-    });
+    const page = (await context.newPage())
+      .on('console', async (msg) => {
+        const type = msg.type();
+        const typeText = logLevelColors[type]?.(`[${type.toUpperCase()}]`);
+        typeText &&
+          console.log(
+            id,
+            typeText,
+            msg.text(),
+            ...(await Promise.all(
+              msg.args().map((h) => h.jsonValue().catch((err) => '' + err)),
+            )),
+          );
+      })
+      .on('pageerror', (err) => {
+        console.log(id, logLevelColors.error?.('[PAGE-ERROR]'), err);
+      });
 
     await page.goto(`${prefix}/${scriptName}/`, { waitUntil: 'networkidle' });
     await script(id, page, context);

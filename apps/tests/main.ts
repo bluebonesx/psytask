@@ -30,6 +30,7 @@ const mods = {
 } satisfies ViewRaw;
 const raw2tree = (raw: ViewRaw): ViewTree =>
   Object.entries(raw).reduce((acc, [name, val]) => {
+    // build leaf
     if (typeof val === 'function') {
       const view: CaseView = reactive({
         render: () =>
@@ -66,6 +67,7 @@ const raw2tree = (raw: ViewRaw): ViewTree =>
               view.state = 'passed';
               view.error = null;
             } catch (err) {
+              console.error(name, err);
               view.state = 'failed';
               view.error = isObject(err) ? noreactive(err) : err;
               throw err;
@@ -78,6 +80,7 @@ const raw2tree = (raw: ViewRaw): ViewTree =>
       });
       return { ...acc, [name]: view };
     }
+    // build tree
     const tree = raw2tree(val);
     const cases = Object.values(tree);
     const view: CaseSetView = reactive({
@@ -116,7 +119,7 @@ const runJob = (job: () => Promise<void>) => {
     window.queueMicrotask(async () => {
       for (const job of todos) {
         try {
-          await sleep(0); // after render pipeline
+          await sleep(1); // after render pipeline and other setTimeout callbacks
           await job();
           todos.delete(job);
         } catch (err) {

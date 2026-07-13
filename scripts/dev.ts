@@ -1,4 +1,4 @@
-import fs from 'fs/promises';
+import fs, { type FileChangeInfo } from 'fs/promises';
 import { networkInterfaces } from 'os';
 import path from 'path';
 import { buildProject } from './build';
@@ -13,6 +13,23 @@ const build = async (proj: Project, clear?: boolean) => {
     console.error(`Build failed for ${proj.name}:`, error);
   }
 };
+const onChanged = (() => {
+  let timer: NodeJS.Timeout | null = null;
+  return async (
+    e: FileChangeInfo<string>,
+    itempath: string,
+    proj: (typeof projects)[number],
+  ) => {
+    timer && clearTimeout(timer);
+    return new Promise<void>((resolve, reject) => {
+      timer = setTimeout(() => {
+        log(yellow(`File changed: ${itempath} ${e.filename}`));
+        proj.state = 0; // not built
+        build(proj).then(resolve, reject); // rebuild
+      }, 1e3);
+    });
+  };
+})();
 const listen = async (proj: (typeof projects)[number]) => {
   log(green(`Listening ${proj.name}`));
   await build(proj, true); // init build
@@ -30,11 +47,9 @@ const listen = async (proj: (typeof projects)[number]) => {
     (async () => {
       const itempath = path.join(proj.path, item);
       if (!(await fs.exists(itempath))) return;
-      for await (const { eventType, filename } of fs.watch(itempath)) {
-        if (filename) {
-          log(yellow(`File changed: ${path.join(item, filename)}`));
-          proj.state = 0; // not built
-          await build(proj); // rebuild
+      for await (const e of fs.watch(itempath)) {
+        if (e.filename && !/^\d+$|~$/.test(e.filename)) {
+          onChanged(e, itempath, proj);
         }
       }
     })();

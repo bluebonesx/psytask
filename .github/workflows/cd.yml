@@ -32,9 +32,9 @@ jobs:
     timeout-minutes: 3
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
-      - uses: actions/configure-pages@v4
+      - uses: actions/configure-pages@v6
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy || true }}
       - run: bun ci
       - run: bun run build
@@ -63,7 +63,7 @@ jobs:
     env:
       NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
       - run: bun ci
       - run: bun run publish ${{ inputs.dev && ' --dev' || '' }}
