@@ -1,7 +1,7 @@
 import { getCurrentScene } from 'psytask';
 import { error_normalize } from 'shared/utils';
 import van from 'vanjs-core';
-import { list, reactive } from 'vanjs-ext';
+import { list, reactive, replace } from 'vanjs-ext';
 import { useFetch } from './hooks';
 
 const { li, ul } = van.tags;
@@ -15,61 +15,77 @@ const { li, ul } = van.tags;
  *
  * ```ts
  * using loader = app.scene(generic(Loader), {
- *   defaultProps: { urls: ['a.png', 'b.json'] },
+ *   defaultProps: { urls: { a: 'a.png', b: 'b.json' } },
  * });
  * const { blobs, error } = await loader.show();
  * if (error) throw error;
  *
- * const imageUrl = URL.createObjectURL(blobs[0]);
- * const jsonData = JSON.parse(await blobs[1].text());
+ * const imageUrl = URL.createObjectURL(blobs.a);
+ * const jsonData = JSON.parse(await blobs.b.text());
  * ```
  *
  * Auto change resources
  *
  * ```ts
  * using loader = app.scene(generic(Loader), {
- *   defaultProps: { urls: [] },
+ *   defaultProps: { urls: {} },
  * });
  *
  * let result;
  * for (let i = 0; i < 5; i++) {
- *   result = await loader.show({ urls: [`resource-${i}.png`] });
+ *   result = await loader.show({ urls: { pic: `resource-${i}.png` } });
  *   if (!result.error) break;
  * }
  * if (result.error) throw result.error;
  *
- * const imageUrl = URL.createObjectURL(result.blobs[0]);
+ * const imageUrl = URL.createObjectURL(result.blobs.pic);
  * ```
  */
-export const Loader = <const T extends readonly string[]>(props: {
+export const Loader = <
+  const T extends { readonly [k: string]: string } | readonly string[],
+>(props: {
   urls: T;
 }) => {
-  let result: { blobs: null; error: Error } | { blobs: Blob[]; error: null } = {
-    blobs: [],
+  let result:
+    | { blobs: null; error: Error }
+    | { blobs: Record<string, Blob>; error: null } = {
+    blobs: {},
     error: null,
   };
   const views = reactive<string[]>([]);
   const ctx = getCurrentScene().on('show', async () => {
     const urls = props.urls;
-    views.splice(0, views.length, ...urls);
-    if (urls.length === 0)
-      return ((result = { blobs: [], error: null }), ctx.close());
+    const keys = Object.keys(urls) as Extract<keyof T, string>[];
+    replace(views, []);
+
+    if (keys.length === 0) {
+      result = { blobs: {}, error: null };
+      ctx.close();
+      return;
+    }
 
     const ac = new AbortController();
-    const promises = urls.map(
-      (url, i) =>
-        new Promise<Blob>((resolve, reject) => {
+    const promises = keys.map(
+      (key, i) =>
+        new Promise<true>((resolve, reject) => {
+          const url = urls[key] as string;
           const res = useFetch({ url, signal: ac.signal });
           van.derive(() => {
             const { status, loading } = res;
-            if (loading)
-              return (views[i] =
+            if (loading) {
+              views[i] =
                 `${url} ⏳` +
                 (status === 'loading'
                   ? `: ${((res.loaded / res.total) * 1e2).toFixed(2)}%`
-                  : '...'));
-            if (status === 'success')
-              return ((views[i] = url + ' - ✅'), resolve(res.data));
+                  : '...');
+              return;
+            }
+            if (status === 'success') {
+              views[i] = url + ' - ✅';
+              result.blobs![key] = res.data;
+              resolve(true);
+              return;
+            }
 
             ac.abort(); // abort all requests
             const { error } = res;
@@ -80,7 +96,7 @@ export const Loader = <const T extends readonly string[]>(props: {
         }),
     );
     result = await Promise.all(promises).then(
-      (data) => ({ blobs: data, error: null }),
+      () => (ac.abort(), result),
       (err) => ({ blobs: null, error: error_normalize(err) }),
     );
     ctx.close();
@@ -94,6 +110,13 @@ export const Loader = <const T extends readonly string[]>(props: {
     data: () =>
       result as
         | { blobs: null; error: Error }
-        | { blobs: { [K in keyof T]: Blob }; error: null },
+        | {
+            blobs: {
+              readonly [K in T extends readonly unknown[]
+                ? Extract<keyof T, `${number}`>
+                : keyof T]: Blob;
+            };
+            error: null;
+          },
   };
 };

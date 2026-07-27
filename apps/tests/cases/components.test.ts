@@ -17,6 +17,7 @@ import {
   type Component,
   type MaybeGenericComponent,
 } from 'psytask';
+import type { Equal } from 'shared/types';
 import van from 'vanjs-core';
 import {
   $,
@@ -29,6 +30,7 @@ import {
   sleep,
   spy_functionCall,
 } from './utils';
+
 const { div } = van.tags;
 
 export const Adapter = {
@@ -319,7 +321,7 @@ const expect_Loader_dataSizes = (
 ) => {
   if (error) throw error;
   expect(error, null);
-  expect(blobs.length, sizes.length);
+  expect(Object.keys(blobs).length, sizes.length);
   for (let i = 0; i < sizes.length; i++) {
     expect(blobs[i] instanceof Blob);
     expect(blobs[i]!.size, sizes[i]);
@@ -346,6 +348,13 @@ export const _Loader = {
       });
       expect_Loader_dataSizes(await loader.show(), []);
     }
+    {
+      using loader = app.scene(generic(Loader), {
+        adapter,
+        defaultProps: { urls: {} },
+      });
+      expect_Loader_dataSizes(await loader.show(), []);
+    }
 
     // show with empty
     {
@@ -356,6 +365,16 @@ export const _Loader = {
       });
       expect(fetchParams.length, 0); // only fetch on show
       expect_Loader_dataSizes(await loader.show({ urls: [] }), []);
+      expect(fetchParams.length, 0); // modify props is sync
+    }
+    {
+      using fetchParams = mock_httpbin();
+      using loader = app.scene(generic(Loader), {
+        adapter,
+        defaultProps: { urls: ['/bytes/1'] },
+      });
+      expect(fetchParams.length, 0); // only fetch on show
+      expect_Loader_dataSizes(await loader.show({ urls: {} }), []);
       expect(fetchParams.length, 0); // modify props is sync
     }
   },
@@ -375,12 +394,12 @@ export const _Loader = {
     using app = await createApp();
     using loader = app.scene(generic(Loader), {
       adapter,
-      defaultProps: { urls: [] },
+      defaultProps: { urls: {} },
     });
     expect_Loader_dataSizes(await loader.show({ urls: ['/bytes/1'] }), [1]);
     expect_Loader_dataSizes(await loader.show(), []);
     expect_Loader_dataSizes(
-      await loader.show({ urls: ['/bytes/2', '/bytes/3'] }),
+      await loader.show({ urls: { 0: '/bytes/2', 1: '/bytes/3' } }),
       [2, 3],
     );
     expect_Loader_dataSizes(await loader.show(), []);
@@ -1143,8 +1162,13 @@ const __typecheck__ = {
     using app = await createApp();
     const urls = [] as const;
     using scene = app.scene(generic(Loader), { defaultProps: { urls } });
-    const { blobs } = await scene.show({ urls: ['', ''] as const });
-    const __should_be_blob_tuple__: readonly [Blob, Blob] =
-      [] as unknown as typeof blobs & {};
+    {
+      const { blobs } = await scene.show({ urls: ['', ''] as const });
+      const _: Equal<typeof blobs & {}, Readonly<{ 0: Blob; 1: Blob }>> = true;
+    }
+    {
+      const { blobs } = await scene.show({ urls: { a: '', b: '' } as const });
+      const _: Equal<typeof blobs & {}, Readonly<{ a: Blob; b: Blob }>> = true;
+    }
   },
 };

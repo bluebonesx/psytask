@@ -71,8 +71,11 @@ const urls = /** @type {const} */ ([
   'https://picsum.photos/10?0',
   'https://picsum.photos/10?1',
 ]);
-using loader = app.scene(generic(Loader), { adapter, defaultProps: { urls } });
-const { blobs: imageBlobs, error } = await loader.show();
+using loader = app.scene(generic(Loader), {
+  adapter,
+  defaultProps: { urls: {} },
+});
+const { blobs: imageBlobs, error } = await loader.show({ urls });
 if (error) throw error;
 
 // get task parameters
@@ -82,16 +85,18 @@ const opts = /** @type {{ image_size: number; mask_duration: number }} */ (
 );
 
 // create stimuli scene
+const physical_pix = deg2pix(opts.image_size);
 const imageBitmaps = /** @type {[ImageBitmap, ImageBitmap]} */ (
-  await Promise.all(
-    imageBlobs.map((blob) => {
-      const physical_pix = deg2pix(opts.image_size);
-      return window.createImageBitmap(blob, {
-        resizeWidth: physical_pix,
-        resizeHeight: physical_pix,
-      });
+  await Promise.all([
+    window.createImageBitmap(imageBlobs[0], {
+      resizeWidth: physical_pix,
+      resizeHeight: physical_pix,
     }),
-  )
+    window.createImageBitmap(imageBlobs[1], {
+      resizeWidth: physical_pix,
+      resizeHeight: physical_pix,
+    }),
+  ])
 );
 const rads = Array.from({ length: 8 }, (_, i) => (i * Math.PI) / 4);
 const stim_size = deg2pix(opts.image_size * 12);
