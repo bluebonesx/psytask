@@ -18,7 +18,7 @@ const should_skip = async (pkg: (typeof pkgs)[0]) => {
 
   // skip logic
   if (!publishedVersion)
-    throw new Error(`Failed to fetch published versio实n for ${name}`);
+    throw new Error(`Failed to fetch published version for ${name}`);
   if (publishedVersion === version) {
     log(yellow('Skipping ') + `${name} (${publishedVersion} == ${version})`);
     return true;

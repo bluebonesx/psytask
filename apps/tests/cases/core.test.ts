@@ -279,11 +279,11 @@ export const _Scene = {
     );
     const p = s.show();
     mock_event(s.root, 'mousedown');
-    await sleep(10);
+    await nextFrame();
     expect(await Promise.race([p, Promise.resolve('timeout')]), 'timeout');
 
     mock_event(s.root, 'keydown');
-    await sleep(10);
+    await nextFrame();
     await Promise.race([p, Promise.reject('timeout')]);
   },
   async 'data - frame times'() {
