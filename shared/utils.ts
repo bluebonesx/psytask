@@ -50,10 +50,7 @@ export const loadCss = (url: string) =>
 export const hasOwn = <T extends {}, K extends PropertyKey>(
   obj: T,
   key: K,
-): obj is Extract<T, { [P in K]: unknown }> extends never
-  ? T & { [P in K]: unknown }
-  : Extract<T, { [P in K]: unknown }> =>
-  $Object.prototype.hasOwnProperty.call(obj, key);
+): boolean => $Object.prototype.hasOwnProperty.call(obj, key);
 export const clamp = (value: number, min: number, max: number) =>
   value < min ? min : value > max ? max : value;
 export const isObject = (value: unknown) =>

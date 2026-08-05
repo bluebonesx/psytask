@@ -21,7 +21,7 @@ Compared to others, it:
 - UI framework: [Vue](https://vuejs.org), [Solid](https://docs.solidjs.com), [Lit](https://lit.dev), [Van](https://vanjs.org) ...
 - Reactive framework: [Rxjs](https://rxjs.dev), [Mobx](https://mobx.js.org), [Valtio](https://valtio.dev) ...
 
-**[API Docs](https://bluebonesx.github.io/psytask/) | [Benchmark](https://bluebonesx.github.io/psytask/benchmark/) | [Tests](https://bluebonesx.github.io/psytask/tests/) | [Play it now ! 🥳](https://bluebonesx.github.io/psytask/play/)**
+**[API](https://bluebonesx.github.io/psytask/) | [Benchmark](https://bluebonesx.github.io/psytask/benchmark/) | [Tests](https://bluebonesx.github.io/psytask/tests/) | [Playground](https://bluebonesx.github.io/psytask/play/)**
 
 ## Install
 
@@ -83,14 +83,13 @@ So writing a task only requires 2 steps: creating and showing scenes.
 All you need is [Component](#component):
 
 ```js
-import { Grating, adapter } from '@psytask/components';
+import { Grating } from '@psytask/components';
 
 using simpleText = app.scene(
   // component
   Grating,
   // scene options
   {
-    adapter, // VanJS support
     defaultProps: { type: Math.sin, size: 100, sf: 0.02 }, // show params
     duration: 1e3, // show 1000 ms
     close_on: 'key: ', // close on space key

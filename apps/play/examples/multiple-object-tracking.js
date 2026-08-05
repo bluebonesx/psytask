@@ -72,7 +72,7 @@ using survey = app.scene(jsPsychStim, {
     },
   },
 });
-using chinrest = app.scene(VirtualChinrest, { adapter, defaultProps: {} });
+using chinrest = app.scene(VirtualChinrest, { defaultProps: {} });
 simpleText.close();
 
 // get task parameters
@@ -104,8 +104,8 @@ using objects = app.scene(
     const boundary_wh = van.derive(
       () =>
         /** @type {const} */ ([
-          win_wh.width - size.val,
-          win_wh.height - size.val,
+          win_wh.width / dpr.val - size.val,
+          win_wh.height / dpr.val - size.val,
         ]),
     );
     const csspix_pre_frame = van.derive(
@@ -148,10 +148,6 @@ using objects = app.scene(
 
     const ctx = getCurrentScene();
     const cleanups = [
-      on(window, 'resize', () => {
-        win_wh.width = innerWidth * dpr.val;
-        win_wh.height = innerHeight * dpr.val;
-      }),
       on(ctx.root, 'pointerup', (e) => {
         const el = e.target;
         if (!el || !(el instanceof HTMLSpanElement)) {

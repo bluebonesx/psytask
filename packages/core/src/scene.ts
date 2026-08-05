@@ -165,12 +165,16 @@ export type MaybeGenericComponent<
   D extends LooseObject & ForbiddenData = {},
 > = Component<P, D> | GenericComponent<P, D>;
 
+const ReactiveFn = Symbol();
+type ComponentFlags = {
+  [ReactiveFn]?: <T extends LooseObject>(obj: T) => T;
+};
 export type ComponentAdapter = {
-  /** Wrap a component with reactive props */
-  wrap: <T extends Component>(component: T) => T;
-  /** Render a component with default props and provided scene */
+  /** Mark a component with reactive function */
+  mark: <T extends Component>(component: T & ComponentFlags) => T;
+  /** Call a component with default props and provided scene */
   render: <T extends Component>(
-    component: T,
+    component: T & ComponentFlags,
     defaultProps: Parameters<T>[0],
     /** If not provided, it will use current scene */
     ctx?: Scene<Component>,
@@ -182,16 +186,36 @@ export type ComponentAdapter = {
       : { nodes: R extends NodeLike ? [R] : R; data: undefined }
     : never);
 };
+/**
+ * Adapte third-part reactive systems
+ *
+ * @example
+ *
+ * With Vue
+ *
+ * ```ts
+ * import { shallowReactive, effect } from '@vue/reactivity';
+ * const adapter = createComponentAdapter(shallowReactive);
+ * const VueComponent = (props: { text: string }) => {
+ *   const node = document.createElement('div');
+ *   effect(() => (node.textContent = props.text));
+ *   return node;
+ * };
+ * const Component = adapter.mark(VueComponent);
+ * ```
+ */
 export const createComponentAdapter = (
   reactive: <T extends LooseObject>(obj: T) => T,
 ): ComponentAdapter => ({
-  wrap: (component) =>
-    ((props) => component(reactive(props))) as typeof component,
-  render: (component, defaultProps, ctx) => {
-    const props = reactive(defaultProps);
+  mark(component) {
+    component[ReactiveFn] = reactive;
+    return component;
+  },
+  render(component, defaultProps, ctx) {
+    const rprops = (component[ReactiveFn] ?? reactive)(defaultProps);
 
     ctx && sceneStack.push(ctx);
-    const instanceOrNode = (component as Component)(props);
+    const instanceOrNode = component(rprops);
     ctx && sceneStack.pop();
 
     let data: (() => LooseObject) | undefined;
@@ -200,7 +224,9 @@ export const createComponentAdapter = (
         ? ((data = instanceOrNode.data), instanceOrNode.node)
         : instanceOrNode,
     );
-    return { props, nodes, data } as ReturnType<ComponentAdapter['render']>;
+    return { props: rprops, nodes, data } as ReturnType<
+      ComponentAdapter['render']
+    >;
   },
 });
 

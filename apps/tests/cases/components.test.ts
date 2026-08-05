@@ -109,67 +109,14 @@ export const Adapter = {
     expect(runCount, 2);
     expect(val, 'hello');
   },
-  async 'adapter - repeat reactive wrap'() {
-    let props: { count: number };
-    const Comp = (p: typeof props) => {
-      props = p;
-      return '';
-    };
-
-    // define
-    {
-      expect(
-        adapter.render(adapter.wrap(Comp), {
-          count: 0,
-        }).props,
-        props!,
-      );
-      expect(
-        adapter.render(adapter.wrap(adapter.wrap(Comp)), {
-          count: 0,
-        }).props,
-        props!,
-      );
-      expect(
-        adapter.render(adapter.wrap(adapter.wrap(adapter.wrap(Comp))), {
-          count: 0,
-        }).props,
-        props!,
-      );
-    }
-
-    // render
-    {
-      const { props } = adapter.render(Comp, { count: 0 });
-
-      const { props: props2 } = adapter.render(Comp, props);
-      expect(props, props2);
-
-      const { props: props3 } = adapter.render(Comp, props2);
-      expect(props, props3);
-    }
-  },
-  async 'adapter - reactive props after wrap'() {
+  async 'adapter - reactive props after mark'() {
     using app = await createApp();
-
-    // basic prop
-    {
-      using s = app.scene(
-        adapter.wrap((props: { text: string }) => div(() => props.text)),
-        { adapter, defaultProps: { text: 'default' }, duration: 0 },
-      );
-      expect(s.root.textContent, 'default');
-      await s.show({ text: 'new' });
-      expect(s.root.textContent, 'new');
-      await s.show();
-      expect(s.root.textContent, 'default');
-    }
 
     // optional prop
     {
       using s = app.scene(
-        adapter.wrap((props: { text?: string }) => div(() => props.text ?? '')),
-        { adapter, defaultProps: {}, duration: 0 },
+        adapter.mark((props: { text?: string }) => div(() => props.text ?? '')),
+        { defaultProps: {}, duration: 0 },
       );
       expect(s.root.textContent, '');
       await s.show({ text: 'new' });
@@ -181,8 +128,8 @@ export const Adapter = {
     // default props is undefined
     {
       using s = app.scene(
-        adapter.wrap((props: { text?: string }) => div(() => props.text ?? '')),
-        { adapter, defaultProps: { text: void 0 }, duration: 0 },
+        adapter.mark((props: { text?: string }) => div(() => props.text ?? '')),
+        { defaultProps: { text: void 0 }, duration: 0 },
       );
       expect(s.root.textContent, '');
       await s.show({ text: 'new' });
@@ -207,7 +154,7 @@ export const Hooks = {
         });
         return '';
       },
-      { adapter, defaultProps: {} },
+      { defaultProps: {} },
     );
     expect(runCount, 1);
 
@@ -238,7 +185,7 @@ export const Hooks = {
         });
         return '';
       },
-      { adapter, defaultProps: {} },
+      { defaultProps: {} },
     );
     expect(runCount, 1);
 
@@ -322,9 +269,10 @@ const expect_Loader_dataSizes = (
   if (error) throw error;
   expect(error, null);
   expect(Object.keys(blobs).length, sizes.length);
-  for (let i = 0; i < sizes.length; i++) {
-    expect(blobs[i] instanceof Blob);
-    expect(blobs[i]!.size, sizes[i]);
+  let i = 0;
+  for (const k of Object.keys(blobs)) {
+    expect(blobs[k] instanceof Blob);
+    expect(blobs[k]!.size, sizes[i++]);
   }
 };
 export const _Loader = {
@@ -332,7 +280,7 @@ export const _Loader = {
     using fetchParams = mock_httpbin();
     using app = await createApp();
     using loader = app
-      .scene(generic(Loader), { adapter, defaultProps: { urls: ['/bytes/1'] } })
+      .scene(generic(Loader), { defaultProps: { urls: ['/bytes/1'] } })
       .on('show', () => loader.close());
     expect_Loader_dataSizes(await loader.show(), []);
     expect(fetchParams.length, 1); // close is async
@@ -343,14 +291,12 @@ export const _Loader = {
     // default empty
     {
       using loader = app.scene(generic(Loader), {
-        adapter,
         defaultProps: { urls: [] },
       });
       expect_Loader_dataSizes(await loader.show(), []);
     }
     {
       using loader = app.scene(generic(Loader), {
-        adapter,
         defaultProps: { urls: {} },
       });
       expect_Loader_dataSizes(await loader.show(), []);
@@ -360,7 +306,6 @@ export const _Loader = {
     {
       using fetchParams = mock_httpbin();
       using loader = app.scene(generic(Loader), {
-        adapter,
         defaultProps: { urls: ['/bytes/1'] },
       });
       expect(fetchParams.length, 0); // only fetch on show
@@ -370,7 +315,6 @@ export const _Loader = {
     {
       using fetchParams = mock_httpbin();
       using loader = app.scene(generic(Loader), {
-        adapter,
         defaultProps: { urls: ['/bytes/1'] },
       });
       expect(fetchParams.length, 0); // only fetch on show
@@ -382,7 +326,6 @@ export const _Loader = {
     using _ = mock_httpbin();
     using app = await createApp();
     using loader = app.scene(generic(Loader), {
-      adapter,
       defaultProps: { urls: ['/bytes/1'] },
     });
     expect_Loader_dataSizes(await loader.show(), [1]);
@@ -393,7 +336,6 @@ export const _Loader = {
     using _ = mock_httpbin();
     using app = await createApp();
     using loader = app.scene(generic(Loader), {
-      adapter,
       defaultProps: { urls: {} },
     });
     expect_Loader_dataSizes(await loader.show({ urls: ['/bytes/1'] }), [1]);
@@ -408,7 +350,6 @@ export const _Loader = {
     using _ = mock_httpbin();
     using app = await createApp();
     using loader = app.scene(generic(Loader), {
-      adapter,
       defaultProps: { urls: ['/bytes/100', '/bytes/50'] },
     });
 
@@ -429,7 +370,6 @@ export const _Loader = {
     using _ = mock_httpbin();
     using app = await createApp();
     using loader = app.scene(generic(Loader), {
-      adapter,
       defaultProps: {
         urls: ['/status/404', '/bytes/1', '/bytes/2', '/bytes/3'],
       },
@@ -439,13 +379,43 @@ export const _Loader = {
     expect(error instanceof Error);
     expect(error!.message.includes('404'));
   },
+  async 'custom children'() {
+    using _ = mock_httpbin();
+    using app = await createApp();
+
+    let call = 0;
+    using loader = app.scene(generic(Loader), {
+      defaultProps: {
+        urls: {},
+        children(_) {
+          call++;
+          return '';
+        },
+      },
+    });
+    expect(call, 1);
+
+    expect_Loader_dataSizes(
+      await loader.show({
+        urls: { a: '/bytes/1', b: '/bytes/2' },
+      }),
+      [1, 2],
+    );
+    expect(call, 1);
+    await loader.show({
+      children(_) {
+        call += 2;
+        return '';
+      },
+    });
+    expect(call, 3);
+  },
 };
 
 export const _ImageStim = {
   async 'render ImageData'() {
     using app = await createApp();
     using s = app.scene(ImageStim, {
-      adapter,
       defaultProps: { image: new ImageData(10, 20) },
       duration: 0,
     });
@@ -460,7 +430,6 @@ export const _ImageStim = {
   async 'render ImageBitmap'() {
     using app = await createApp();
     using s = app.scene(ImageStim, {
-      adapter,
       defaultProps: { image: await createImageBitmap(new ImageData(15, 25)) },
       duration: 0,
     });
@@ -476,7 +445,6 @@ export const _ImageStim = {
     using app = await createApp();
     let called = 0;
     using s = app.scene(ImageStim, {
-      adapter,
       defaultProps: { draw: () => called++ },
       duration: 0,
     });
@@ -490,7 +458,6 @@ export const _Grating = {
   async 'basic render'() {
     using app = await createApp();
     using s = app.scene(Grating, {
-      adapter,
       defaultProps: {
         type: Math.sin,
         size: 100,
@@ -501,6 +468,7 @@ export const _Grating = {
       duration: 0,
     });
     const el = $(s.root, 'canvas');
+    await 0;
     expect(el.width, 100);
     expect(el.height, 100);
     const ctx = el.getContext('2d')!;
@@ -534,7 +502,6 @@ export const _Grating = {
   async 'update props'() {
     using app = await createApp();
     using s = app.scene(Grating, {
-      adapter,
       defaultProps: {
         type: Math.sin,
         size: 100,
@@ -551,7 +518,6 @@ export const _Grating = {
   async 'mask - circle'() {
     using app = await createApp();
     using s = app.scene(Grating, {
-      adapter,
       defaultProps: {
         type: (x) => 1, // full intensity
         size: 100,
@@ -562,6 +528,7 @@ export const _Grating = {
       duration: 0,
     });
     const ctx = $(s.root, 'canvas').getContext('2d')!;
+    await 0;
 
     // center should be visible
     expect(ctx.getImageData(50, 50, 1, 1).data[3], 255);
@@ -578,7 +545,7 @@ export const _Grating = {
 export const _PhysicalWidthDetector = {
   async 'calculation logic'() {
     using app = await createApp();
-    using pwd = app.scene(PhysicalWidthDetector, { adapter, defaultProps: {} });
+    using pwd = app.scene(PhysicalWidthDetector, { defaultProps: {} });
     const state = pwd.data(); // deep reactive
 
     // set line distance cm, fixed line distance pix
@@ -605,7 +572,7 @@ export const _PhysicalWidthDetector = {
   },
   async 'calculation logic - 0 or NaN'() {
     using app = await createApp();
-    using pwd = app.scene(PhysicalWidthDetector, { adapter, defaultProps: {} });
+    using pwd = app.scene(PhysicalWidthDetector, { defaultProps: {} });
     const state = pwd.data(); // deep reactive
 
     // line_distance_cm
@@ -645,7 +612,7 @@ export const _PhysicalWidthDetector = {
   },
   async 'interaction - drag'() {
     using app = await createApp();
-    using pwd = app.scene(PhysicalWidthDetector, { adapter, defaultProps: {} });
+    using pwd = app.scene(PhysicalWidthDetector, { defaultProps: {} });
     const showPromise = pwd.show();
     const state = pwd.data();
 
@@ -697,7 +664,7 @@ export const _PhysicalWidthDetector = {
       pix_per_cm: '每厘米像素数',
     };
     using pwd = app
-      .scene(PhysicalWidthDetector, { adapter, defaultProps: { i18n } })
+      .scene(PhysicalWidthDetector, { defaultProps: { i18n } })
       .on('show', () => pwd.close());
     await pwd.show();
 
@@ -718,7 +685,6 @@ export const _ViewDistanceDetector = {
 
     using app = await createApp();
     using vdd = app.scene(ViewDistanceDetector, {
-      adapter,
       defaultProps: { pix_per_cm, blindspot_deg },
     });
     const state = vdd.data(); // deep reactive
@@ -742,7 +708,6 @@ export const _ViewDistanceDetector = {
 
     using app = await createApp();
     using vdd = app.scene(ViewDistanceDetector, {
-      adapter,
       defaultProps: { pix_per_cm },
     });
     const showPromise = vdd.show();
@@ -794,7 +759,6 @@ export const _ViewDistanceDetector = {
     };
     using s = app
       .scene(ViewDistanceDetector, {
-        adapter,
         defaultProps: { pix_per_cm: 40, i18n },
       })
       .on('show', () => s.close());

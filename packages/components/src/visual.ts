@@ -2,7 +2,7 @@ import { css, defaultProps, getCurrentScene, on, Scene } from 'psytask';
 import type { LooseObject } from 'shared/types';
 import { ERR, modify, mount } from 'shared/utils';
 import van from 'vanjs-core';
-import { calc, list, noreactive, reactive } from 'vanjs-ext';
+import { list, noreactive, reactive } from 'vanjs-ext';
 import { adapter } from './adapter';
 import { useDevicePixelRatio } from './hooks';
 
@@ -42,7 +42,7 @@ const { PI, sin, cos, tan } = Math; // just for minimize
  * });
  * ```
  */
-export const ImageStim = adapter.wrap(
+export const ImageStim = adapter.mark(
   (props: {
     image?: ImageBitmap | ImageData;
     draw?(ctx: CanvasRenderingContext2D): void;
@@ -92,7 +92,7 @@ type RGB255 = [R: number, G: number, B: number];
  * });
  * ```
  */
-export const Grating = adapter.wrap(
+export const Grating = adapter.mark(
   (props: {
     /** Convert radians (-Inf, Inf) to amplitude [-1, 1] */
     type: (x: number) => number;
@@ -108,53 +108,54 @@ export const Grating = adapter.wrap(
     color?: RGB255 | [RGB255, RGB255];
     /** Convert coordinates [-1, 1] to opacity [0, 1] */
     mask?: (x: number, y: number) => number;
-  }) =>
-    ImageStim({
-      image: calc(() => {
-        const p = { ori: 0, phase: 0, color: [0, 0, 0] as const, ...props };
-        const [w, h] = typeof p.size === 'number' ? [p.size, p.size] : p.size;
+  }) => {
+    const { props: image_props, nodes } = adapter.render(ImageStim, {});
+    van.derive(() => {
+      const p = { ori: 0, phase: 0, color: [0, 0, 0] as const, ...props };
+      const [w, h] = typeof p.size === 'number' ? [p.size, p.size] : p.size;
 
-        const ori_cos = cos(p.ori);
-        const ori_sin = sin(p.ori);
+      const ori_cos = cos(p.ori);
+      const ori_sin = sin(p.ori);
 
-        const cx = w / 2;
-        const cy = h / 2;
+      const cx = w / 2;
+      const cy = h / 2;
 
-        const imageData = new ImageData(w, h);
-        for (let y = 0; y < h; y++) {
-          for (let x = 0; x < w; x++) {
-            const dx = x - cx;
-            const dy = y - cy;
+      const imageData = new ImageData(w, h);
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const dx = x - cx;
+          const dy = y - cy;
 
-            const offset_from_center = dx * ori_cos + dy * ori_sin;
-            const radian = offset_from_center * p.sf * 2 * PI + p.phase;
-            const amplitude = p.type(radian); // from rad to [-1, 1]
-            const intensity = (amplitude + 1) / 2; // from [-1, 1] to [0, 1]
+          const offset_from_center = dx * ori_cos + dy * ori_sin;
+          const radian = offset_from_center * p.sf * 2 * PI + p.phase;
+          const amplitude = p.type(radian); // from rad to [-1, 1]
+          const intensity = (amplitude + 1) / 2; // from [-1, 1] to [0, 1]
 
-            const rgba = (
-              p.color.length === 2
-                ? [
-                    ...p.color[1].map(
-                      (c, i) =>
-                        c +
-                        intensity * ((p.color as [RGB255, RGB255])[0][i]! - c),
-                    ),
-                    255,
-                  ]
-                : [...p.color, 255 * intensity]
-            ) as [number, number, number, number];
+          const rgba = (
+            p.color.length === 2
+              ? [
+                  ...p.color[1].map(
+                    (c, i) =>
+                      c +
+                      intensity * ((p.color as [RGB255, RGB255])[0][i]! - c),
+                  ),
+                  255,
+                ]
+              : [...p.color, 255 * intensity]
+          ) as [number, number, number, number];
 
-            if (rgba[3] > 0 && p.mask) rgba[3] *= p.mask(dx / cx, dy / cy);
+          if (rgba[3] > 0 && p.mask) rgba[3] *= p.mask(dx / cx, dy / cy);
 
-            let pixel_idx = (y * w + x) * 4;
-            // auto round and clamp 0-255
-            for (const value of rgba) imageData.data[pixel_idx++] = value;
-          }
+          let pixel_idx = (y * w + x) * 4;
+          // auto round and clamp 0-255
+          for (const value of rgba) imageData.data[pixel_idx++] = value;
         }
+      }
 
-        return noreactive(imageData);
-      }),
-    }),
+      image_props.image = noreactive(imageData);
+    });
+    return nodes;
+  },
 );
 // TODO: Noise
 
@@ -219,7 +220,7 @@ const Triangles = (color: string, size = 6) =>
  * }
  * ```
  */
-export const PhysicalWidthDetector = adapter.wrap(
+export const PhysicalWidthDetector = adapter.mark(
   (props: {
     line_distance_pix?: number;
     i18n?: Record<
@@ -343,7 +344,7 @@ Or, input the pixels per centimeter (pix/cm) directly if you know.`,
  * }
  * ```
  */
-export const ViewDistanceDetector = adapter.wrap(
+export const ViewDistanceDetector = adapter.mark(
   (props: {
     pix_per_cm: number;
     /** @default 13.5 */
@@ -509,16 +510,14 @@ export const VirtualChinrest = modify(
     const ctx = getCurrentScene();
     const Root = () => div({ style: css({ height: '100%' }) });
 
-    const windowWidthDetector = new Scene(PhysicalWidthDetector, {
+    const physicalWidthDetector = new Scene(PhysicalWidthDetector, {
       ...ctx.options,
       root: mount(Root(), ctx.root),
-      adapter,
       defaultProps: {},
     });
     const viewDistanceDetector = new Scene(ViewDistanceDetector, {
       ...ctx.options,
       root: mount(Root(), ctx.root),
-      adapter,
       defaultProps: {
         pix_per_cm: 0, // overwritten on show
       },
@@ -527,7 +526,7 @@ export const VirtualChinrest = modify(
     let data: ReturnType<typeof VirtualChinrest.get>;
     ctx
       .on('dispose', () => {
-        windowWidthDetector.emit('dispose');
+        physicalWidthDetector.emit('dispose');
         viewDistanceDetector.emit('dispose');
       })
       .on('show', async () => {
@@ -546,7 +545,7 @@ export const VirtualChinrest = modify(
                   JSON.stringify(data, null, 2),
               )
             ) {
-              await ctx.close();
+              ctx.close();
               return;
             }
           } catch (error) {
@@ -555,7 +554,7 @@ export const VirtualChinrest = modify(
         }
 
         // run chinrest
-        const { pix_per_cm } = await windowWidthDetector.show({
+        const { pix_per_cm } = await physicalWidthDetector.show({
           i18n: i18n && {
             line_distance: i18n.line_distance,
             pix_per_cm: i18n.pix_per_cm,

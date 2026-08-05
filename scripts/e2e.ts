@@ -23,7 +23,7 @@ const browsers: { type: BrowserType; options?: LaunchOptions }[] = __DEV__
   ? [
       {
         type: chromium,
-        options: { channel: 'chrome', headless: false },
+        options: { executablePath: '/usr/bin/chromium', headless: false },
       },
       // {
       //   type: firefox,

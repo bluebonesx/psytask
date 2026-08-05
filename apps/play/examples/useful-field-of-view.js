@@ -8,7 +8,7 @@ import {
 import { jsPsychStim } from '@psytask/jspsych';
 import { createApp, css, generic, getCurrentScene, StairCase } from 'psytask';
 import van from 'vanjs-core';
-import { calc, noreactive } from 'vanjs-ext';
+import { noreactive } from 'vanjs-ext';
 
 const { button, div } = van.tags;
 
@@ -63,7 +63,7 @@ using survey = app.scene(jsPsychStim, {
     },
   },
 });
-using chinrest = app.scene(VirtualChinrest, { adapter, defaultProps: {} });
+using chinrest = app.scene(VirtualChinrest, { defaultProps: {} });
 simpleText.close();
 
 // load remote resources
@@ -128,11 +128,26 @@ using stim = app.scene(
         return el;
       };
 
-    const peripheralImage = displace(
-      ImageStim({
-        image: calc(() => noreactive(imageBitmaps[props.image_indexes[1]])),
-      }),
-      [0, 0],
+    const {
+      props: peripheralImageProps,
+      nodes: [peripheralImage],
+    } = adapter.render(ImageStim, {});
+    van.derive(
+      () =>
+        (peripheralImageProps.image = noreactive(
+          imageBitmaps[props.image_indexes[1]],
+        )),
+    );
+
+    const {
+      props: centralImageProps,
+      nodes: [centralImage],
+    } = adapter.render(ImageStim, {});
+    van.derive(
+      () =>
+        (centralImageProps.image = noreactive(
+          imageBitmaps[props.image_indexes[0]],
+        )),
     );
 
     const strokeWidth = van.derive(
@@ -218,14 +233,9 @@ using stim = app.scene(
         opts.image_size * 1.5,
       ),
       // centeral image
-      displace(
-        ImageStim({
-          image: calc(() => noreactive(imageBitmaps[props.image_indexes[0]])),
-        }),
-        [0, 0],
-      ),
+      displace(centralImage, [0, 0]),
       // peripheral image
-      peripheralImage,
+      displace(peripheralImage, [0, 0]),
       ...option_triangle_els,
       ...fixed_triangle_els,
     );
@@ -238,7 +248,11 @@ using stim = app.scene(
 using mask = app.scene(
   /** @param {{}} props */
   (props) => {
-    const image = () => {
+    const {
+      props: imageProps,
+      nodes: [el],
+    } = adapter.render(ImageStim, {});
+    van.derive(() => {
       const imageData = new ImageData(stim_size, stim_size);
       const data = imageData.data;
 
@@ -249,9 +263,9 @@ using mask = app.scene(
         data[i + 2] = value;
         data[i + 3] = 255;
       }
-      return noreactive(imageData);
-    };
-    const el = ImageStim({ image: calc(image) });
+      imageProps.image = noreactive(imageData);
+    });
+
     el.classList.add('psytask-center');
     return el;
   },
@@ -264,11 +278,16 @@ using identification = app.scene(
     let data;
     const ctx = getCurrentScene();
     const Image = /** @param {0 | 1} index */ (index) => {
-      const el = ImageStim({
-        image: calc(() => imageBitmaps[props.image_indexes[index]]),
-      });
+      const {
+        props: imageProps,
+        nodes: [el],
+      } = adapter.render(ImageStim, {});
+      van.derive(
+        () => (imageProps.image = imageBitmaps[props.image_indexes[index]]),
+      );
+
       el.style.cursor = 'pointer';
-      el.onclick = (e) => {
+      el.onclick = /** @param {MouseEvent} e */ (e) => {
         data = {
           response_image_index: props.image_indexes[index],
           response_time: e.timeStamp,

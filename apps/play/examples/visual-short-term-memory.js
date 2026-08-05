@@ -57,7 +57,7 @@ using survey = app.scene(jsPsychStim, {
     },
   },
 });
-using chinrest = app.scene(VirtualChinrest, { adapter, defaultProps: {} });
+using chinrest = app.scene(VirtualChinrest, { defaultProps: {} });
 /** @typedef {{ pos: [number, number]; color: string; size: number }} BoxParams */
 using boxes = app.scene(
   /** @param {{ params: BoxParams[]; target_index?: number }} props */

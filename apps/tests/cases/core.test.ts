@@ -400,15 +400,6 @@ export const _Adapter = {
     const { props } = adapter.render((p: { a: number }) => '', { a: 1 });
     expect(props, { a: 1 }, 1);
   },
-  async 'render - reactive props'() {
-    let count = 0;
-    const adapter = createComponentAdapter((e) => {
-      count++;
-      return e;
-    });
-    adapter.render((p: {}) => '', {});
-    expect(count, 1);
-  },
   async 'render - normalize node'() {
     const adapter = createComponentAdapter((e) => e);
 
@@ -449,6 +440,138 @@ export const _Adapter = {
       expect(nodes[0], node);
       expect(nodes[1], 'text');
     }
+  },
+  async 'mark - repeat mark'() {
+    let props: { count: number };
+    const Comp = (p: typeof props) => {
+      props = p;
+      return '';
+    };
+    const adapter = createComponentAdapter((e) => e);
+    expect(
+      adapter.render(adapter.mark(Comp), {
+        count: 0,
+      }).props.count,
+      props!.count,
+    );
+    expect(
+      adapter.render(adapter.mark(adapter.mark(Comp)), {
+        count: 1,
+      }).props.count,
+      props!.count,
+    );
+    expect(
+      adapter.render(adapter.mark(adapter.mark(adapter.mark(Comp))), {
+        count: 2,
+      }).props.count,
+      props!.count,
+    );
+  },
+  async 'mark - reactive applied once'() {
+    let calls = 0;
+    const adapter = createComponentAdapter((obj) => {
+      calls++;
+      return obj;
+    });
+    {
+      const Comp = (_: {}) => '';
+      adapter.render(Comp, {});
+      expect(calls, 1);
+    }
+    {
+      const Comp = adapter.mark((_: {}) => '');
+      adapter.render(Comp, {});
+      expect(calls, 2);
+    }
+  },
+  async 'mark - cross adapter render'() {
+    let a_calls = 0;
+    let b_calls = 0;
+    const adapterA = createComponentAdapter((obj) => {
+      a_calls++;
+      return obj;
+    });
+    const adapterB = createComponentAdapter((obj) => {
+      b_calls++;
+      return obj;
+    });
+
+    // marked with A, rendered by A
+    {
+      const Comp = adapterA.mark((_: {}) => '');
+      adapterA.render(Comp, {});
+      expect(a_calls, 1);
+      expect(b_calls, 0);
+    }
+    // marked with A, rendered by B -> uses A's reactive fn
+    {
+      const Comp = adapterA.mark((_: {}) => '');
+      adapterB.render(Comp, {});
+      expect(a_calls, 2);
+      expect(b_calls, 0);
+    }
+    // unmarked, rendered by B -> uses B's reactive fn
+    {
+      adapterB.render((_: {}) => '', {});
+      expect(a_calls, 2);
+      expect(b_calls, 1);
+    }
+  },
+  async 'mark - cross framework nesting'() {
+    const { shallowReactive, effect } = await import(
+      //@ts-expect-error external module
+      'https://esm.sh/@vue/reactivity@3.5.25?exports=shallowReactive,effect'
+    );
+    const { createStore, createEffect } = await import(
+      //@ts-expect-error external module
+      'https://esm.sh/@solidjs/signals@0.13.13?exports=createStore,createEffect'
+    );
+    const vueAdapter = createComponentAdapter(shallowReactive);
+    const solidAdapter = createComponentAdapter((obj) => {
+      const [state, setState] = createStore(obj);
+      return new Proxy(state, {
+        set: (target, prop, value) => (
+          setState(() => ({ [prop]: value })),
+          true
+        ),
+      });
+    });
+
+    const vueNode = div();
+    const solidNode = div();
+
+    const SolidChild = solidAdapter.mark((p: { value: number }) => {
+      createEffect(
+        () => p.value,
+        (val: number) => {
+          solidNode.textContent = '' + val;
+        },
+      );
+      return solidNode;
+    });
+
+    // vue component nests a solid component with a fresh object
+    const VueParent = vueAdapter.mark((p: { value: number; label: string }) => {
+      const { props: p2, nodes } = solidAdapter.render(SolidChild, {
+        value: p.value,
+      });
+      effect(() => (vueNode.textContent = p.label));
+      effect(() => (p2.value = p.value));
+      return [vueNode, solidNode];
+    });
+
+    const { props } = vueAdapter.render(VueParent, { value: 1, label: 'a' });
+    await 0;
+    expect(vueNode.textContent, 'a');
+    expect(solidNode.textContent, '1');
+
+    props.label = 'b';
+    await 0;
+    expect(vueNode.textContent, 'b');
+
+    props!.value = 3;
+    await 0;
+    expect(solidNode.textContent, '3');
   },
   // integrate with reactivity libs
   async 'with vanjs-ext'() {
@@ -492,7 +615,7 @@ export const _Adapter = {
   async 'with @solidjs/signals'() {
     const { createStore, createEffect } = await import(
       //@ts-expect-error external module
-      'https://esm.sh/@solidjs/signals@0.8.2?exports=createStore,createEffect'
+      'https://esm.sh/@solidjs/signals@0.13.13?exports=createStore,createEffect'
     );
     const node = div();
     const { props } = createComponentAdapter((obj) => {
