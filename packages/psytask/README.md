@@ -33,7 +33,7 @@ via NPM:
 ```bash
 npm create psytask # optional: use template
 npm install psytask # only package
-npm install @psytask/component vanjs-core vanjs-ext # optional: use components
+npm install @psytask/components vanjs-core vanjs-ext # optional: use components
 ```
 
 via CDN:
@@ -55,7 +55,8 @@ via CDN:
 <script type="module">
   import { createApp } from 'psytask';
 
-  using app = await creaeApp();
+  using app = await createApp();
+  // create & show scenes
 </script>
 ```
 
@@ -65,10 +66,13 @@ via CDN:
 > For CDN usage in old browsers that don't support the `using` keyword, you will see `Uncaught SyntaxError: Unexpected identifier 'app'`. You need to change the code:
 >
 > ```js
-> // Instead of: using app = await createApp();
 > const app = await createApp();
-> // ... your code ...
-> app.emit('dispose'); // Manually clean up when done
+> try {
+>   // ... your code ...
+> } finally {
+>   // Manually clean up when done
+>   app.emit('dispose');
+> }
 > ```
 >
 > Or, you can use the bundlers (like Vite, Bun, etc.) to transpile it.
@@ -85,7 +89,7 @@ All you need is [Component](#component):
 ```js
 import { Grating } from '@psytask/components';
 
-using simpleText = app.scene(
+using scene = app.scene(
   // component
   Grating,
   // scene options
@@ -151,7 +155,7 @@ using dc = app.collector('data.csv');
 for (const text of ['A', 'B', 'C']) {
   const data = await scene.show({ text });
 
-  // `frame_times` will be recorded automatically
+  // `frame_times` is recorded internally
   const start_time = /** @type {number} */ (data.frame_times[0]);
 
   // add a row
@@ -188,23 +192,17 @@ const Component = (props) => document.createElement('div');
 const Component = (props) => ['text node', document.createElement('div')];
 ```
 
-> [!CAUTION]
-> You shouldn't modify props, whatever, as it may change the default props.
-> See one-way data flow in [Redux](https://redux.js.org/tutorials/fundamentals/part-2-concepts-data-flow) and [Vue](https://vuejs.org/guide/components/props.html#one-way-data-flow).
-
-A practical example:
+A comprehensive example:
 
 ```js
 import { on, getCurrentScene } from 'psytask';
-import { ImageStim, adapter } from '@psytask/components';
-import van from 'vanjs-core';
 
-const { div } = van.tags;
 const Component =
   /** @param {{ text: string }} props */
   (props) => {
     /** @type {{ response_key: string; response_time: number }} */
     let data;
+    const el = document.createElement('div');
     const ctx = getCurrentScene();
 
     // add DOM event listener
@@ -215,33 +213,25 @@ const Component =
     });
 
     ctx
-      // reset data on show
+      // reset data and update DOM
       .on('show', () => {
         data = { response_key: '', response_time: 0 };
+        el.textContent = props.text;
       })
-      // remove DOM event listener on dispose
+      // remove DOM event listener
       .on('dispose', cleanup);
 
     // Return the element and data getter
-    return {
-      node: div(
-        // use other Component
-        ImageStim({ image: new ImageData(1) }),
-      ),
-      data: () => data,
-    };
+    return { node: el, data: () => data };
   };
 ```
-
-> [!TIP]
-> Use [JSDoc Comment](https://www.typescriptlang.org/docs/handbook/jsdoc-supported-types.html) to get type hint in JavaScript.
 
 ### Setup
 
 When you call `app.scene(Component, { adapter, defaultProps })`, it will use `adapter.render` to call `Component` with `defaultProps` once, then **Node** will be mounted to `this.root`.
 
 > [!NOTE]
-> The component will be called only once; the following DOM update will be triggered by the **Props** update. See [reactivity](#reactivity).
+> The component will be called _only once_; the following DOM updates will be triggered by the **Props** update. See [reactivity](#reactivity).
 
 ### Show
 
