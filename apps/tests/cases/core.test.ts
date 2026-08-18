@@ -287,12 +287,11 @@ export const _Scene = {
     await Promise.race([p, Promise.reject('timeout')]);
   },
   async 'data - frame times'() {
+    await sleep(100);
     // no frames
     {
       let frameCount = 0;
-      using s = DefaultScene((p: {}) => '', {
-        timer: () => createTimer(() => true),
-      }).on('frame', () => frameCount++);
+      using s = DefaultScene((_: {}) => '').on('frame', () => frameCount++);
 
       const data1 = await s.show();
       expect(frameCount, 0);
@@ -306,7 +305,7 @@ export const _Scene = {
     // has frames
     {
       let frameCount = 0;
-      using s = DefaultScene((p: {}) => '', {
+      using s = DefaultScene((_: {}) => '', {
         timer: () => createTimer((_, records) => records.length > 2),
       }).on('frame', () => frameCount++);
 
@@ -325,7 +324,8 @@ export const _Scene = {
   async 'data - start time'() {
     using s = DefaultScene((p: {}) => '', {
       timer: () => createTimer((_, records) => records.length > 2),
-    }).on('frame', (time) => performance.mark('f-' + time));
+    });
+    await sleep(100);
 
     // sole show
     {

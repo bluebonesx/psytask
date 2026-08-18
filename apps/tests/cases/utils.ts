@@ -41,7 +41,9 @@ export const DefaultScene = <T extends MaybeGenericComponent>(
     adapter: createComponentAdapter((e) => e),
     timer: () => createTimer(() => true),
     ...options,
-  }).on('dispose', () => container.remove());
+  })
+    .on('dispose', () => container.remove())
+    .on('frame', (time) => performance.mark('f-' + time));
 };
 export const DefaultAdapter = createComponentAdapter((e) => e);
 
