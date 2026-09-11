@@ -37,6 +37,7 @@ export const DefaultScene = <T extends MaybeGenericComponent>(
   const root = mount(div({ class: 'psytask-scene' }), container);
   return new Scene(comp, {
     root,
+    //@ts-expect-error
     defaultProps: {},
     adapter: createComponentAdapter((e) => e),
     timer: () => createTimer(() => true),
@@ -56,11 +57,14 @@ export const expect = <D extends 0 | 1 = 0>(
   ]
 ) => {
   const [raw, expected, deep = 0] = e.length === 1 ? [e[0], true, 0] : e;
-  (deep && isObject(raw)
-    ? JSON.stringify(raw) === JSON.stringify(expected)
-    : Object.is(raw, expected)) ||
-    (console.error('Expect', raw, 'to be', expected),
-    ERR(`Expect ${raw} to be ${expected}`));
+  if (
+    deep && isObject(raw)
+      ? JSON.stringify(raw) !== JSON.stringify(expected)
+      : !Object.is(raw, expected)
+  ) {
+    console.error('Expect', raw, 'to be', expected);
+    ERR(`Expect ${raw} to be ${expected}`);
+  }
 };
 
 export const expect_error = async (action: Action) => {
@@ -86,7 +90,8 @@ export const expect_closeTo = (
   }
 };
 export const expect_includes = <T>(raw: T, expected: Partial<T>) => {
-  for (const key of Object.keys(expected)) expect(raw[key], expected[key]);
+  for (const key of Object.keys(expected) as (keyof T)[])
+    expect(raw[key], expected[key]);
 };
 export const expect_dutationCloseTo = async (
   action: Action,

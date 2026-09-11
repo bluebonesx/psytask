@@ -9,7 +9,7 @@ import {
   getCurrentScene,
 } from '@psytask/core';
 import { on } from 'psytask';
-import type { LooseObject } from 'shared/types';
+import type { Equal, LooseObject } from 'shared/types';
 import { map, rAF } from 'shared/utils';
 import van from 'vanjs-core';
 import { reactive } from 'vanjs-ext';
@@ -966,15 +966,27 @@ export const _EventEmitter = {
 
 const __typecheck__ = {
   async generic() {
-    const comp = <T extends {}>(props: T) => ({ node: '', data: () => props });
-    using scene = DefaultScene(generic(comp), { defaultProps: {} });
+    type Props = { a: number; b: string; c?: boolean };
+    const comp = <T extends Props>(props: T) => ({
+      node: '',
+      data: () => props,
+    });
+
+    using scene = DefaultScene(generic(comp), {
+      defaultProps: { a: 0, b: '' },
+    });
+    const __defaultProps_type__: Equal<
+      Props,
+      typeof scene.options.defaultProps
+    > = true;
+
     const props = {
-      num: 1,
-      hello: 'world',
-      bool: false,
+      a: 1,
+      b: 'world',
+      c: false,
       arr: [1, '', true],
       obj: { a: 1, b: '2', c: false },
     } as const;
-    const __should_be_same_type__: typeof props = await scene.show(props);
+    const __data_type__: typeof props = await scene.show(props);
   },
 };

@@ -2,9 +2,9 @@ import type { LooseObject, Merge } from 'shared/types';
 import { array_normalize, ERR, rAF } from 'shared/utils';
 import { EventEmitter } from './event-emitter';
 
-// timer system
+// #region timer
 /** Timestamps of elapsed frames */
-export type TimerRecords = number[]; //TODO: use `Float64Array` to optimize memory
+export type TimerRecords = number[]; // TODO: use `Float64Array` to optimize memory
 export type Timer = {
   /**
    * If called in {@link window.requestAnimationFrame rAF} callback or microtasks
@@ -71,13 +71,21 @@ export const createTimer = (
     start: (cb) =>
       new Promise((resolve) => {
         const records: number[] = [];
-        currentFrameTime &&
-          (records.push(currentFrameTime), cb?.(currentFrameTime)); // first frame
+        // if called in frame, add current frame time as the first
+        if (currentFrameTime) {
+          records.push(currentFrameTime);
+          cb?.(currentFrameTime);
+        }
 
         const frame = (time: number) => {
           const is_stoped = shouldStop(time, records);
           records.push(time);
-          is_stoped ? timer.stop() : (cb?.(time), (handle = rAF(frame)));
+          if (is_stoped) {
+            timer.stop();
+          } else {
+            handle = rAF(frame);
+            cb?.(time);
+          }
         };
         let handle = rAF(frame);
         timer.stop = () => {
@@ -90,8 +98,9 @@ export const createTimer = (
   };
   return timer;
 };
+// #endregion
 
-// component system
+// #region component
 export type NodeLike = string | Node;
 type BuiltinData = {
   /**
@@ -103,7 +112,6 @@ type BuiltinData = {
   duration: number;
 };
 type ForbiddenData = { [K in keyof BuiltinData]?: never };
-
 /**
  * Only called once when the scene is created.
  *
@@ -125,16 +133,14 @@ export type Component<
         data: () => D;
       };
 };
-
-type SceneShow<
-  P extends LooseObject = LooseObject,
-  D extends LooseObject = LooseObject & ForbiddenData,
-> = (patchProps?: Partial<P>) => Promise<Merge<D, BuiltinData>>;
-/** Same with {@link SceneShow} */
 type GenericComponent<
   P extends LooseObject = LooseObject,
   D extends LooseObject = LooseObject & ForbiddenData,
-> = SceneShow<P, D>;
+> = (
+  patchProps?: Partial<P>,
+  /** NOTE: only for type hint */
+  __rawProps?: P,
+) => Promise<Merge<D, BuiltinData>>;
 /**
  * Provide type infer for generic component, do nothing in runtime.
  *
@@ -164,7 +170,38 @@ export type MaybeGenericComponent<
   P extends LooseObject = any,
   D extends LooseObject & ForbiddenData = {},
 > = Component<P, D> | GenericComponent<P, D>;
+// #endregion
 
+// #region context
+const sceneStack: Scene<MaybeGenericComponent>[] = [];
+/**
+ * @example
+ *
+ * Must be called on the top scope of component
+ *
+ * ```ts
+ * const Component = (props: {}) => {
+ *   const ctx = getCurrentScene();
+ *   return '';
+ * };
+ * ```
+ *
+ * DO NOT call on other place
+ *
+ * ```ts
+ * const Component = (props: {}) => {
+ *   const fn = () => {
+ *     const ctx = getCurrentScene(); // WRONG!
+ *   };
+ *   return '';
+ * };
+ * ```
+ */
+export const getCurrentScene = () =>
+  sceneStack[sceneStack.length - 1] ?? ERR('Not found current scene');
+// #endregion
+
+// #region adapter
 const ReactiveFn = Symbol();
 type ComponentFlags = {
   [ReactiveFn]?: <T extends LooseObject>(obj: T) => T;
@@ -176,7 +213,7 @@ export type ComponentAdapter = {
   render: <T extends Component>(
     component: T & ComponentFlags,
     defaultProps: Parameters<T>[0],
-    /** If not provided, it will use current scene */
+    /** If not provided, use current scene */
     ctx?: Scene<Component>,
   ) => {
     props: Parameters<T>[0];
@@ -229,8 +266,9 @@ export const createComponentAdapter = (
     >;
   },
 });
+// #endregion
 
-// event system
+// #region event system
 /**
  * Lifecycle hooks.
  *
@@ -245,40 +283,17 @@ export type SceneEventMap = {
   frame: number;
   close: undefined;
 };
+// #endregion
 
-const sceneStack: Scene<MaybeGenericComponent>[] = [];
-/**
- * @example
- *
- * Must be called on the top scope of component
- *
- * ```ts
- * const Component = (props: {}) => {
- *   const ctx = getCurrentScene();
- *   return '';
- * };
- * ```
- *
- * DO NOT call on other place
- *
- * ```ts
- * const Component = (props: {}) => {
- *   const fn = () => {
- *     const ctx = getCurrentScene(); // WRONG!
- *   };
- *   return '';
- * };
- * ```
- */
-export const getCurrentScene = () =>
-  sceneStack[sceneStack.length - 1] ?? ERR('Not found current scene');
-
+// #region scene
 /** Scene options */
 export type SceneOptions<T extends MaybeGenericComponent> = {
   /** Root element */
   root: HTMLDivElement;
   /** Default props */
-  defaultProps: Parameters<T>[0];
+  defaultProps: T extends Component<infer P, infer _>
+    ? P
+    : Parameters<T>[1] & {}; // NOTE: extract GenericComponent's raw props type';
   /** Control show timing */
   timer: () => Timer;
   /** Component adapter */
@@ -290,7 +305,7 @@ export class Scene<
   readonly root: HTMLDivElement;
   readonly #timer: Timer;
   readonly #props: LooseObject;
-  readonly data: T extends MaybeGenericComponent<infer P, infer D>
+  readonly data: T extends MaybeGenericComponent<infer _, infer D>
     ? () => D
     : undefined;
   /**
@@ -305,9 +320,10 @@ export class Scene<
    * await scene.show(); // show with default props
    * ```
    */
-  //@ts-expect-error impl generic component
-  show: T extends Component<infer P, infer D> ? SceneShow<P, D> : T =
-    this.#show;
+  //@ts-expect-error impl generic show
+  show: T extends Component<infer P, infer D>
+    ? (patchProps?: Partial<P>) => Promise<Merge<D, BuiltinData>>
+    : T = this.#show; // use GenericComponent as Scene.show type
 
   /**
    * @param component - {@link Component}
@@ -323,20 +339,24 @@ export class Scene<
     root.style.scale = '0';
 
     const { props, nodes, data } = adapter.render(
-      component as Component,
+      //@ts-expect-error impl generic component
+      component,
       { ...defaultProps },
       this.on('dispose', () => root.remove()),
     );
     this.#timer = timer(); // create timer instance
-
+    this.#props = props;
     //@ts-expect-error impl generic component
-    ((this.#props = props), (this.data = data));
+    this.data = data;
     root.append(...nodes);
   }
-  /** Add close task as Microtask if is caled in the frame else next rAF. */
+  /**
+   * If called in frame, close in current frame (as microtask), else in next
+   * frame
+   */
   close() {
-    const t = this.#timer;
-    (currentFrameTime ? queueMicrotask : rAF)(() => t.stop());
+    const ref = this.#timer; // NOTE: keep timer ref
+    (currentFrameTime ? queueMicrotask : rAF)(() => ref.stop());
   }
   async #show(patchProps?: Partial<LooseObject>) {
     const { root, defaultProps } = this.options;
@@ -363,3 +383,4 @@ export class Scene<
     } satisfies BuiltinData;
   }
 }
+// #endregion
